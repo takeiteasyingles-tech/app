@@ -54,6 +54,17 @@ describe('POST /api/game/event', () => {
     expect(await keys()).toEqual([`quiz:eb1:t3:${localDate(Date.now(), 'America/Sao_Paulo')}`]);
   });
 
+  it("pays Take the Lead hits only for the e-book's real turns", async () => {
+    await exec(
+      'INSERT OR REPLACE INTO ebooks(num, title, lead, updated_at) VALUES(1, \'E1\', \'[{"m":1},{"m":2},{"m":3}]\', 0)',
+    );
+    expect(await ok({ kind: 'quiz_hit', key: 'lead-eb1:2' })).toMatchObject({ awarded: true });
+    for (const key of ['lead-eb1:3', 'lead-eb1:1000', 'lead-eb1:x', 'lead-eb9:0']) {
+      expect((await post({ kind: 'quiz_hit', key })).status, key).toBe(400);
+    }
+    expect((await keys()).length).toBe(1);
+  });
+
   it('accepts songs only for published episodes or known album tracks', async () => {
     expect((await post({ kind: 'song', key: '1' })).status).toBe(404);
     await seedEpisodes([1]);

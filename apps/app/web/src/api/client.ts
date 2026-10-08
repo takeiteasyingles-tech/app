@@ -12,6 +12,7 @@ import {
   type ResOf,
 } from '@tie/shared/contracts/http';
 import { ApiError, type ErrorCode, isErrorEnvelope } from '@tie/shared/errors';
+import { isOutboxPath, OUTBOX_HEADER } from '../../sw/protocol';
 
 export interface CallOptions<E extends EndpointDef> {
   params?: ParamsIn<E>;
@@ -30,6 +31,30 @@ export class NetworkError extends Error {
     super('Sem conexão. Confira a internet e tente de novo.', { cause });
     this.name = 'NetworkError';
   }
+}
+
+/**
+ * The service worker stored the write in its offline outbox (202 + X-Tie-Outbox: queued) instead of
+ * reaching the server: it will be replayed with the same Idempotency-Key when the connection returns.
+ * There is no server answer (no award) to apply yet.
+ */
+export class QueuedError extends Error {
+  constructor(readonly path: string) {
+    super('Sem conexão. Seu progresso vai ser enviado quando a internet voltar.');
+    this.name = 'QueuedError';
+  }
+}
+
+/**
+ * isOutboxPath: writes the SW may queue offline (idempotent on the server, meaningful without an
+ * immediate answer). Only these get an Idempotency-Key from the store.
+ */
+export { isOutboxPath, OUTBOX_HEADER };
+
+/** A fresh Idempotency-Key for one logical write. */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 type Listener = (err: ApiError) => void;
@@ -107,6 +132,7 @@ export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = 
     if (err.code === 'unauthorized' || err.code === 'session_expired') for (const fn of authListeners) fn(err);
     throw err;
   }
+  if (res.status === 202 && res.headers.get(OUTBOX_HEADER) === 'queued') throw new QueuedError(urlFor(ep, opts));
   if (ep.res === 'binary') return (await res.arrayBuffer()) as ResOf<E>;
   if (res.status === 204) return undefined as ResOf<E>;
   return (await res.json()) as ResOf<E>;
@@ -114,6 +140,6 @@ export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = 
 
 /** User-facing pt-BR message for any thrown value (ApiError keeps the server's copy). */
 export function errorMessage(err: unknown): string {
-  if (err instanceof ApiError || err instanceof NetworkError) return err.message;
+  if (err instanceof ApiError || err instanceof NetworkError || err instanceof QueuedError) return err.message;
   return 'Algo deu errado. Tente de novo.';
 }

@@ -45,33 +45,13 @@ export async function optimistic<T>(patch: Patch, request: () => Promise<T>): Pr
     const restore: Record<string, unknown> = {};
     for (const k of keys) if (now[k] === applied[k]) restore[k] = before[k];
     set(restore as Patch);
-    toast(errorMessage(err));
+    if (typeof document !== 'undefined') toast(errorMessage(err));
     throw err;
   }
 }
 
-// settings.phone is the dev-only layout toggle; it never reaches the server.
-const PHONE_KEY = 'tie.dev.phone';
-function readPhone(): boolean {
-  if (!import.meta.env.DEV) return false;
-  try {
-    return localStorage.getItem(PHONE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-/** Local-only settings (phone, free in dev) without a server round trip. */
-export function setLocalSettings(p: Partial<Pick<Settings, 'phone' | 'free'>>): void {
-  if (p.phone !== undefined && import.meta.env.DEV) {
-    try {
-      localStorage.setItem(PHONE_KEY, p.phone ? '1' : '0');
-    } catch {
-      // Private mode: the toggle just does not persist.
-    }
-  }
-  set((s) => ({ settings: { ...s.settings, ...p } }));
-}
+// settings.phone was the prototype's dev layout toggle (not shipped): always false in production,
+// so the layout follows the window width alone. settings.free comes from the dev.free_steps flag.
 
 /** PATCH /api/me/settings, applied optimistically. */
 export function patchSettings(p: Partial<Omit<Settings, 'phone' | 'free'>>): Promise<unknown> {
@@ -80,9 +60,7 @@ export function patchSettings(p: Partial<Omit<Settings, 'phone' | 'free'>>): Pro
 
 /** Signed out (or session expired): back to the fresh state; the shell guard routes to #/entrar. */
 export function signedOut(): void {
-  const fresh = freshState();
-  fresh.settings.phone = readPhone();
-  state.value = fresh;
+  state.value = freshState();
 }
 
 const isSignedOutError = (err: unknown): boolean =>
@@ -95,7 +73,7 @@ const isSignedOutError = (err: unknown): boolean =>
 export async function load(): Promise<void> {
   try {
     const s = await call(meApi.state);
-    s.settings = { ...s.settings, phone: readPhone() };
+    s.settings = { ...s.settings, phone: false };
     batch(() => {
       state.value = s;
       loadError.value = '';

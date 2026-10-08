@@ -178,11 +178,13 @@ describe('e-book test', () => {
     expect((await submitTest(w.deps(), 1, { answers: { 'eb1-t13': 'she is' } })).passed).toBe(true);
   });
 
-  it('reset (testRedo) clears the answers and the submitted result', async () => {
+  it('reset (testRedo) clears the answers and reopens the test, keeping the last score', async () => {
     await submitTest(w.deps(), 1, { answers: ALL_RIGHT });
     await saveAnswers(w.deps(), 1, { answers: { 'eb1-t1': 1 }, reset: true });
     expect(saved()).toEqual([{ question_id: 'eb1-t1', choice_idx: 1, text_value: null, correct: 0 }]);
-    expect(w.db.rows('SELECT * FROM ebook_test_results WHERE user_id = ?', USER)).toEqual([]);
+    expect(w.db.rows('SELECT ebook_num, passed, submitted_at FROM ebook_test_results WHERE user_id = ?', USER)).toEqual(
+      [{ ebook_num: 1, passed: 1, submitted_at: 0 }],
+    );
     // Passing again later does not award twice.
     expect((await submitTest(w.deps(), 1, { answers: ALL_RIGHT })).award?.awarded).toBe(false);
   });

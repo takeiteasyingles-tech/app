@@ -46,7 +46,9 @@ export function registerServiceWorker(hooks: ServiceWorkerHooks = {}, url = '/sw
   });
   // Replays left in the outbox also flush when the connection comes back (browsers without Background Sync).
   window.addEventListener('online', () => flushOutbox());
-  void w.register();
+  // Registration can fail (private mode, blocked service workers in automated browsers): the app
+  // simply runs without the offline layer instead of raising an unhandled rejection.
+  w.register().catch(() => {});
   return w;
 }
 

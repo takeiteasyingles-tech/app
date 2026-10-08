@@ -1,0 +1,951 @@
+/* biome-ignore-all lint/style/noDescendingSpecificity: the flagged pairs target different elements (scoped per screen), so source order does not decide between them. */
+/* EXTRA screens (catalog, title page, player, music, Desafio): slice-local polish on top of tie.css.
+   Every rule is scoped under .x-scr (the OnNavy root), so nothing leaks into other screens.
+   The markup and tie.css classes stay the prototype's; these rules only fix what the prototype
+   left rough (alignment, wrapping, clipped captions, empty desktop space). */
+
+/* ---------- shared ---------- */
+
+/* The header lines up with the content column on desktop instead of hugging the window edge. */
+.app[data-layout="desktop"] .x-scr .topbar {
+  width: 100%;
+  max-width: var(--x-w, 1100px);
+  margin: 0 auto;
+  padding: 14px 32px 8px;
+}
+.x-scr .topbar .lbl {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.x-scr .btn > span {
+  text-wrap: balance;
+}
+
+/* ---------- catalog ---------- */
+
+/* Sentence case keeps the long eyebrow on one line next to the avatar on phones. */
+.app[data-layout="mobile"] .x-cat .topbar .lbl {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+/* Rails: the cards of a rail are as tall as each other and the "why" line sits at the same height
+   in every card (title and kind flow naturally above it), and the first card keeps the gutter when
+   scroll snapping kicks in. */
+.x-scr .rail {
+  align-items: stretch;
+  scroll-padding-inline: 18px;
+}
+.x-cat .rail > .cover {
+  display: flex;
+  flex-direction: column;
+}
+.x-cat .rail > .cover .why {
+  margin-top: auto;
+  padding-top: 4px;
+  /* Two lines: one- and two-line reasons start on the same row. */
+  min-height: calc(2.6em + 4px);
+}
+.x-scr .cover .ttl {
+  text-wrap: balance;
+}
+
+/* Phones: a soft fade at the right edge says "there is more" on the rails. */
+.app[data-layout="mobile"] .x-cat .rail {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+}
+/* Phones: the shelf tabs wrap onto two rows, so no tab is cut at the screen edge. */
+.app[data-layout="mobile"] .x-cat .shelf-tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+  gap: 8px 6px;
+}
+.app[data-layout="mobile"] .x-cat .shelf-tabs button {
+  min-height: 38px;
+  padding: 0 13px;
+  font-size: 0.86rem;
+}
+
+/* Coverflow: the front cover and its two neighbours are captioned (the ones further back are
+   hidden behind them); arrows stay above the side covers, and on desktop sit close to the covers. */
+.x-cat .flow .item .cap {
+  transition: opacity 0.35s;
+}
+.x-cat .flow .item:not(.on) .cap {
+  opacity: 0;
+  padding: 34px 10px 10px;
+}
+.x-cat .flow .item:not(.on) .cap b {
+  font-size: 0.86rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.x-cat .flow .item:not(.on) .cap span {
+  display: block;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Right neighbour: the item after the front one (or the first, when the front one is the last).
+   Left neighbour: the item before the front one (or the last, when the front one is the first). */
+.x-cat .flow > .item.on + .item .cap,
+.x-cat .flow:has(> .item.on:nth-last-of-type(2)) > .item:first-child .cap,
+.x-cat .flow > .item:has(+ .item.on) .cap,
+.x-cat .flow:has(> .item.on:first-child) > .item:nth-last-of-type(2) .cap {
+  opacity: 1;
+}
+/* The front cover hides the inner edge of its neighbours, so their captions keep clear of it. */
+.x-cat .flow > .item.on + .item .cap,
+.x-cat .flow:has(> .item.on:nth-last-of-type(2)) > .item:first-child .cap {
+  padding-left: 56px;
+}
+/* Phones: only a strip of each neighbour shows (the screen edge cuts the outer part), so the
+   caption is a narrow block in that strip. */
+.app[data-layout="mobile"] .x-cat .flow > .item.on + .item .cap,
+.app[data-layout="mobile"] .x-cat .flow:has(> .item.on:nth-last-of-type(2)) > .item:first-child .cap {
+  padding-left: 76px;
+  padding-right: 18px;
+}
+.app[data-layout="mobile"] .x-cat .flow > .item:has(+ .item.on) .cap,
+.app[data-layout="mobile"] .x-cat .flow:has(> .item.on:first-child) > .item:nth-last-of-type(2) .cap {
+  padding-left: 18px;
+  padding-right: 76px;
+}
+.app[data-layout="mobile"] .x-cat .flow .item:not(.on) .cap b {
+  font-size: 0.78rem;
+  -webkit-line-clamp: 3;
+}
+.x-cat .flow .arrow {
+  z-index: 20;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.5);
+}
+.app[data-layout="desktop"] .x-cat .flow {
+  width: 100%;
+  max-width: 820px;
+  margin-inline: auto;
+}
+
+/* Locked premieres: a bottom shade with the "Sexta" pill instead of graying out the whole cover. */
+.x-cat .cover .art .lock {
+  background: linear-gradient(180deg, rgba(10, 30, 63, 0.05) 35%, rgba(10, 30, 63, 0.88));
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 10px;
+}
+
+/* Desktop: the rails fill their row; the cards widen (150px up to ~210px) instead of leaving the
+   right of the page empty. --n is the rail's card count. */
+.app[data-layout="desktop"] .x-cat .x-rail {
+  max-width: calc(var(--n) * 212px + (var(--n) - 1) * 12px + var(--x-pad, 0px));
+}
+.app[data-layout="desktop"] .x-cat .x-rail .rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 1fr);
+}
+.app[data-layout="desktop"] .x-cat .x-rail .rail > .cover {
+  width: auto;
+}
+
+/* Desktop: short rails share rows (each one a shelf panel) instead of one half-empty row each. */
+.x-group {
+  --x-pad: 43px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 20px;
+}
+.x-group > section {
+  flex: var(--n) 1 calc(var(--n) * 150px + (var(--n) - 1) * 12px + var(--x-pad));
+  min-width: 0;
+  padding: 16px 20px 2px;
+  border-radius: 20px;
+  background: rgba(22, 53, 102, 0.55);
+  border: 1.5px solid var(--navy3);
+}
+.x-group .rail {
+  margin: 0;
+  padding: 4px 0 14px;
+  scroll-padding-inline: 0;
+}
+.x-group > .x-dwrap {
+  flex: 3 1 270px;
+}
+
+/* The Desafio card: wide = one row; narrow (phones, or a slot in the desktop row) = stacked. */
+.x-dwrap {
+  container-type: inline-size;
+  container-name: xdc;
+  display: flex;
+}
+.x-scr .x-dcard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px 16px;
+  width: 100%;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 20px;
+  color: #fff;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.18), transparent 55%),
+    linear-gradient(135deg, #ff7b47, var(--orange) 55%, #dd4a1d);
+  box-shadow: 0 18px 34px -22px rgba(244, 90, 40, 0.9);
+}
+.x-dcard .ic {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.x-dcard .tx {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.x-dcard .tx .h3 {
+  color: #fff;
+  font-size: 1.15rem;
+  text-wrap: balance;
+}
+.x-dcard .tx .xs {
+  color: #fff;
+  opacity: 0.92;
+}
+.x-dcard .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.x-dcard .meta .pill {
+  background: rgba(10, 30, 63, 0.28);
+  color: #fff;
+}
+.x-dcard .meta .pill.rec {
+  background: #fff;
+  color: #c2410c;
+}
+.x-dcard .go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--orange);
+  font-weight: 800;
+}
+.x-dcard .go span {
+  display: none;
+}
+/* "How it works" fills the tall card in the desktop row; elsewhere the card stays compact. */
+.x-dcard .steps {
+  display: none;
+}
+.x-group .x-dcard .steps {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(10, 30, 63, 0.2);
+  font-size: 0.8rem;
+  line-height: 1.25;
+  font-weight: 700;
+}
+.x-dcard .steps > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.x-dcard .steps b {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--orange);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+}
+@container xdc (max-width: 560px) {
+  .x-scr .x-dcard {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    align-content: space-between;
+  }
+  .x-dcard .ic {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+  .x-dcard .meta {
+    grid-column: 2;
+  }
+  .x-dcard .go {
+    grid-column: 1 / -1;
+    align-self: end;
+    width: 100%;
+    height: 46px;
+    border-radius: 14px;
+  }
+  .x-dcard .go span {
+    display: inline;
+  }
+}
+
+/* ---------- title page ---------- */
+
+.x-det .hero-extra {
+  min-height: 280px;
+}
+.app[data-layout="desktop"] .x-det .hero-extra {
+  min-height: 360px;
+}
+.x-det .hero-extra .shade {
+  background: linear-gradient(
+    180deg,
+    rgba(10, 30, 63, 0.3) 0%,
+    transparent 26%,
+    rgba(15, 42, 85, 0.78) 62%,
+    var(--navy) 100%
+  );
+}
+.app[data-layout="desktop"] .x-det .hero-extra .shade {
+  /* Fully opaque at the left edge: the page navy runs into the hero with no seam by the side nav. */
+  background:
+    linear-gradient(90deg, var(--navy) 0%, rgba(15, 42, 85, 0.86) 16%, rgba(15, 42, 85, 0.55) 40%, transparent 70%),
+    linear-gradient(180deg, var(--navy) 0%, transparent 14%, transparent 40%, var(--navy) 100%);
+}
+/* The bar shows the kind; the title joins it once the hero (with its own big title) scrolls away. */
+.x-det .topbar .ttl {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: stretch;
+}
+.x-det:not(.x-past) .topbar .ttl .h2 {
+  display: none;
+}
+.x-det .hero-extra .inner {
+  max-width: var(--x-w, 1100px);
+  margin: 0 auto;
+}
+.app[data-layout="desktop"] .x-det .hero-extra .inner {
+  padding: 32px 32px 30px;
+}
+.x-det .hero-extra .h1 {
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+}
+.app[data-layout="desktop"] .x-det .hero-extra .h1 {
+  font-size: 2.6rem;
+}
+.x-det .hero-extra .sm {
+  color: #e7ecf7;
+  font-weight: 600;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.x-scr .pill.x-dark {
+  background: rgba(10, 30, 63, 0.82);
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
+}
+.x-det-body {
+  display: grid;
+  gap: 18px;
+}
+/* Desktop: both columns end on the same line (the actions sit at the foot of the story column). */
+.app[data-layout="desktop"] .x-det-body {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 24px 44px;
+  align-items: stretch;
+}
+.x-det-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.app[data-layout="desktop"] .x-det-main > .x-acts {
+  margin-top: auto;
+}
+.x-scr .x-cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+}
+.x-scr .x-cast .pill.m {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 66px;
+  padding: 0;
+  background: none;
+  white-space: normal;
+  text-align: center;
+}
+.x-cast .av {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 8px 16px -8px rgba(0, 0, 0, 0.7);
+}
+.x-cast .nm {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+/* Phones: the cast spreads over the full row (4 per row) instead of bunching up on the left. */
+.app[data-layout="mobile"] .x-scr .x-cast {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 8px;
+}
+.app[data-layout="mobile"] .x-scr .x-cast .pill.m {
+  width: auto;
+}
+.app[data-layout="mobile"] .x-cast .av {
+  width: 44px;
+  height: 44px;
+}
+.x-acts {
+  display: grid;
+  gap: 10px;
+}
+/* Desktop: the actions stack at one width; the secondary ones a step lower than the main one. */
+.app[data-layout="desktop"] .x-acts > .btn:not(:first-child) {
+  min-height: 48px;
+  font-size: 0.95rem;
+}
+.app[data-layout="mobile"] .x-acts .btn {
+  padding: 0 14px;
+  font-size: 0.98rem;
+}
+.x-det .x-vocab .listrow button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.x-det .x-vocab .sayico,
+.x-play .x-vocab .sayico {
+  background: var(--navy3);
+  color: #fff;
+}
+
+/* ---------- player ---------- */
+
+/* White cards (dub panel, end card) on the navy page: tie.css's .on-navy rules turned their orange
+   label pale and their ghost buttons white-on-white (invisible "Ouvir antes" / "Assistir de novo"). */
+.x-scr .card.paper .lbl.or {
+  color: var(--orange);
+}
+.x-scr .card.paper .btn.ghost {
+  --fg: var(--navy);
+  border-color: var(--navy);
+}
+
+.x-play .scene .sub .who {
+  background: rgba(0, 0, 0, 0.66);
+  padding: 1px 8px;
+  border-radius: 6px;
+  text-shadow: none;
+}
+/* The tappable words take keyboard focus too. */
+.x-play .scene .sub .en .w:focus-visible {
+  outline: 2px solid #ffd27a;
+  outline-offset: 1px;
+}
+/* Balanced subtitle lines: no single word left alone on the last line. */
+.x-play .scene .sub .en,
+.x-play .scene .sub .ptl {
+  text-wrap: balance;
+  max-width: 100%;
+}
+.x-play .x-aib {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+}
+.app[data-layout="mobile"] .x-play .topbar .lbl {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.app[data-layout="mobile"] .x-play .scene {
+  aspect-ratio: 4 / 3;
+}
+.app[data-layout="mobile"] .x-play .scene .sub {
+  left: 8px;
+  right: 8px;
+  bottom: 10px;
+  gap: 3px;
+}
+.app[data-layout="mobile"] .x-play .scene .sub .en {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.app[data-layout="mobile"] .x-play .scene .sub .ptl {
+  font-size: 0.8rem;
+}
+.app[data-layout="mobile"] .x-play .scene .sub .who {
+  font-size: 0.68rem;
+}
+/* Desktop: the scene's words in two columns, so the player column ends level with the script. */
+.app[data-layout="desktop"] .x-play .x-vocab .stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+}
+.app[data-layout="desktop"] .x-play .x-vocab .stack > .listrow:nth-child(2) {
+  border-top: 0;
+}
+.x-play .x-count {
+  font-weight: 800;
+  white-space: nowrap;
+}
+.x-play .segs i,
+.x-mus .segs i {
+  height: 6px;
+}
+.x-play .segs i.done,
+.x-mus .segs i.done {
+  background: #5b93ff;
+}
+.x-play .segs i.now,
+.x-mus .segs i.now {
+  background: var(--orange);
+}
+.x-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.x-tools .chip {
+  white-space: nowrap;
+}
+.app[data-layout="mobile"] .x-tools .seg button {
+  padding: 0 10px;
+}
+.app[data-layout="mobile"] .x-tools .chip {
+  padding: 0 12px;
+}
+.x-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.x-play .line {
+  padding: 11px 14px;
+}
+.x-play .x-vocab .listrow button {
+  min-height: 36px;
+}
+
+/* ---------- music ---------- */
+
+.x-mus-grid {
+  display: grid;
+  gap: 16px;
+}
+.app[data-layout="desktop"] .x-mus-grid {
+  grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+  gap: 24px 40px;
+  align-items: start;
+}
+.x-mus-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.x-mus .x-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.x-mus .x-cover {
+  width: 88px;
+  height: 88px;
+  flex: none;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: 0 12px 24px -14px rgba(0, 0, 0, 0.8);
+}
+.app[data-layout="desktop"] .x-mus .x-cover.x-art {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 20px;
+  box-shadow: 0 24px 40px -24px rgba(0, 0, 0, 0.85);
+}
+.app[data-layout="desktop"] .x-mus .x-gapbtn {
+  width: auto;
+  min-height: 44px;
+  gap: 8px;
+}
+.app[data-layout="desktop"] .x-mus .x-gapnote {
+  margin-left: 6px;
+}
+/* Desktop: the lyrics sit on a panel beside the player. */
+.app[data-layout="desktop"] .x-mus .x-lyr {
+  padding: 16px 0 10px;
+  border-radius: var(--r);
+  background: var(--navy2);
+  border: 1.5px solid var(--navy3);
+}
+.app[data-layout="desktop"] .x-mus .x-lyr .lyrics {
+  padding: 0 8px;
+}
+.app[data-layout="desktop"] .x-mus .x-lyr .lyric {
+  padding: 10px;
+}
+.x-mus .x-prog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.x-mus .x-prog .xs {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+}
+.x-mus .controls {
+  justify-content: center;
+}
+.x-scr .chip.x-gapbtn {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 14px;
+}
+.x-gapbtn .x-gapnote {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.x-mus .lyric {
+  padding: 10px 18px;
+}
+.x-mus .line {
+  padding: 12px 18px;
+}
+.x-mus .x-lbl {
+  padding: 0 18px;
+}
+.x-rep {
+  margin-left: 8px;
+  vertical-align: 2px;
+}
+.x-scr .pill.x-rep {
+  background: var(--navy3);
+  color: #fff;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+}
+.x-mus .fb.tip {
+  margin: 0;
+}
+
+/* ---------- Desafio ---------- */
+
+/* The intro's big title says it already; the bar's title shows from the round on. */
+.x-des .topbar .ttl {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: stretch;
+}
+.x-des.x-intro .topbar .ttl .h2 {
+  display: none;
+}
+.x-des .scroll > .x-des-wrap {
+  padding-top: 20px;
+  padding-bottom: 32px;
+}
+/* Desktop: a roomier intro (bigger title, field and answers) from the top of the page. */
+.app[data-layout="desktop"] .x-des .scroll > .x-des-wrap {
+  padding-top: 48px;
+}
+.app[data-layout="desktop"] .x-des-copy {
+  gap: 18px;
+}
+.app[data-layout="desktop"] .x-des-copy .h1 {
+  font-size: 2.7rem;
+}
+.app[data-layout="desktop"] .x-des-copy .p {
+  font-size: 1.08rem;
+  line-height: 1.6;
+}
+.app[data-layout="desktop"] .x-facts > div {
+  padding: 16px 18px;
+}
+.app[data-layout="desktop"] .x-facts b {
+  font-size: 1.9rem;
+}
+.app[data-layout="desktop"] .x-facts span {
+  font-size: 0.86rem;
+}
+.app[data-layout="desktop"] .x-record {
+  padding: 16px 18px;
+}
+.app[data-layout="desktop"] .x-des-copy .btn {
+  min-height: 60px;
+}
+.app[data-layout="desktop"] .x-demo {
+  gap: 12px;
+}
+.app[data-layout="desktop"] .x-demo .quiz-field {
+  height: 330px;
+}
+.app[data-layout="desktop"] .x-demo .x-opt {
+  min-height: 56px;
+  font-size: 1rem;
+}
+.app[data-layout="desktop"] .x-demo .faller {
+  top: 64px;
+  font-size: 1.15rem;
+}
+.app[data-layout="desktop"] .x-demo .x-trail {
+  top: 136px;
+  bottom: 50px;
+}
+/* Answers: balanced lines (no word left alone on the second line). */
+.x-des .btn.light,
+.x-demo .x-opt {
+  text-wrap: balance;
+}
+.x-des-grid {
+  display: grid;
+  gap: 22px;
+  align-items: start;
+}
+.app[data-layout="desktop"] .x-des-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 48px;
+}
+.x-des-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+.x-des-copy .h1 {
+  font-size: 2.1rem;
+}
+.x-des-copy .p {
+  color: var(--onNavy);
+  margin: 0;
+}
+.x-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+.x-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--navy2);
+  border: 1.5px solid var(--navy3);
+}
+.x-facts b {
+  font-size: 1.45rem;
+  line-height: 1.1;
+  font-weight: 800;
+  color: #fff;
+}
+.x-facts span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--onNavy);
+}
+.x-record {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  color: #ffd27a;
+  font-weight: 700;
+  background: linear-gradient(120deg, rgba(255, 210, 122, 0.16), rgba(255, 210, 122, 0.05));
+  border: 1.5px solid rgba(255, 210, 122, 0.55);
+}
+.x-record b {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+}
+.x-des-copy .btn {
+  width: 100%;
+}
+.x-demo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.x-demo .quiz-field {
+  height: 270px;
+}
+.app[data-layout="mobile"] .x-demo .quiz-field {
+  height: 200px;
+}
+.x-demo .faller {
+  top: 50px;
+  z-index: 2;
+  box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.6);
+}
+.x-demo .x-trail {
+  position: absolute;
+  left: 50%;
+  top: 112px;
+  bottom: 44px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  border-left: 2px dashed rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.6);
+}
+.x-demo .x-trail svg {
+  margin-left: -2px;
+  margin-bottom: -6px;
+}
+.x-demo .x-groundnote {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 14px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ffb08f;
+}
+.app[data-layout="mobile"] .x-demo .x-trail {
+  top: 100px;
+  bottom: 40px;
+}
+.x-demo .x-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 16px;
+  line-height: 1.3;
+  border-radius: 14px;
+  background: var(--navy2);
+  border: 1.5px solid var(--navy3);
+  color: var(--onNavy);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.app[data-layout="mobile"] .x-demo .x-opt {
+  font-size: 0.9rem;
+}
+.x-demo .x-opt.ok {
+  background: #fff;
+  border-color: #fff;
+  color: var(--navy);
+}
+.x-demo .x-opt.ok svg {
+  color: var(--green);
+}
+.x-demo .x-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+}
+.x-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 36px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.x-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: var(--navy2);
+  border: 1.5px solid var(--navy3);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+.x-steps b {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--orange);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+.x-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 20px;
+  text-align: center;
+}
+.x-result .big {
+  font-size: 3.4rem;
+  line-height: 1;
+  font-weight: 800;
+  color: #fff;
+}
+.x-result .stats {
+  display: flex;
+  gap: 18px;
+  margin-top: 8px;
+}

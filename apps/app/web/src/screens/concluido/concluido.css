@@ -1,0 +1,110 @@
+﻿/* Episode done: slice-local polish on top of tie.css (scoped to cc-* classes this screen owns).
+   The prototype's card had no celebratory visual once the confetti burst was over, and on desktop the
+   narrow column hugged the top of an empty canvas. */
+
+/* Desktop: the column sits in the middle of the window instead of hugging the top. */
+.app[data-layout="desktop"] .cc-scr {
+  display: flex;
+  flex-direction: column;
+}
+.app[data-layout="desktop"] .cc-wrap {
+  margin: auto;
+}
+
+.now-card.cc-card {
+  padding: 20px 22px 22px;
+}
+.cc-medal {
+  width: 50px;
+  height: 50px;
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--goldT);
+  color: #b27a00;
+  box-shadow:
+    0 0 0 4px rgba(233, 162, 0, 0.28),
+    0 10px 22px -10px rgba(0, 0, 0, 0.6);
+}
+
+/* A few static confetti pieces in a narrow band at the card's right edge: clear of the badge and the
+   title, and well inside the rounded corner. */
+.now-card > .cc-spark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.cc-spark i {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 0.9;
+}
+.cc-spark i:nth-child(1) {
+  top: 16px;
+  right: 54px;
+  background: var(--orange);
+  transform: rotate(24deg);
+  width: 8px;
+  height: 14px;
+}
+.cc-spark i:nth-child(2) {
+  top: 22px;
+  right: 22px;
+  background: var(--gold);
+  transform: rotate(-32deg);
+  width: 6px;
+  height: 10px;
+}
+.cc-spark i:nth-child(3) {
+  top: 92px;
+  right: 34px;
+  background: #5b93ff;
+  transform: rotate(58deg);
+  width: 8px;
+  height: 14px;
+}
+.cc-spark i:nth-child(4) {
+  top: 120px;
+  right: 58px;
+  background: #fff;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+.cc-spark i:nth-child(5) {
+  top: 140px;
+  right: 18px;
+  background: #5b93ff;
+  transform: rotate(-48deg);
+  width: 6px;
+  height: 11px;
+}
+.cc-spark i:nth-child(6) {
+  top: 168px;
+  right: 44px;
+  background: var(--gold);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.cc-spark i:nth-child(7) {
+  top: 44px;
+  right: 16px;
+  background: var(--orange);
+  transform: rotate(-70deg);
+  width: 5px;
+  height: 9px;
+  opacity: 0.75;
+}
+.cc-spark i:nth-child(8) {
+  top: 112px;
+  right: 14px;
+  background: #fff;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0.55;
+}

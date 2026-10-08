@@ -98,6 +98,25 @@ describe('IDOR', () => {
     expect((await forged.json(M.state.path)).status).toBe(401);
   });
 
+  it('state lists only finished Mic sessions (an abandoned open call is not history)', async () => {
+    const a = await signup('open@example.com');
+    await seedProgress(a.id, 'A');
+    await exec(
+      `INSERT INTO mic_sessions(id, user_id, assistant_key, mode, started_at, billed_until, status)
+       VALUES('ms-open', ?, 'margaret', 'missao', ?, ?, 'open')`,
+      a.id,
+      NOW,
+      NOW,
+    );
+    await exec(
+      `INSERT INTO mic_turns(session_id, idx, who, en, pt, created_at) VALUES('ms-open', 0, 'her', 'Hi!', 'Oi!', ?)`,
+      NOW,
+    );
+    const sa = TieState.parse((await a.client.json(M.state.path)).body);
+    expect(sa.maggie.sessions.map((s) => s.id)).toEqual(['ms-A']);
+    expect(sa.maggie.sessions[0]?.turns.map((t) => t.who)).toEqual(['her', 'me']);
+  });
+
   it('reset-progress only clears the caller', async () => {
     const a = await signup('ra@example.com');
     const b = await signup('rb@example.com');

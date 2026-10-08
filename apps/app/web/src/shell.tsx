@@ -4,14 +4,14 @@
 // path, so a route change starts fresh at the top, like the prototype's innerHTML swap.
 import { signal } from '@preact/signals';
 import type { TieState } from '@tie/shared/state';
-import { Btn, Icon, Side, Tabbar } from '@tie/ui';
+import { Btn, Side, Tabbar } from '@tie/ui';
 import { Component, type ComponentChildren } from 'preact';
 import { useLayoutEffect } from 'preact/hooks';
 import { chromeOverride } from './frame';
 import { resolveView } from './guard';
 import { navTick, replace, route } from './router';
 import { SECTION } from './screens/registry';
-import { gameView, loadError, retryLoad, setLocalSettings, state, status } from './store';
+import { dueNow, gameView, loadError, retryLoad, state, status } from './store';
 
 const DESKTOP_MIN = 900;
 
@@ -132,9 +132,11 @@ export function Shell() {
 
   const Screen = def.component;
   const g = gameView.value;
+  // review.sync() recounted s.due on every render; dueNow recounts it from the deck as cards come due.
+  const due = s.profile ? dueNow.value : s.due;
   return (
     <Frame layout={L} theme={chrome.theme ?? 'cream'}>
-      {tabs && L === 'desktop' ? <Side active={nav} due={s.due} g={g} /> : null}
+      {tabs && L === 'desktop' ? <Side active={nav} due={due} g={g} /> : null}
       {/* Keyed by path: a new route mounts a new .view, so 'enter' plays once and later re-renders
           keep the class without restarting (or cutting) the animation. */}
       <div key={r.path} class={`view${tabs ? ' has-tabs' : ''} enter`}>
@@ -142,33 +144,7 @@ export function Shell() {
           <Screen params={r.params} q={r.q} path={r.path} />
         </ScreenBoundary>
       </div>
-      {tabs && L === 'mobile' ? <Tabbar active={nav} due={s.due} /> : null}
+      {tabs && L === 'mobile' ? <Tabbar active={nav} due={due} /> : null}
     </Frame>
-  );
-}
-
-/** Prototype dev toggle (Celular / Computador / Etapas livres). Dev builds only; never shipped. */
-export function DevToggle() {
-  const st = state.value.settings;
-  return (
-    <>
-      <button type="button" class={st.phone ? 'on' : ''} onClick={() => setLocalSettings({ phone: true })}>
-        <Icon name="phone" size={16} />
-        Celular
-      </button>
-      <button type="button" class={!st.phone ? 'on' : ''} onClick={() => setLocalSettings({ phone: false })}>
-        <Icon name="desktop" size={16} />
-        Computador
-      </button>
-      <button
-        type="button"
-        class={st.free ? 'on' : ''}
-        title="Avançar as etapas do episódio sem concluir o que falta"
-        onClick={() => setLocalSettings({ free: !st.free })}
-      >
-        <Icon name="lock" size={16} />
-        Etapas livres
-      </button>
-    </>
   );
 }

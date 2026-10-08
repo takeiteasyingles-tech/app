@@ -1,0 +1,613 @@
+﻿/* Episode player: slice-local polish on top of tie.css. Every rule is scoped under .pl-scr (the
+   player root) or a pl-* class this slice owns, so nothing leaks into other screens. The markup and
+   tie.css classes stay the prototype's; these rules only fix what the prototype left rough. */
+
+/* ---------- head / foot ---------- */
+
+/* The 10-step bar: the gaps between the three groups (Abertura Â· O episÃ³dio Â· Fechamento) read as
+   deliberate instead of as uneven spacing. */
+.pl-scr .player-head .segs {
+  gap: 4px;
+}
+.pl-scr .player-head .segs i.sep {
+  margin-left: 12px;
+}
+
+/* A locked Next keeps legible contrast (white on #C9C2AE was ~1.7:1): navy on a soft cream. */
+.pl-scr .player-foot .btn.next[disabled] {
+  --bg: #ece6d6;
+  --fg: var(--navy);
+  box-shadow: inset 0 0 0 1.5px var(--line2);
+}
+.pl-scr .player-foot .btn.next[disabled] .kicker {
+  color: var(--orangeD);
+  opacity: 1;
+  font-weight: 800;
+}
+
+/* ---------- episode map (desktop aside and mobile sheet) ---------- */
+
+/* Step name and its status ("Feito" / "+10") on one line; the subtitle gets the row's full width. */
+.pl-sth {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.pl-sth .h3 {
+  min-width: 0;
+}
+.pl-side .steprow {
+  min-height: 54px;
+  padding: 9px 12px;
+}
+.pl-side .steprow .sm {
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+/* ---------- shared bits ---------- */
+
+.pl-scr p,
+.pl-scr .pl-nextx {
+  text-wrap: pretty;
+}
+/* Mic feedback: balanced lines, never a stray word or two alone on the last one. */
+.pl-scr .pl-fbt {
+  text-wrap: balance;
+}
+.pl-scr .pl-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--muted);
+}
+.pl-scr .pl-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--navy);
+}
+.pl-scr .nw {
+  white-space: nowrap;
+}
+
+/* Cast: navy avatars; the character's colour (its dot in Take It In) is the ring only. */
+.pl-cast {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+}
+.pl-castm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  min-width: 0;
+}
+.pl-ava {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 0 0 2.5px #fff,
+    0 0 0 4.5px var(--c, var(--line2));
+}
+.pl-castn {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--navy);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+/* Desktop: one row of equal avatar + name pills (an even strip spread thin across the 760px column). */
+.app[data-layout="desktop"] .pl-cast {
+  gap: 10px;
+}
+.app[data-layout="desktop"] .pl-castm {
+  flex-direction: row;
+  gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 999px;
+  background: var(--cream);
+}
+.app[data-layout="desktop"] .pl-ava {
+  width: 36px;
+  height: 36px;
+  font-size: 0.74rem;
+}
+.app[data-layout="desktop"] .pl-castn {
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* The dashed "PrÃ³ximo: â€¦" card at the end of a finished step. */
+.pl-cico {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pl-next {
+  text-align: left;
+  width: 100%;
+  color: var(--navy);
+}
+.pl-nextx {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pl-nextt {
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--navy);
+}
+.pl-nexts {
+  line-height: 1.35;
+}
+
+/* ---------- 1 Â· Abertura ---------- */
+
+.pl-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.pl-topics li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--navy);
+}
+.pl-topics .num {
+  flex: none;
+  width: 18px;
+  color: var(--orange);
+  font-size: 1rem;
+}
+.app[data-layout="desktop"] .pl-topics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+
+/* ---------- 2 e 10 Â· MÃºsica ---------- */
+
+/* "Ã—2": a line the song sings twice, as a solid badge that reads at a glance. */
+.pl-rep {
+  margin-left: 10px;
+  vertical-align: 2px;
+  font-size: 0.85rem;
+  padding: 3px 10px;
+  background: var(--navy);
+  color: #fff;
+  font-style: normal;
+}
+.pl-sing {
+  margin: 0;
+}
+
+/* ---------- 3 Â· E-book ---------- */
+
+.pl-inside .pill {
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  background: var(--cream);
+}
+.pl-inside .pill svg {
+  color: var(--green);
+}
+.pl-ebtns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.app[data-layout="desktop"] .pl-ebtns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---------- 4 Â· Take a Look ---------- */
+
+.pl-video {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--navyD);
+  aspect-ratio: 16 / 9;
+}
+.pl-video video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--navyD);
+}
+/* The poster's play button sits in the lower-left corner, over a bottom gradient, so the
+   characters' faces stay visible. */
+.pl-vplay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(10, 26, 54, 0) 50%, rgba(10, 26, 54, 0.72));
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.pl-vbtn {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--orange);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.6);
+  transition: transform 0.12s;
+}
+.app[data-layout="desktop"] .pl-vbtn {
+  width: 60px;
+  height: 60px;
+}
+.app[data-layout="desktop"] .pl-vplay {
+  padding: 18px;
+}
+.pl-vplay .pl-vbtn svg {
+  margin-left: 3px;
+}
+.pl-vplay:hover .pl-vbtn {
+  transform: scale(1.06);
+}
+.pl-vcap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  font-weight: 800;
+  font-size: 1rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+.pl-vcap .pill {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--navy);
+  text-shadow: none;
+}
+/* Desktop: four vocabulary cards per row, each with its speaker above the word. */
+.app[data-layout="desktop"] .pl-vocab {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.app[data-layout="desktop"] .pl-vocab .card {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.pl-vocab .en {
+  font-size: 1.02rem;
+}
+.pl-vocab .sm {
+  font-size: 0.92rem;
+  color: var(--ink);
+  opacity: 0.8;
+}
+
+/* ---------- 5 Â· Take It In ---------- */
+
+.pl-who {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pl-who i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+/* Translations: a dark grey that still reads as secondary (the muted grey was low-contrast). */
+.pl-s5 .dialog-line .pt {
+  color: #3f4759;
+}
+.pl-s5 .dialog-line .grid .pt {
+  border-left: 2px solid var(--line2);
+  padding-left: 14px;
+}
+.pl-s5 .dialog-line.on .pt {
+  color: var(--ink);
+}
+.pl-s5 .dialog-line.stage .pt {
+  color: var(--muted);
+}
+
+/* ---------- 6 Â· Take the Mic ---------- */
+
+/* Phone: the status takes its own line under Ouvir + waveform. */
+.app:not([data-layout="desktop"]) .pl-microw {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.app:not([data-layout="desktop"]) .pl-mics {
+  flex-basis: 100%;
+}
+/* Phone: the score (or "Ver nota") over the feedback, which keeps the card's full width. */
+.app:not([data-layout="desktop"]) .pl-fb {
+  flex-direction: column;
+  gap: 8px;
+}
+.pl-reveal {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+.pl-recd {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--greenT);
+  color: var(--green);
+}
+
+/* ---------- 7 Â· Take a Lesson ---------- */
+
+/* Outline of the lesson: chips that jump to each block. */
+.pl-tocl {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.pl-tocb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 40px;
+  padding: 4px 14px 4px 5px;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  text-align: left;
+}
+.pl-tocb .num {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--orange);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+.app[data-layout="desktop"] .pl-tocl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: visible;
+}
+.app[data-layout="desktop"] .pl-tocb {
+  white-space: normal;
+  border-radius: 14px;
+  line-height: 1.3;
+}
+/* An odd last entry spans the row instead of sitting alone in the left column. */
+.app[data-layout="desktop"] .pl-tocb:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+/* Each block reads as its own section: an orange top rule, a larger label, more air between them. */
+.pl-s7 > .card {
+  scroll-margin-top: 12px;
+}
+.pl-s7 > .card:not(.pl-toc):not(.navy) {
+  box-shadow: inset 0 3px 0 var(--orange);
+}
+.pl-s7 > .card:not(.pl-toc) > .lbl.or:first-child {
+  font-size: 0.84rem;
+}
+.pl-s7 > .card:not(.pl-toc) + .card {
+  margin-top: 10px;
+}
+.pl-pairs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.app[data-layout="desktop"] .pl-pairs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.pl-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--navy2);
+}
+.pl-pair b {
+  font-weight: 800;
+  color: #fff;
+}
+/* Both words hug the â‰  in the middle, so each pair reads as one unit. */
+.pl-pair b:first-of-type {
+  text-align: right;
+}
+.pl-vs {
+  color: var(--orange);
+  font-weight: 800;
+}
+.pl-gloss {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--onNavy);
+}
+.pl-words {
+  justify-content: center;
+}
+.pl-words .chip {
+  justify-content: center;
+  min-width: 92px;
+}
+
+/* ---------- 8 Â· Take Away ---------- */
+
+.pl-s8 .sayico {
+  background: var(--blueT);
+  color: var(--blue);
+}
+.pl-s8 .sayrow.heard .sayico {
+  background: var(--blue);
+  color: #fff;
+}
+.pl-exp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-width: 0;
+}
+.pl-s8 .pl-exp .pt {
+  color: #3f4759;
+}
+.pl-s8 .listrow {
+  padding: 11px 0;
+}
+/* Desktop: two columns of expressions (English over its translation in each). */
+.app[data-layout="desktop"] .pl-explist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+.app[data-layout="desktop"] .pl-explist > .listrow:nth-child(2) {
+  border-top: 0;
+}
+.app[data-layout="desktop"] .pl-explist > .listrow:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+/* Desktop keywords: an even grid whose column count leaves no chip alone on a row. */
+.app[data-layout="desktop"] .chips.pl-words8 {
+  display: grid;
+  gap: 8px;
+}
+.pl-words8 .pill {
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+/* ---------- 9 Â· Take Action ---------- */
+
+.pl-opts.pl-optrow {
+  display: grid;
+  gap: 10px;
+}
+.pl-opts.pl-optrow .opt {
+  min-height: 60px;
+  font-size: 1.02rem;
+}
+.app[data-layout="desktop"] .pl-s9 .h2 {
+  font-size: 1.5rem;
+}
+.pl-exnav {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+}
+.pl-exnav .btn {
+  width: 100%;
+}
+.app[data-layout="desktop"] .pl-exnav {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pl-count {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+}
+.pl-count b {
+  font-weight: 800;
+  color: var(--blueD);
+  font-size: 1.05rem;
+}
+
+/* Take Action: the step's exercises at a glance (jump to any of them). */
+.pl-exlist {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.app[data-layout="desktop"] .pl-exlist {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pl-exlist .card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  width: 100%;
+}
+.pl-exlist .card.cur {
+  border-color: var(--navy);
+  box-shadow: inset 0 0 0 1px var(--navy);
+}
+.pl-exlist .num {
+  flex: none;
+  width: 22px;
+  color: var(--orange);
+  font-size: 1.1rem;
+}
+.pl-exlist .pill.gr svg {
+  color: var(--green);
+}

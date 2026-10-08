@@ -84,7 +84,13 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         codeSplitting: {
-          groups: [{ name: 'vendor', test: /node_modules[\\/](preact|@preact[\\/]signals)/ }],
+          groups: [
+            { name: 'vendor', test: /node_modules[\\/](preact|@preact[\\/]signals)/ },
+            // zod and web/src/zod-config.ts share a chunk, so config({ jitless: true }) runs when zod
+            // itself loads, before any chunk that builds schemas at its top level (inlined into the
+            // entry it ran too late, after the static schema chunks: a CSP eval report on every load).
+            { name: 'zod', test: /node_modules[\\/]zod[\\/]|[\\/]web[\\/]src[\\/]zod-config\.ts$/ },
+          ],
         },
       },
     },

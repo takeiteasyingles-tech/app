@@ -237,9 +237,9 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
        JOIN ebook_test_questions q ON q.id = a.question_id WHERE a.user_id = ?`,
       uid,
     ),
-    q<{ ebook_num: number; score: number; passed: number }>(
+    q<{ ebook_num: number; score: number; passed: number; submitted_at: number }>(
       db,
-      'SELECT ebook_num, score, passed FROM ebook_test_results WHERE user_id = ?',
+      'SELECT ebook_num, score, passed, submitted_at FROM ebook_test_results WHERE user_id = ?',
       uid,
     ),
     q<{ id: string; en: string; pt: string; scene: string | null; note: string | null; due_at: number; reps: number }>(
@@ -272,17 +272,20 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
       uid,
       LIMITS.gameLogMax,
     ),
+    // Only finished conversations: a call abandoned before /end stays 'open' and is not history
+    // (the same rule as GET /api/mic/sessions).
     q<MicSessionRow>(
       db,
       `SELECT id, assistant_key, mode, mission_key, extra_id, started_at, secs, report, report_source
-       FROM mic_sessions WHERE user_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`,
+       FROM mic_sessions WHERE user_id = ? AND status = 'ended' ORDER BY started_at DESC, id DESC LIMIT ?`,
       uid,
       LIMITS.micSessionsKept,
     ),
     q<MicTurnRow>(
       db,
       `SELECT t.session_id, t.idx, t.who, t.en, t.pt, t.feedback, t.pron, t.words FROM mic_turns t
-       WHERE t.session_id IN (SELECT id FROM mic_sessions WHERE user_id = ?1 ORDER BY started_at DESC, id DESC LIMIT ?2)
+       WHERE t.session_id IN (SELECT id FROM mic_sessions WHERE user_id = ?1 AND status = 'ended'
+         ORDER BY started_at DESC, id DESC LIMIT ?2)
        ORDER BY t.session_id, t.idx`,
       uid,
       LIMITS.micSessionsKept,
@@ -334,7 +337,8 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
   const testDone: Record<string, boolean> = {};
   const testScore: Record<string, number> = {};
   for (const r of testResults) {
-    testDone[String(r.ebook_num)] = true;
+    // A redo (testRedo) keeps the last score with submitted_at = 0: not done, score still shown.
+    if (r.submitted_at > 0) testDone[String(r.ebook_num)] = true;
     testScore[String(r.ebook_num)] = Math.max(0, r.score);
   }
 

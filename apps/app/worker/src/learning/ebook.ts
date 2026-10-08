@@ -184,10 +184,9 @@ function answerWrites(d: LearningDeps, changes: Map<GradableQuestion, TestAnswer
 }
 
 /**
- * PUT /api/ebooks/:n/test/answers. `reset` (testRedo) clears answers and the submitted result first.
- * KNOWN GAP (I1): the prototype's testRedo keeps testScore; here the result row goes, because S1's
- * /api/me/state derives testDone from the row's presence. Keeping the score needs both sides: reset
- * sets submitted_at = 0 (score/passed kept) and state.ts sets testDone only when submitted_at > 0.
+ * PUT /api/ebooks/:n/test/answers. `reset` (testRedo) clears the answers and reopens the test. Like
+ * the prototype's testRedo it keeps the last score: the result row stays with submitted_at = 0
+ * (score/passed kept), and /api/me/state sets testDone only when submitted_at > 0.
  */
 export async function saveAnswers(d: LearningDeps, n: number, body: TestAnswersBody): Promise<Ok> {
   const { questions } = await loadTest(d, n);
@@ -202,7 +201,7 @@ export async function saveAnswers(d: LearningDeps, n: number, body: TestAnswersB
         d.userId,
         n,
       ),
-      q(d.db, 'DELETE FROM ebook_test_results WHERE user_id = ? AND ebook_num = ?', d.userId, n),
+      q(d.db, 'UPDATE ebook_test_results SET submitted_at = 0 WHERE user_id = ? AND ebook_num = ?', d.userId, n),
     );
   }
   writes.push(...answerWrites(d, changes));
