@@ -1,0 +1,24 @@
+{
+  "name": "@tie/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure TS shared by browser, Workers and Node: contracts, content schemas, state, domain logic.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5"
+  }
+}

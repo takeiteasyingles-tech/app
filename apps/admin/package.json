@@ -1,0 +1,31 @@
+{
+  "name": "@tie/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "tie-admin Worker: admin SPA (static assets) + /admin-api.",
+  "scripts": {
+    "dev": "wrangler dev --persist-to ../app/.wrangler/state",
+    "build": "vite build",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json && tsc -p worker/tsconfig.json && tsc -p web/tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.1",
+    "@preact/signals": "^2.11.3",
+    "@tie/shared": "*",
+    "@tie/ui": "*",
+    "@tie/worker-core": "*",
+    "hono": "^4.13.13",
+    "preact": "^10.29.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261007.1",
+    "@preact/preset-vite": "^2.10.6",
+    "@tie/db": "*",
+    "vite": "^8.3.3",
+    "wrangler": "^4.148.0"
+  }
+}

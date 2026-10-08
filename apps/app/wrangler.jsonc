@@ -1,0 +1,46 @@
+{
+  // tie-app: student PWA (Workers Static Assets from dist/web) + /api + /m media. Spec 04 §1 "Wrangler config".
+  // The Worker only runs for /api/* and /m/*; everything else is served from assets (SPA fallback to index.html).
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tie-app",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-09-15",
+  "workers_dev": true,
+  "dev": { "port": 8787 },
+  "assets": {
+    "directory": "./dist/web",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/m/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tie-db",
+      // Placeholder: replace with the id printed by `wrangler d1 create tie-db` before the first deploy.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "tie-media" }],
+  "ai": { "binding": "AI" },
+  // Spec 04 §5: RL_AUTH 5/60s (ip+email), RL_AI 20/60s, RL_API 100/10s, RL_UPLOAD 5/60s (per user).
+  "ratelimits": [
+    { "name": "RL_AUTH", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
+    { "name": "RL_AI", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } },
+    { "name": "RL_API", "namespace_id": "1003", "simple": { "limit": 100, "period": 10 } },
+    { "name": "RL_UPLOAD", "namespace_id": "1004", "simple": { "limit": 5, "period": 60 } }
+  ],
+  "placement": { "mode": "smart" },
+  "observability": { "enabled": true },
+  // Production values only: fill both before the first deploy (like database_id above). Until then,
+  // and whenever a deploy carries dev values, the Worker answers non-local requests with 500 and logs
+  // why (worker-core config.ts). COOKIE_PREFIX is deliberately absent, so cookies get the __Host- prefix.
+  // Local dev overrides these from .dev.vars (localhost origin, Turnstile test keys, COOKIE_PREFIX="");
+  // see .dev.vars.example. Secrets (TURNSTILE_SECRET, MEDIA_TOKEN_KEY, IP_HASH_SALT) go through
+  // `wrangler secret put`.
+  "vars": {
+    "TURNSTILE_SITEKEY": "",
+    "APP_ORIGIN": ""
+  }
+}

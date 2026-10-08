@@ -1,0 +1,26 @@
+{
+  "name": "@tie/seed",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Extracts prototype content, emits SQL, uploads media and publishes content snapshots.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "seed": "tsx src/index.ts",
+    "bootstrap-admin": "tsx src/bootstrapAdmin.ts"
+  },
+  "dependencies": {
+    "@tie/shared": "*",
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "wrangler": "^4.148.0"
+  }
+}

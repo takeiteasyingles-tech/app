@@ -1,0 +1,22 @@
+# Copy to apps/app/.dev.vars for `wrangler dev` (never commit .dev.vars).
+# Values here override the production-only `vars` in wrangler.jsonc during local dev.
+# Production secrets are set with `wrangler secret put <NAME>` in apps/app.
+
+# --- Local-dev vars (production values live in wrangler.jsonc `vars`) ---
+# Plain-HTTP localhost origin; CSRF and the Turnstile offline shortcut key off it.
+APP_ORIGIN=http://localhost:8787
+# Cloudflare Turnstile test sitekey: always passes.
+TURNSTILE_SITEKEY=1x00000000000000000000AA
+# Empty prefix: browsers reject __Host- cookies without Secure, and plain-HTTP localhost has no https.
+COOKIE_PREFIX=
+
+# --- Secrets ---
+# Cloudflare Turnstile test secret: always passes (pairs with the test sitekey above).
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+
+# HMAC key for the signed media cookie (tie_m). Any random string locally; generate one with:
+#   node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+MEDIA_TOKEN_KEY=dev-media-token-key-change-me-0123456789abcdef
+
+# Salt for the hashed IPs stored in sessions and audit_log.
+IP_HASH_SALT=dev-ip-hash-salt-change-me-0123456789abcdef

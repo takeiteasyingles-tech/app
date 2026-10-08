@@ -1,0 +1,22 @@
+# Workers Static Assets headers (the Worker itself only runs for /admin-api/* and /m/*).
+# Same policy as @tie/worker-core headers.ts (spec 04 §5).
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: microphone=(self), camera=(), geolocation=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+
+# Hashed build output never changes.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML revalidates.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache

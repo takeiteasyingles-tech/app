@@ -1,0 +1,17 @@
+{
+  "name": "@tie/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end specs (Playwright) against wrangler dev.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@tie/shared": "*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0"
+  }
+}

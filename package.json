@@ -1,0 +1,37 @@
+{
+  "name": "takeiteasy",
+  "private": true,
+  "type": "module",
+  "description": "Take It Easy: curso de inglês para quem fala português (Cloudflare Workers + D1 + R2 + Workers AI).",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build -w @tie/app -w @tie/admin --if-present",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "dev:app": "npm run dev -w @tie/app",
+    "dev:admin": "npm run dev -w @tie/admin",
+    "db:migrate:local": "npm run db:migrate:local -w @tie/app",
+    "seed": "npm run seed -w @tie/seed --",
+    "seed:bootstrap-admin": "npm run bootstrap-admin -w @tie/seed --",
+    "parity": "npm run parity -w @tie/parity",
+    "e2e": "npm run e2e -w @tie/e2e",
+    "icons": "npm run icons -w @tie/icons"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^24.19.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@tie/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Design system: tie.css (verbatim from the prototype), fonts, icons and Preact components.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./css/*": "./css/*",
+    "./fonts/*": "./fonts/*",
+    "./icons": "./src/icons.tsx",
+    "./components": "./src/components/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "gen:icons": "tsx scripts/genIconsTsx.ts",
+    "fetch:fonts": "tsx scripts/fetchFonts.ts"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.3",
+    "@tie/shared": "*",
+    "preact": "^10.29.8"
+  }
+}

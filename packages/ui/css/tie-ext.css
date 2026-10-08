@@ -1,0 +1,14 @@
+/* Additive rules on top of tie.css (a verbatim copy of the prototype). Never override tie.css here
+   without a note explaining the production difference. */
+
+/* index.html <noscript> text (the prototype used an inline style attribute, which the CSP blocks). */
+.stage .noscript {
+  padding: 24px;
+  font-family: sans-serif;
+}
+
+/* Holders the shell adds so Preact can portal overlays next to #content; they generate no box,
+   so .overlay still positions against .app exactly as in the prototype. */
+#overlayroot {
+  display: contents;
+}

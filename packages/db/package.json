@@ -1,0 +1,13 @@
+{
+  "name": "@tie/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "D1 migrations for tie-db (applied by wrangler from apps/app and apps/admin).",
+  "files": [
+    "migrations"
+  ],
+  "exports": {
+    "./migrations/*": "./migrations/*"
+  }
+}

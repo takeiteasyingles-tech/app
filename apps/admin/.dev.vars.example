@@ -1,0 +1,14 @@
+# Copy to apps/admin/.dev.vars for `wrangler dev` (never commit .dev.vars).
+# Values here override the production-only `vars` in wrangler.jsonc during local dev.
+# Use the same MEDIA_TOKEN_KEY and IP_HASH_SALT as apps/app so media cookies and IP hashes match.
+
+# --- Local-dev vars (production values live in wrangler.jsonc `vars`) ---
+APP_ORIGIN=http://localhost:8788
+TURNSTILE_SITEKEY=1x00000000000000000000AA
+COOKIE_PREFIX=
+
+# --- Secrets ---
+# Cloudflare Turnstile test secret: always passes (pairs with the test sitekey above).
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+MEDIA_TOKEN_KEY=dev-media-token-key-change-me-0123456789abcdef
+IP_HASH_SALT=dev-ip-hash-salt-change-me-0123456789abcdef
