@@ -1,0 +1,30 @@
+# Secrets
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+
+# Dependencies and builds
+node_modules/
+dist/
+.wrangler/
+*.tsbuildinfo
+coverage/
+
+# Tooling output
+tools/parity/out/
+tools/e2e/out/
+playwright-report/
+test-results/
+packages/seed/out/
+.seed-uploaded.json
+
+# Prototype material that must not go to git (144 MB video, archive)
+prototipo/temp/
+prototipo/prototipo.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
