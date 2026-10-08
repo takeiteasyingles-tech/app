@@ -29,9 +29,23 @@ describe('csrfDecision', () => {
     expect(csrfDecision(input({ secFetchSite: null }))).toEqual({ ok: true });
   });
 
-  it('accepts the request origin when APP_ORIGIN differs (localhost dev)', () => {
+  it('accepts the request origin when a local APP_ORIGIN differs (localhost dev, parity slots)', () => {
+    const url = 'http://localhost:8201/api/me/settings';
+    const local = { url, origin: 'http://localhost:8201', method: 'PATCH', appOrigin: 'http://localhost:8787' };
+    expect(csrfDecision(input(local))).toEqual({ ok: true });
+    expect(csrfDecision(input({ ...local, appOrigin: '' }))).toEqual({ ok: true });
+  });
+
+  it('accepts only APP_ORIGIN when it is set and not local', () => {
+    // Same Worker reached through a second hostname (workers.dev vs custom domain, preview URL).
+    const other = 'https://tie-app-preview.example.workers.dev';
+    expect(csrfDecision(input({ url: `${other}/api/me/settings`, origin: other }))).toEqual({
+      ok: false,
+      reason: 'bad-origin',
+    });
     const url = 'http://localhost:8787/api/me/settings';
-    expect(csrfDecision(input({ url, origin: 'http://localhost:8787', method: 'PATCH' }))).toEqual({ ok: true });
+    expect(csrfDecision(input({ url, origin: 'http://localhost:8787' }))).toEqual({ ok: false, reason: 'bad-origin' });
+    expect(csrfDecision(input({ url, origin: APP }))).toEqual({ ok: true });
   });
 
   it('requires an Origin header', () => {

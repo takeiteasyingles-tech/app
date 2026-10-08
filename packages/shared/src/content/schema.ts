@@ -312,6 +312,12 @@ export const Catalog = z.object({
   mic: MicCatalog,
   game: GameCatalog,
   srs: z.object({ grades: z.array(SrsGrade).length(4) }),
+  /**
+   * Images the prototype screens hardcode (content_blobs.ui_images), keyed by their path under
+   * assets/img/gen/ without extension: 'bg/home', 'bg/maggie-set', 'avatar/user-1', ... (login's
+   * background ships as the static /img/login.webp, since it shows before the media cookie exists).
+   */
+  images: z.record(z.string(), MediaUrl).optional(),
 });
 export type Catalog = z.infer<typeof Catalog>;
 
@@ -339,10 +345,22 @@ export const Block = z.object({
 });
 export type Block = z.infer<typeof Block>;
 
-export const LyricLine = z.object({ en: z.string(), pt: z.string(), gap: z.string().optional() });
+export const LyricLine = z.object({
+  /** Stable id (`e1-ly0`); compile fills it positionally when a row lacks it. */
+  id: z.string().optional(),
+  en: z.string(),
+  pt: z.string(),
+  gap: z.string().optional(),
+});
 export type LyricLine = z.infer<typeof LyricLine>;
 
+/** Take a Look word with its stable id (`e1-vi0`). */
+export const VisualWord = Bilingual.extend({ id: z.string().optional() });
+export type VisualWord = z.infer<typeof VisualWord>;
+
 export const DialogLine = z.object({
+  /** Stable id (`e1-dl0`); compile fills it positionally when a row lacks it. */
+  id: z.string().optional(),
   /** '' for stage directions, 'All' for everyone. */
   who: z.string(),
   en: z.string(),
@@ -432,7 +450,7 @@ export const Episode = z.object({
   sceneNote: z.string(),
   lyrics: z.array(LyricLine),
   cast: z.array(z.string()),
-  visual: z.array(Bilingual),
+  visual: z.array(VisualWord),
   dialogTitle: z.string(),
   dialogSub: z.string(),
   dialog: z.array(DialogLine),

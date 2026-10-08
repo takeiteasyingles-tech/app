@@ -21,3 +21,8 @@
   Cache-Control: no-cache
 /manifest.webmanifest
   Cache-Control: no-cache
+
+# The service worker must always revalidate (updates reach users on the next visit).
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /

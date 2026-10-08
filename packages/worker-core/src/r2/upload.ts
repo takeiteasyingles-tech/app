@@ -21,6 +21,28 @@ const ascii = (b: Uint8Array, at: number, text: string): boolean => {
   return true;
 };
 
+/** ftyp major brands accepted as MP4 (ISO base media); heic/heix/mif1/avif/avis/'qt  ' are not. */
+const MP4_AUDIO_BRANDS: ReadonlySet<string> = new Set(['M4A ', 'M4B ', 'M4P ', 'F4A ']);
+const MP4_VIDEO_BRANDS: ReadonlySet<string> = new Set([
+  'isom',
+  'iso2',
+  'iso3',
+  'iso4',
+  'iso5',
+  'iso6',
+  'mp41',
+  'mp42',
+  'mp71',
+  'avc1',
+  'dash',
+  'M4V ',
+  'M4VH',
+  'M4VP',
+  'MSNV',
+  'NDAS',
+  'f4v ',
+]);
+
 /** Detects the real type from the first bytes; null when not one of the supported formats. */
 export function sniffMime(b: Uint8Array): SniffedMime | null {
   if (b.length < 4) return null;
@@ -32,8 +54,11 @@ export function sniffMime(b: Uint8Array): SniffedMime | null {
   if (ascii(b, 0, '%PDF-')) return 'application/pdf';
   if (b0 === 0x1a && b1 === 0x45 && b2 === 0xdf && b3 === 0xa3) return 'video/webm';
   if (ascii(b, 4, 'ftyp')) {
+    if (b.length < 12) return null;
     const brand = String.fromCharCode(...b.subarray(8, 12));
-    return brand === 'M4A ' || brand === 'M4B ' ? 'audio/mp4' : 'video/mp4';
+    if (MP4_AUDIO_BRANDS.has(brand)) return 'audio/mp4';
+    // ISO-BMFF also carries HEIC/AVIF stills and QuickTime (mov): only real MP4 brands pass.
+    return MP4_VIDEO_BRANDS.has(brand) ? 'video/mp4' : null;
   }
   if (ascii(b, 0, 'ID3')) return 'audio/mpeg';
   // MPEG audio frame sync: 11 set bits, version != reserved (01), layer != reserved (00).

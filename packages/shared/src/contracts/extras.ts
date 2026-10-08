@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IdParams, IdString } from './common';
 import { AwardResult } from './game';
 import { endpoint } from './http';
-import { MicScoreSource } from './progress';
+import { MIC_ATTEMPT_MAX, MicScoreSource } from './progress';
 
 /** finishScene: seen + lastId; awards `extra` once per id. */
 export const ExtraSeenRes = z.object({ seen: z.literal(true), lastId: z.string(), award: AwardResult.nullable() });
@@ -11,11 +11,14 @@ export type ExtraSeenRes = z.infer<typeof ExtraSeenRes>;
 /**
  * One dubbed line: updates the running average and awards `dub`. The spec's award key is dub:{id};
  * the copy says "+10 por fala", so `line` is sent in case the key becomes per line.
+ * source 'ia' must carry `attempt`, the server-signed token /api/pronounce returned for
+ * phraseId `${extraId}:${line}` (PronounceResult.attempt) with this exact score.
  */
 export const DubBody = z.object({
   score: z.int().min(0).max(10),
   source: MicScoreSource,
   line: z.int().min(0).max(500),
+  attempt: z.string().min(1).max(MIC_ATTEMPT_MAX).optional(),
 });
 export type DubBody = z.infer<typeof DubBody>;
 

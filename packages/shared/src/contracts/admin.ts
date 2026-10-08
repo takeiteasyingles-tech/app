@@ -414,6 +414,8 @@ export const BLOB_KEYS = [
   'mic_help',
   'ebook_teasers',
   'scene_images',
+  'ui_images',
+  'onboarding_meta',
 ] as const;
 
 export const BlobRow = z.object({

@@ -61,11 +61,19 @@ export type ExerciseRes = z.infer<typeof ExerciseRes>;
 export const MicScoreSource = z.enum([...AiSource.options, 'script']);
 export type MicScoreSource = z.infer<typeof MicScoreSource>;
 
-/** Take the Mic score: awards mic_good (score ≥ 8) or mic_try, once per phrase each. */
+/** Upper bound for the signed attempt token issued by /api/pronounce (PronounceResult.attempt). */
+export const MIC_ATTEMPT_MAX = 600;
+
+/**
+ * Take the Mic score: awards mic_good (score ≥ 8) or mic_try, once per phrase each.
+ * source 'ia' must carry `attempt`, the server-signed token from /api/pronounce (its score wins over
+ * `score`); 'demo' and 'script' scores are recorded but only ever award mic_try.
+ */
 export const MicScoreBody = z.object({
   phraseId: IdString,
   score: z.int().min(0).max(10),
   source: MicScoreSource,
+  attempt: z.string().min(1).max(MIC_ATTEMPT_MAX).optional(),
 });
 export type MicScoreBody = z.infer<typeof MicScoreBody>;
 

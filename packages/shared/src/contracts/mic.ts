@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { LIMITS } from '../constants';
 import { Bilingual, MicMode } from '../content/schema';
 import { MicSession } from '../state';
-import { Feedback, Mood, PronTip } from './ai';
+import { Feedback, Mood, PronTip, TutorReply } from './ai';
 import { IdParams, IdString } from './common';
 import { AwardResult } from './game';
 import { endpoint } from './http';
@@ -55,6 +55,14 @@ export const EndSessionRes = z.object({
   award: AwardResult.nullable(),
 });
 export type EndSessionRes = z.infer<typeof EndSessionRes>;
+
+/**
+ * What POST /api/tutor actually returns: the TutorReply contract plus the maggie_turn award of
+ * this turn (null when capped, replayed or not awarded). Parse with this to read the award;
+ * TutorReply alone strips it. Lives here, not in ai.ts, to keep ai.ts free of the game import.
+ */
+export const TutorTurnRes = TutorReply.extend({ award: AwardResult.nullable().optional() });
+export type TutorTurnRes = z.infer<typeof TutorTurnRes>;
 
 export const SessionsRes = z.object({ sessions: z.array(MicSession) });
 export type SessionsRes = z.infer<typeof SessionsRes>;

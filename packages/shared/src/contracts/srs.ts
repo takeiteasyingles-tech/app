@@ -36,6 +36,11 @@ export const AddCardsRes = z.object({
   added: z.array(DeckCard),
   skipped: z.int().min(0),
   due: z.int().min(0),
+  /**
+   * POST /api/srs/cards only: one `word` award (word:{normKey} of the first added card) per request,
+   * like the prototype's single award per save. Null when nothing was added.
+   */
+  award: AwardResult.nullable().optional(),
 });
 export type AddCardsRes = z.infer<typeof AddCardsRes>;
 

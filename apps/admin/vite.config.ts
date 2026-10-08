@@ -1,5 +1,5 @@
 import preact from '@preact/preset-vite';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, type ProxyOptions } from 'vite';
 
 // Admin SPA: web/ → dist/web (Workers Static Assets). Mirrors apps/app/vite.config.ts without the PWA.
 
@@ -24,12 +24,28 @@ function preloadFonts(): Plugin {
   };
 }
 
+const WORKER_DEV = 'http://localhost:8788';
+
+/** Dev proxy to `wrangler dev` that presents the worker's own origin. */
+function workerProxy(target: string): ProxyOptions {
+  return {
+    target,
+    changeOrigin: true,
+    configure(proxy) {
+      proxy.on('proxyReq', (req) => {
+        if (req.getHeader('origin')) req.setHeader('origin', target);
+      });
+    },
+  };
+}
+
 export default defineConfig({
   root: 'web',
   plugins: [preact(), preloadFonts()],
   server: {
     port: 5174,
-    proxy: { '/admin-api': 'http://localhost:8788', '/m': 'http://localhost:8788' },
+    // The worker's CSRF check wants Origin == the worker origin, so the proxy rewrites it (spec 05 #7).
+    proxy: { '/admin-api': workerProxy(WORKER_DEV), '/m': workerProxy(WORKER_DEV) },
   },
   build: {
     outDir: '../dist/web',

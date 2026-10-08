@@ -23,8 +23,9 @@
     "db:migrate:local": "npm run db:migrate:local -w @tie/app",
     "seed": "npm run seed -w @tie/seed --",
     "seed:bootstrap-admin": "npm run bootstrap-admin -w @tie/seed --",
-    "parity": "npm run parity -w @tie/parity",
-    "e2e": "npm run e2e -w @tie/e2e",
+    "parity": "npm run parity -w @tie/parity --",
+    "parity:reveal": "npm run parity:reveal -w @tie/parity --",
+    "e2e": "npm run e2e -w @tie/e2e --",
     "icons": "npm run icons -w @tie/icons"
   },
   "devDependencies": {
@@ -33,5 +34,9 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "workerd": true
   }
 }

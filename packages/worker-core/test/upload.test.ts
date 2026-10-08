@@ -51,6 +51,16 @@ describe('sniffMime', () => {
     expect(sniffMime(bytes('RIFF', [0, 0, 0, 0], 'AVI '))).toBeNull();
     expect(sniffMime(new Uint8Array([0xff, 0xd8]))).toBeNull();
   });
+
+  it('accepts only MP4 ftyp brands (no HEIC, AVIF or QuickTime)', () => {
+    for (const brand of ['mp42', 'iso5', 'avc1', 'M4V ', 'dash']) {
+      expect(sniffMime(bytes([0, 0, 0, 0x20], `ftyp${brand}`))).toBe('video/mp4');
+    }
+    expect(sniffMime(bytes([0, 0, 0, 0x20], 'ftypM4B '))).toBe('audio/mp4');
+    for (const brand of ['heic', 'heix', 'mif1', 'msf1', 'avif', 'avis', 'qt  ', 'crx ']) {
+      expect(sniffMime(bytes([0, 0, 0, 0x20], `ftyp${brand}`))).toBeNull();
+    }
+  });
 });
 
 describe('allowedMime', () => {

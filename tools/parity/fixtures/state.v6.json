@@ -1,0 +1,854 @@
+{
+  "v": 6,
+  "user": {
+    "name": "Ana",
+    "fullName": "Ana Beatriz Souza",
+    "email": "ana@parity.test"
+  },
+  "profile": {
+    "name": "Ana",
+    "fullName": "Ana Beatriz Souza",
+    "birth": "1994-05-12",
+    "age": "25-34",
+    "occup": "trabalho",
+    "area": "criativo",
+    "level": "basico",
+    "goals": ["viagem", "series", "carreira"],
+    "deadline": "6m",
+    "history": ["escola", "app"],
+    "fails": ["falar", "tempo"],
+    "formats": ["series", "animes", "musica"],
+    "genres": ["comedia", "suspense", "shonen", "musical", "pop", "anos80"],
+    "themes": ["comida", "viagem", "tecnologia"],
+    "diffs": ["pron", "listening", "shy"],
+    "mainDiff": "pron",
+    "styles": ["vendo", "falando"],
+    "company": "desafio",
+    "feedback": "direto",
+    "days": [1, 2, 3, 4, 5],
+    "minutes": 20,
+    "reminders": ["07:30", "20:00"],
+    "motives": ["viagem", "carreira"],
+    "why": "Quero viajar para Boston no ano que vem sem travar.",
+    "voice": null,
+    "assistant": "margaret",
+    "avatar": 2
+  },
+  "onbStep": 7,
+  "draft": {
+    "fullName": "Ana Beatriz Souza",
+    "name": "Ana",
+    "birth": "1994-05-12",
+    "email": "ana@parity.test",
+    "pass": "",
+    "goals": ["viagem", "series", "carreira"],
+    "formats": ["series", "animes", "musica"],
+    "genres": ["comedia", "suspense", "shonen", "musical", "pop", "anos80"],
+    "themes": ["comida", "viagem", "tecnologia"],
+    "diffs": ["pron", "listening", "shy"],
+    "mainDiff": "pron",
+    "styles": ["vendo", "falando"],
+    "company": "desafio",
+    "feedback": "direto",
+    "days": [1, 2, 3, 4, 5],
+    "minutes": 20,
+    "reminders": ["07:30", "20:00"],
+    "voice": null
+  },
+  "prog": {
+    "1": 6
+  },
+  "ebooks": {
+    "1": true
+  },
+  "epsDone": {},
+  "stepOk": {
+    "1-1": true,
+    "1-2": true,
+    "1-4": true,
+    "1-5": true
+  },
+  "scores": {
+    "1-0": 8,
+    "1-1": 6,
+    "1-2": 9
+  },
+  "exAns": {
+    "1-0-0": 0,
+    "1-0-1": 2,
+    "1-0-2": 0
+  },
+  "testAns": {},
+  "testDone": false,
+  "testScore": null,
+  "deck": [
+    {
+      "en": "passport",
+      "pt": "passaporte",
+      "scene": "Mic · Maggie",
+      "at": 1789657200000,
+      "reps": 1
+    },
+    {
+      "en": "flying",
+      "pt": "voando",
+      "scene": "Mic · Maggie",
+      "at": 1789916400000,
+      "reps": 2
+    },
+    {
+      "en": "got it",
+      "pt": "entendi",
+      "scene": "Extra · Woods & Beans",
+      "at": 1789473600000
+    },
+    {
+      "en": "order",
+      "pt": "pedido",
+      "scene": "Extra · Woods & Beans",
+      "at": 1789657380000,
+      "reps": 1
+    },
+    {
+      "en": "morning",
+      "pt": "manhã",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789466400000
+    },
+    {
+      "en": "kitchen",
+      "pt": "cozinha",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789462800000
+    },
+    {
+      "en": "window",
+      "pt": "janela",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789657560000,
+      "reps": 1
+    },
+    {
+      "en": "table",
+      "pt": "mesa",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789455600000
+    },
+    {
+      "en": "coffee",
+      "pt": "café",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789452000000
+    },
+    {
+      "en": "mug",
+      "pt": "caneca",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789657740000,
+      "reps": 1
+    },
+    {
+      "en": "door",
+      "pt": "porta",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789444800000
+    },
+    {
+      "en": "phone",
+      "pt": "celular",
+      "scene": "Ep. 1 · Take a Look",
+      "at": 1789916400000,
+      "reps": 2
+    }
+  ],
+  "due": 6,
+  "extras": {
+    "seen": {
+      "woods-and-beans": true
+    },
+    "dubs": {
+      "woods-and-beans": 7
+    },
+    "best": 85,
+    "lastId": "woods-and-beans"
+  },
+  "maggie": {
+    "secLeft": 3060,
+    "sessions": [
+      {
+        "id": "56xdhnp",
+        "at": 1789425000000,
+        "assistant": "margaret",
+        "mode": "missao",
+        "mission": "viagem",
+        "extraId": "woods-and-beans",
+        "secs": 300,
+        "turns": [
+          {
+            "who": "her",
+            "en": "Good morning. Where are you flying today?",
+            "pt": "Bom dia. Para onde você vai voar hoje?",
+            "fb": null,
+            "pron": [],
+            "words": [
+              {
+                "en": "flying",
+                "pt": "voando"
+              }
+            ]
+          },
+          {
+            "who": "me",
+            "en": "Hello, I have a flight to Boston today.",
+            "pt": "",
+            "fb": {
+              "status": "certo",
+              "original": "Hello, I have a flight to Boston today.",
+              "corrected": "",
+              "explain_pt": "Certinho. Pode seguir nesse ritmo.",
+              "cat": ""
+            },
+            "pron": [
+              {
+                "word": "hello",
+                "tip_pt": "O h de hello é só ar. Nada de R de “rato”."
+              },
+              {
+                "word": "have",
+                "tip_pt": "O h de have é só ar. Nada de R de “rato”."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Nice. Great. Can I see your passport, please?",
+            "pt": "Ótimo. Posso ver o seu passaporte, por favor?",
+            "fb": null,
+            "pron": [],
+            "words": [
+              {
+                "en": "passport",
+                "pt": "passaporte"
+              }
+            ]
+          },
+          {
+            "who": "me",
+            "en": "Yes, here is my passport.",
+            "pt": "",
+            "fb": {
+              "status": "certo",
+              "original": "Yes, here is my passport.",
+              "corrected": "",
+              "explain_pt": "Isso. Soou natural.",
+              "cat": ""
+            },
+            "pron": [
+              {
+                "word": "here",
+                "tip_pt": "O h de here é só ar. Nada de R de “rato”."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Thank you. Do you have any bags to check?",
+            "pt": "Obrigada. Você tem malas para despachar?",
+            "fb": null,
+            "pron": [],
+            "words": [
+              {
+                "en": "check a bag",
+                "pt": "despachar a mala"
+              }
+            ]
+          },
+          {
+            "who": "me",
+            "en": "I have one bag, it depends of the weight?",
+            "pt": "",
+            "fb": {
+              "status": "ajuste",
+              "original": "I have one bag, it depends of the weight?",
+              "corrected": "I have one bag, it depends on the weight?",
+              "explain_pt": "Em inglês é depends on, não of.",
+              "cat": "Preposição"
+            },
+            "pron": [
+              {
+                "word": "have",
+                "tip_pt": "O h de have é só ar. Nada de R de “rato”."
+              },
+              {
+                "word": "bag",
+                "tip_pt": "Termine bag seco, sem “bagi” no fim."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Would you like a window or an aisle seat?",
+            "pt": "Você prefere janela ou corredor?",
+            "fb": null,
+            "pron": [],
+            "words": [
+              {
+                "en": "aisle seat",
+                "pt": "assento no corredor"
+              }
+            ]
+          },
+          {
+            "who": "me",
+            "en": "A window seat, please. Is it far?",
+            "pt": "",
+            "fb": {
+              "status": "certo",
+              "original": "A window seat, please. Is it far?",
+              "corrected": "",
+              "explain_pt": "Certinho. Pode seguir nesse ritmo.",
+              "cat": ""
+            },
+            "pron": [],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Here’s your boarding pass. Gate 12. Have a nice flight.",
+            "pt": "Aqui está o seu cartão de embarque. Portão 12. Boa viagem.",
+            "fb": null,
+            "pron": [],
+            "words": [
+              {
+                "en": "boarding pass",
+                "pt": "cartão de embarque"
+              },
+              {
+                "en": "gate",
+                "pt": "portão"
+              }
+            ]
+          },
+          {
+            "who": "me",
+            "en": "Thank you so much! Have a nice day.",
+            "pt": "",
+            "fb": {
+              "status": "certo",
+              "original": "Thank you so much! Have a nice day.",
+              "corrected": "",
+              "explain_pt": "Entendi de primeira. É esse o objetivo.",
+              "cat": ""
+            },
+            "pron": [
+              {
+                "word": "thank",
+                "tip_pt": "Th: língua entre os dentes e sopro."
+              },
+              {
+                "word": "have",
+                "tip_pt": "O h de have é só ar. Nada de R de “rato”."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Here’s your boarding pass. Gate 12. Have a nice flight.",
+            "pt": "Aqui está o seu cartão de embarque. Portão 12. Boa viagem.",
+            "fb": null,
+            "pron": [],
+            "words": [
+              {
+                "en": "boarding pass",
+                "pt": "cartão de embarque"
+              },
+              {
+                "en": "gate",
+                "pt": "portão"
+              }
+            ]
+          }
+        ],
+        "report": {
+          "summary_pt": "Você falou 5 vezes com a Maggie e 1 fala pediu ajuste.",
+          "strengths": [
+            "4 falas saíram certas de primeira.",
+            "Você arriscou frases longas, e isso é o que mais faz a fala destravar.",
+            "Você devolveu perguntas. Conversa em inglês é assim: sempre devolva a bola."
+          ],
+          "fixes": [
+            {
+              "said": "I have one bag, it depends of the weight?",
+              "better": "I have one bag, it depends on the weight?",
+              "why_pt": "Em inglês é depends on, não of.",
+              "cat": "Preposição"
+            }
+          ],
+          "pron": [
+            {
+              "word": "hello",
+              "tip_pt": "O h de hello é só ar. Nada de R de “rato”."
+            },
+            {
+              "word": "have",
+              "tip_pt": "O h de have é só ar. Nada de R de “rato”."
+            },
+            {
+              "word": "here",
+              "tip_pt": "O h de here é só ar. Nada de R de “rato”."
+            },
+            {
+              "word": "bag",
+              "tip_pt": "Termine bag seco, sem “bagi” no fim."
+            }
+          ],
+          "words": [
+            {
+              "en": "flying",
+              "pt": "voando"
+            },
+            {
+              "en": "passport",
+              "pt": "passaporte"
+            },
+            {
+              "en": "check a bag",
+              "pt": "despachar a mala"
+            },
+            {
+              "en": "aisle seat",
+              "pt": "assento no corredor"
+            },
+            {
+              "en": "boarding pass",
+              "pt": "cartão de embarque"
+            },
+            {
+              "en": "gate",
+              "pt": "portão"
+            }
+          ],
+          "next_goal_pt": "Próxima meta: preposição. A Maggie vai puxar esse ponto na próxima conversa.",
+          "source": "demo"
+        }
+      },
+      {
+        "id": "3dekeaw",
+        "at": 1789340400000,
+        "assistant": "margaret",
+        "mode": "livre",
+        "mission": "viagem",
+        "extraId": "woods-and-beans",
+        "secs": 240,
+        "turns": [
+          {
+            "who": "her",
+            "en": "Hi, Ana. So, what series are you watching right now?",
+            "pt": "Oi, Ana. E aí, que série você está vendo agora?",
+            "fb": null,
+            "pron": [],
+            "words": []
+          },
+          {
+            "who": "me",
+            "en": "Hi Maggie! I am designer, I work with apps.",
+            "pt": "",
+            "fb": {
+              "status": "ajuste",
+              "original": "Hi Maggie! I am designer, I work with apps.",
+              "corrected": "Hi Maggie! I am a designer, I work with apps.",
+              "explain_pt": "Profissão pede artigo em inglês: I’m a designer, I’m an engineer.",
+              "cat": "Artigo antes de profissão"
+            },
+            "pron": [
+              {
+                "word": "hi",
+                "tip_pt": "O h de hi é só ar. Nada de R de “rato”."
+              },
+              {
+                "word": "work",
+                "tip_pt": "Termine work seco, sem “worki” no fim."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Oh, nice. Why do you like it?",
+            "pt": "Ah, legal. Por que você gosta?",
+            "fb": null,
+            "pron": [],
+            "words": []
+          },
+          {
+            "who": "me",
+            "en": "I like very much anime and music.",
+            "pt": "",
+            "fb": {
+              "status": "ajuste",
+              "original": "I like very much anime and music.",
+              "corrected": "I really like anime and music.",
+              "explain_pt": "Very much não vai no meio. Diga I really like anime.",
+              "cat": "Ordem da frase"
+            },
+            "pron": [
+              {
+                "word": "and",
+                "tip_pt": "Termine and seco, sem “andi” no fim."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Oh, you really like anime and music. Do you watch it in English or in Portuguese?",
+            "pt": "Você assiste em inglês ou em português?",
+            "fb": null,
+            "pron": [],
+            "words": []
+          },
+          {
+            "who": "me",
+            "en": "Yesterday I watch two episodes of Woods and Beans.",
+            "pt": "",
+            "fb": {
+              "status": "ajuste",
+              "original": "Yesterday I watch two episodes of Woods and Beans.",
+              "corrected": "I watched two episodes of Woods and Beans.",
+              "explain_pt": "Com yesterday e last week o verbo vai para o passado: I went, I watched.",
+              "cat": "Passado"
+            },
+            "pron": [
+              {
+                "word": "and",
+                "tip_pt": "Termine and seco, sem “andi” no fim."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Oh, you watched two episodes of Woods and Beans. Cool. What else do you like to do on the weekend?",
+            "pt": "Legal. O que mais você gosta de fazer no fim de semana?",
+            "fb": null,
+            "pron": [],
+            "words": []
+          },
+          {
+            "who": "me",
+            "en": "My sister have a cat, she is so funny.",
+            "pt": "",
+            "fb": {
+              "status": "certo",
+              "original": "My sister have a cat, she is so funny.",
+              "corrected": "",
+              "explain_pt": "Boa: sujeito, verbo e complemento no lugar.",
+              "cat": ""
+            },
+            "pron": [
+              {
+                "word": "have",
+                "tip_pt": "O h de have é só ar. Nada de R de “rato”."
+              }
+            ],
+            "words": []
+          },
+          {
+            "who": "her",
+            "en": "Great. That sounds fun. Is it popular in Brazil?",
+            "pt": "Parece divertido. É popular no Brasil?",
+            "fb": null,
+            "pron": [],
+            "words": []
+          }
+        ],
+        "report": {
+          "summary_pt": "Você falou 4 vezes com a Maggie e 3 falas pediram ajuste.",
+          "strengths": [
+            "1 fala saiu certa de primeira.",
+            "Você arriscou frases longas, e isso é o que mais faz a fala destravar."
+          ],
+          "fixes": [
+            {
+              "said": "Hi Maggie! I am designer, I work with apps.",
+              "better": "Hi Maggie! I am a designer, I work with apps.",
+              "why_pt": "Profissão pede artigo em inglês: I’m a designer, I’m an engineer.",
+              "cat": "Artigo antes de profissão"
+            },
+            {
+              "said": "I like very much anime and music.",
+              "better": "I really like anime and music.",
+              "why_pt": "Very much não vai no meio. Diga I really like anime.",
+              "cat": "Ordem da frase"
+            },
+            {
+              "said": "Yesterday I watch two episodes of Woods and Beans.",
+              "better": "I watched two episodes of Woods and Beans.",
+              "why_pt": "Com yesterday e last week o verbo vai para o passado: I went, I watched.",
+              "cat": "Passado"
+            }
+          ],
+          "pron": [
+            {
+              "word": "hi",
+              "tip_pt": "O h de hi é só ar. Nada de R de “rato”."
+            },
+            {
+              "word": "work",
+              "tip_pt": "Termine work seco, sem “worki” no fim."
+            },
+            {
+              "word": "and",
+              "tip_pt": "Termine and seco, sem “andi” no fim."
+            },
+            {
+              "word": "have",
+              "tip_pt": "O h de have é só ar. Nada de R de “rato”."
+            }
+          ],
+          "words": [],
+          "next_goal_pt": "Próxima meta: artigo antes de profissão. A Maggie vai puxar esse ponto na próxima conversa.",
+          "source": "demo"
+        }
+      }
+    ]
+  },
+  "game": {
+    "points": 340,
+    "streak": 3,
+    "lastDay": "2026-09-15",
+    "daily": {
+      "2026-09-13": {
+        "points": 120,
+        "steps": 2,
+        "cards": 0,
+        "maggieSec": 240,
+        "extras": 0,
+        "mic": 2,
+        "goal": true,
+        "missions": {
+          "step": true,
+          "maggie": true
+        }
+      },
+      "2026-09-14": {
+        "points": 134,
+        "steps": 0,
+        "cards": 3,
+        "maggieSec": 300,
+        "extras": 1,
+        "mic": 0,
+        "goal": true,
+        "missions": {
+          "extra": true,
+          "maggie": true
+        }
+      },
+      "2026-09-15": {
+        "points": 86,
+        "steps": 2,
+        "cards": 4,
+        "maggieSec": 0,
+        "extras": 0,
+        "mic": 3,
+        "goal": false,
+        "missions": {
+          "step": true
+        }
+      }
+    },
+    "badges": ["first-step", "mic-8", "first-talk", "cinema", "dub", "song", "streak-3"],
+    "log": [
+      {
+        "k": "step",
+        "t": 1789300800000,
+        "p": 10
+      },
+      {
+        "k": "step",
+        "t": 1789300860000,
+        "p": 10
+      },
+      {
+        "k": "mic_try",
+        "t": 1789302000000,
+        "p": 5
+      },
+      {
+        "k": "mic_good",
+        "t": 1789302060000,
+        "p": 15
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789340460000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789340520000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789340580000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789340640000,
+        "p": 5
+      },
+      {
+        "k": "maggie_session",
+        "t": 1789340700000,
+        "p": 30
+      },
+      {
+        "k": "extra",
+        "t": 1789399800000,
+        "p": 20
+      },
+      {
+        "k": "dub",
+        "t": 1789400400000,
+        "p": 10
+      },
+      {
+        "k": "card",
+        "t": 1789401600000,
+        "p": 2
+      },
+      {
+        "k": "card",
+        "t": 1789401660000,
+        "p": 2
+      },
+      {
+        "k": "card",
+        "t": 1789401720000,
+        "p": 2
+      },
+      {
+        "k": "word",
+        "t": 1789402200000,
+        "p": 3
+      },
+      {
+        "k": "ex_right",
+        "t": 1789402800000,
+        "p": 5
+      },
+      {
+        "k": "ex_right",
+        "t": 1789402860000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789425060000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789425120000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789425180000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789425240000,
+        "p": 5
+      },
+      {
+        "k": "maggie_turn",
+        "t": 1789425300000,
+        "p": 5
+      },
+      {
+        "k": "maggie_session",
+        "t": 1789425360000,
+        "p": 30
+      },
+      {
+        "k": "step",
+        "t": 1789470000000,
+        "p": 10
+      },
+      {
+        "k": "step",
+        "t": 1789470060000,
+        "p": 10
+      },
+      {
+        "k": "song",
+        "t": 1789470600000,
+        "p": 10
+      },
+      {
+        "k": "mic_try",
+        "t": 1789471200000,
+        "p": 5
+      },
+      {
+        "k": "mic_try",
+        "t": 1789471260000,
+        "p": 5
+      },
+      {
+        "k": "mic_good",
+        "t": 1789471320000,
+        "p": 15
+      },
+      {
+        "k": "ex_right",
+        "t": 1789472400000,
+        "p": 5
+      },
+      {
+        "k": "word",
+        "t": 1789473600000,
+        "p": 3
+      },
+      {
+        "k": "card",
+        "t": 1789474200000,
+        "p": 2
+      },
+      {
+        "k": "card",
+        "t": 1789474260000,
+        "p": 2
+      },
+      {
+        "k": "card",
+        "t": 1789474320000,
+        "p": 2
+      },
+      {
+        "k": "card",
+        "t": 1789474380000,
+        "p": 2
+      }
+    ]
+  },
+  "settings": {
+    "ts": 1,
+    "sound": true,
+    "hd": false,
+    "trans": true,
+    "slow": true,
+    "remind": true,
+    "phone": false,
+    "fx": true,
+    "free": false
+  }
+}

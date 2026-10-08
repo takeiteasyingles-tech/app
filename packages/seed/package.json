@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
     "seed": "tsx src/index.ts",
-    "bootstrap-admin": "tsx src/bootstrapAdmin.ts"
+    "bootstrap-admin": "tsx src/bootstrapAdmin.ts",
+    "fixture": "tsx src/fixtureToSql.ts"
   },
   "dependencies": {
     "@tie/shared": "*",

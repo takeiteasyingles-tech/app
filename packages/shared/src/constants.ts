@@ -76,8 +76,22 @@ export const DEFAULT_TERMS_VERSION = '2026-10';
 
 /** Feature flags (feature_flags.key) the code reads. */
 export const FLAGS = {
+  aiEnabled: 'ai.enabled',
   freeSteps: 'dev.free_steps',
   storeRecordings: 'mic.store_recordings',
+} as const;
+
+/** ai_prompts.key values the AI routes read (seeded from packages/seed/prompts/*.md). */
+export const AI_PROMPT_KEYS = {
+  tutor: 'tutor_system',
+  report: 'report_system',
+} as const;
+
+/** plans.features keys the code reads (truthy = the plan has it). */
+export const PLAN_FEATURES = {
+  /** Extras with premium=1 (content file extra/{id}.json answers 403 plan_required without it). */
+  premiumExtras: 'premium_extras',
+  hd: 'hd',
 } as const;
 
 /** app_settings keys the code reads. */

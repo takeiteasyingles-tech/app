@@ -92,6 +92,12 @@ export const PronounceResult = z.object({
   issues: z.array(PronounceIssue).max(AI_LIMITS.pronounceIssues),
   praise_pt: z.string(),
   source: AiSource,
+  /**
+   * Signed attempt token (server AI scoring only, when the request named a phraseId). Carries
+   * {userId, phraseId, score, exp}; /api/progress/mic and /api/extras/:id/dub can verify it so a
+   * client cannot claim an AI score it never got. Absent on demo results.
+   */
+  attempt: z.string().max(600).optional(),
 });
 export type PronounceResult = z.infer<typeof PronounceResult>;
 
@@ -118,6 +124,11 @@ export const PronounceBody = z.object({
   target: z.string().min(1).max(300),
   /** Links the try to a Mic session (pronuncia mode) so it is billed and stored as a turn. */
   session_id: IdString.optional(),
+  /**
+   * What the score is for (a mic phrase id, or `${extraId}:${line}` for a dub line). When present
+   * the response carries a signed `attempt` token bound to this id and the score.
+   */
+  phraseId: IdString.optional(),
 });
 export type PronounceBody = z.infer<typeof PronounceBody>;
 

@@ -1,0 +1,9 @@
+{
+  // Page-side hooks (register.ts): DOM globals. Checked with `tsc -p web/sw/tsconfig.page.json`.
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "include": ["register.ts", "protocol.ts"]
+}

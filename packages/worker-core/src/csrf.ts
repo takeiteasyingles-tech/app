@@ -1,5 +1,6 @@
 import { ApiError } from '@tie/shared';
 import type { MiddlewareHandler } from 'hono';
+import { isLocalOrigin } from './config';
 import type { AppEnv } from './env';
 
 // Cookie sessions are SameSite=Lax; this adds the Origin/Sec-Fetch-Site/content-type checks from
@@ -38,7 +39,12 @@ export function csrfDecision(input: CsrfInput): CsrfDecision {
 
   if (!input.origin || input.origin === 'null') return { ok: false, reason: 'missing-origin' };
   const origin = normalizeOrigin(input.origin);
-  const allowed = new Set([normalizeOrigin(input.appOrigin), normalizeOrigin(input.url)]);
+  const appOrigin = normalizeOrigin(input.appOrigin);
+  // A deployed (non-local) APP_ORIGIN is the only accepted origin: the request's own origin could be
+  // a second hostname for the same Worker (custom domain vs workers.dev, preview URLs). Locally, and
+  // while APP_ORIGIN is unset, the request's own origin is accepted too (dev ports, parity slots).
+  const allowed =
+    appOrigin && !isLocalOrigin(appOrigin) ? new Set([appOrigin]) : new Set([appOrigin, normalizeOrigin(input.url)]);
   if (!origin || !allowed.has(origin)) return { ok: false, reason: 'bad-origin' };
 
   if (input.secFetchSite && input.secFetchSite !== 'same-origin') return { ok: false, reason: 'cross-site' };

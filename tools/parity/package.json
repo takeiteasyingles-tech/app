@@ -3,10 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Blind visual-parity harness: prototype vs new app screenshots.",
+  "description": "Blind visual-parity harness: prototype vs new app screenshots, in isolated slots.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "parity": "playwright test"
+    "test": "vitest run",
+    "parity": "tsx src/cli.ts",
+    "parity:reveal": "tsx src/reveal.ts",
+    "reveal": "tsx src/reveal.ts",
+    "compare": "tsx src/compareRuns.ts",
+    "fixture:gen": "tsx src/fixture/generate.ts",
+    "fixture:check": "playwright test -c playwright.config.ts"
   },
   "dependencies": {
     "@tie/seed": "*",
