@@ -1,0 +1,52 @@
+/* #/cadastro/:step: regras da fatia U1, escopadas em [data-u1='onb'] (a raiz .scroll do assistente). */
+
+/* A barra de ação fica presa ao pé da tela como uma barra branca com borda, o par do cabeçalho de
+   progresso: o espaço livre de um passo curto fica entre o conteúdo e a barra (a página), não como
+   uma faixa vazia solta acima ou abaixo do botão. */
+[data-u1="onb"] .wiz-foot {
+  background: #fff;
+  border-top: 1.5px solid var(--line);
+  box-shadow: 0 -10px 24px -20px rgba(15, 42, 85, 0.45);
+  padding-top: 12px;
+  padding-bottom: calc(12px + var(--safe-b, 0px));
+}
+.app[data-layout="desktop"] [data-u1="onb"] .wiz-foot {
+  max-width: none;
+  margin: 0;
+  padding: 14px max(18px, calc((100% - 684px) / 2)) 16px;
+}
+/* Desktop: o passo começa logo abaixo do cabeçalho, alinhado ao topo como o resto do app. */
+.app[data-layout="desktop"] [data-u1="onb"] .wiz-body {
+  padding-top: 40px;
+  padding-bottom: 32px;
+}
+
+/* Cartões de múltipla escolha (Objetivo, Dificuldades): um círculo vazio no lugar do check enquanto
+   o cartão não está marcado, para que o estado de repouso também diga "dá para marcar". */
+[data-u1="onb"] .stack > .optcard:not(.on)::after {
+  content: "";
+  width: 20px;
+  height: 20px;
+  margin-right: 1px;
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--line2);
+  background: #fff;
+}
+/* Cartões um pouco mais justos (ícone de 40px), para o título caber numa linha ao lado do círculo;
+   no celular também mais baixos, para a lista de 8 pedir menos rolagem. */
+[data-u1="onb"] .stack > .optcard {
+  padding: 12px 14px;
+  gap: 12px;
+}
+[data-u1="onb"] .stack > .optcard .ico {
+  width: 40px;
+  height: 40px;
+}
+.app:not([data-layout="desktop"]) [data-u1="onb"] .stack > .optcard {
+  min-height: 64px;
+}
+[data-u1="onb"] .stack > .optcard .h3 {
+  text-wrap: balance;
+}

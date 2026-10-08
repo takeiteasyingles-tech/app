@@ -100,7 +100,18 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
   const x = full.data;
   const vre = useRerender();
   const ref = useRef<VState | null>(null);
-  if (!ref.current || ref.current.id !== id) ref.current = vfresh(id, q.dub === '1');
+  if (!ref.current || ref.current.id !== id) {
+    // Another Extra's player replaces this one in place (hash jump): silence the outgoing state first,
+    // so its pending line timer cannot speak one more line of the old scene.
+    const old = ref.current;
+    if (old) {
+      speech.stop();
+      old.playing = false;
+      clearTimeout(old.t);
+      old.abort?.();
+    }
+    ref.current = vfresh(id, q.dub === '1');
+  }
   const V = ref.current;
   const alive = useRef(true);
 
@@ -130,17 +141,39 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
     document.getElementById(`vl${V.line}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [V.line, V.playing]);
 
-  // Escape closes the word sheet.
+  // The word sheet is a modal dialog: focus moves into it, Tab stays inside it, Escape closes it,
+  // and focus goes back to the word that opened it.
   const sheetOpen = !!V.word;
+  const sheetRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!sheetOpen) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusables = () => [...(sheetRef.current?.querySelectorAll<HTMLElement>('button') ?? [])];
+    focusables()[0]?.focus();
     const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Tab') {
+        const f = focusables();
+        const first = f[0];
+        const last = f[f.length - 1];
+        if (!first || !last) return;
+        if (ev.shiftKey && document.activeElement === first) {
+          ev.preventDefault();
+          last.focus();
+        } else if (!ev.shiftKey && document.activeElement === last) {
+          ev.preventDefault();
+          first.focus();
+        }
+        return;
+      }
       if (ev.key !== 'Escape' || !ref.current?.word) return;
       ref.current.word = null;
       vre();
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
   }, [sheetOpen]);
 
   if (gone) return <OnNavy cls="x-play" />;
@@ -378,6 +411,8 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
     ),
   );
 
+  // Phones: the translation sits on a strip under the picture (x-strip), so the subtitles cover less of it.
+  const ptBelow = !desk && !V.end && !(mine && V.dubState !== 'done') && V.subs === 'both';
   let subtitle = null;
   if (!V.end) {
     if (mine && V.dubState !== 'done') {
@@ -402,7 +437,7 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
   }
 
   const scene = (
-    <div class="scene">
+    <div class={`scene${ptBelow ? ' x-strip' : ''}`}>
       <div class={`img${V.playing ? '' : ' paused'}`} style={{ backgroundImage: `url(${x.scene ?? ''})` }} />
       <span class="tag pill" style={{ background: 'rgba(10,30,63,.7)', color: '#fff' }}>
         {V.dub ? (
@@ -413,12 +448,10 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
           x.ep
         )}
       </span>
-      {/* Phones: the demo badge rides on the scene, so the bar keeps room for "kind · episode". */}
-      {desk ? null : (
-        <span class="x-aib">
-          <AiBadge />
-        </span>
-      )}
+      {/* The demo badge rides on the scene it is about, so the bar keeps room for "kind · episode". */}
+      <span class="x-aib">
+        <AiBadge />
+      </span>
       {subtitle}
     </div>
   );
@@ -531,7 +564,7 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
           <Icon name="repeat" size={20} />
         </button>
         <span class="grow" />
-        <span class="xs x-count">{V.end ? 'Fim da cena' : `Fala ${V.line + 1} de ${lines.length}`}</span>
+        <span class="pill x-count">{V.end ? 'Fim da cena' : `Fala ${V.line + 1} de ${lines.length}`}</span>
       </div>
       <div class="segs" aria-hidden="true">
         {lines.map((_, i) => (
@@ -560,27 +593,28 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
     </>
   );
 
-  // Desktop: the scene's words under the player (the prototype left that column empty).
+  // The scene's words as tiles (word over translation): under the player on desktop (the prototype
+  // left that column empty), after the script on phones.
   const vocabCard = x.vocab.length ? (
     <div class="card x-vocab">
       <div class="lbl">Vocabulário da cena</div>
-      <div class="stack mt8" style={{ '--gap': '0' }}>
+      <div class="x-vgrid mt12">
         {x.vocab.map((v) => (
-          <div key={v.en} class="listrow">
-            <button
-              type="button"
-              class="en grow row"
-              style={{ textAlign: 'left', color: '#fff', '--gap': '10px' }}
-              aria-label={`Ouvir: ${v.en}`}
-              onClick={act(() => say(v.en))}
-            >
-              <span class="sayico">
-                <Icon name="speaker" size={16} />
-              </span>
-              {v.en}
-            </button>
-            <span style={{ color: 'var(--onNavy)' }}>{v.pt}</span>
-          </div>
+          <button
+            type="button"
+            key={v.en}
+            class="x-vtile"
+            aria-label={`Ouvir: ${v.en} (${v.pt})`}
+            onClick={act(() => say(v.en))}
+          >
+            <span class="sayico">
+              <Icon name="speaker" size={16} />
+            </span>
+            <span class="tx">
+              <b>{v.en}</b>
+              <span>{v.pt}</span>
+            </span>
+          </button>
         ))}
       </div>
     </div>
@@ -589,7 +623,7 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
   const ws = V.word;
   return (
     <OnNavy cls="x-play" w={1100}>
-      <Topbar back={`extra/${x.id}`} kicker={`${x.kind} · ${x.ep}`} title={x.title} right={desk ? <AiBadge /> : null} />
+      <Topbar back={`extra/${x.id}`} kicker={`${x.kind} · ${x.ep}`} title={x.title} />
       <div class="scroll">
         <div class="wrap" style={{ '--wrap': '1100px' }}>
           {desk ? (
@@ -598,10 +632,11 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
                 display: 'grid',
                 gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)',
                 gap: '28px',
-                alignItems: 'start',
+                // Both columns end on the same line: the vocabulary card fills the player column.
+                alignItems: 'stretch',
               }}
             >
-              <div class="stack" style={{ '--gap': '14px' }}>
+              <div class="stack x-pcol" style={{ '--gap': '14px' }}>
                 {scene}
                 {controls}
                 {dubPanel}
@@ -621,6 +656,7 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
               {endCard}
               <div class="lbl mt8">Roteiro da cena</div>
               {script}
+              {vocabCard}
             </div>
           )}
         </div>
@@ -631,10 +667,12 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
             {/* biome-ignore lint/a11y/useKeyWithClickEvents: the scrim closes the sheet like the prototype; "Fechar" is the keyboard path. */}
             {/* biome-ignore lint/a11y/noStaticElementInteractions: same markup as the prototype's .scrim. */}
             <div class="scrim" onClick={act(wordClose)} />
-            <div class="sheet">
+            <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="x-wsheet-t" ref={sheetRef}>
               <div class="grab" />
               <div class="row between">
-                <div class="h1">{ws.w}</div>
+                <div class="h1" id="x-wsheet-t">
+                  {ws.w}
+                </div>
                 <button type="button" class="iconbtn" aria-label="Ouvir" onClick={act(() => say(ws.w))}>
                   <Icon name="speaker" size={20} />
                 </button>

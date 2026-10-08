@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { type BrowserContext, expect, type Page, type Request, test } from '@playwright/test';
 import { fixtureStatements } from '@tie/seed/fixtureToSql';
 import { COOKIES } from '@tie/shared/constants';
+import { meApi } from '@tie/shared/contracts/me';
 import { VIEWPORTS, type ViewportName } from '../../parity/src/config';
 import { contextOptions, prepareContext } from '../../parity/src/determinism';
 import { type FixtureSql, namespaceCards, passHash } from '../../parity/src/fixture/sql';
@@ -52,6 +53,7 @@ for (const vp of VPS) {
     'pf-out',
     'pf-a11y',
     'cmp-main',
+    'x-csp',
   ])
     USERS.push(`u1-${t}-${vp}`);
   for (let n = 2; n <= 7; n++) {
@@ -59,6 +61,8 @@ for (const vp of VPS) {
     FRESH[`u1-cmp-onb${n}-${vp}`] = n;
   }
 }
+/** Users of the API-level security probes (not per viewport). */
+USERS.push('u1-api-a', 'u1-api-b', 'u1-api-login');
 const baseState = (key: string): Any =>
   FRESH[key] ? freshUser(FRESH[key]) : JSON.parse(JSON.stringify(loadFixture()));
 const userId = (key: string) => `U_E2E_${key.toUpperCase().replace(/-/g, '_')}`;
@@ -163,7 +167,7 @@ async function expectClean(page: Page, w: Watch): Promise<void> {
   const all = await page.evaluate(() => (window as any).__csp as string[]).catch(() => [] as string[]);
   // zod v4's allowsEval probe (Function('') in try/catch, shared chunk, every screen) is reported
   // separately as a global finding; anything else fails the slice.
-  const csp = all.filter((v) => !/^script-src eval @ .*\/assets\/ai-[\w-]+\.js:1:\d+ sample=$/.test(v));
+  const csp = all.filter((v) => !/^script-src eval @ .*\/assets\/(ai|zod)-[\w-]+\.js:1:\d+ sample=$/.test(v));
   if (all.length !== csp.length) ZOD_EVAL.n++;
   expect.soft(csp, 'CSP violations').toEqual([]);
   expect.soft(w.errors, 'console/page/API errors').toEqual([]);
@@ -645,6 +649,12 @@ for (const vp of VPS) {
       expect(st.profile.reminders).toContain('06:45');
       expect(st.profile.voice?.score).toEqual(expect.any(Number));
       expect(goalKeysUi.length).toBe(2);
+      // onbFinish: settings.slow from personalize.defaults (diffs include 'listening' → 0.75×) and the
+      // finish counts as activity (streak touched today on the server).
+      expect(st.profile.diffs).toContain('listening');
+      expect(st.settings.slow, 'settings.slow from defaults().speed').toBe(true);
+      expect(st.game.streak).toBeGreaterThanOrEqual(1);
+      expect(st.game.lastDay, 'streak touched on finish').toMatch(/^\d{4}-\d{2}-\d{2}$/);
       // reload keeps the profile; perfil shows the answers
       await page.reload();
       await expect(page.getByRole('heading', { level: 1, name: /Oi, Bruno/ })).toBeVisible({ timeout: 20_000 });
@@ -1274,6 +1284,154 @@ for (const vp of VPS) {
   });
 }
 
+// ---------------------------------------------------------------- extra checks (verifier round r8)
+
+for (const vp of VPS) {
+  test.describe(`U1 extra ${vp}`, () => {
+    const V = VIEWPORTS[vp];
+    test.use({
+      viewport: { width: V.width, height: V.height },
+      isMobile: V.isMobile,
+      hasTouch: V.hasTouch,
+      deviceScaleFactor: V.deviceScaleFactor,
+      permissions: ['microphone'],
+    });
+
+    test(`cadastro 1 signed out: age < 5 refused, X → entrar, terms sheet, one signup per double tap (${vp})`, async ({
+      page,
+      context,
+    }) => {
+      await prep(context);
+      const w = watch(page, SIGNED_OUT);
+      let signups = 0;
+      page.on('request', (r) => {
+        if (r.url().endsWith('/api/auth/signup')) signups++;
+      });
+      await page.goto('/#/cadastro/1');
+      const v = view(page);
+      await expect(v.locator('#onb-fullname')).toBeVisible({ timeout: 20_000 });
+      await expect(page.locator('.tabbar')).toHaveCount(0);
+      await expect(page.locator('aside.side')).toHaveCount(0);
+      // a 3-year-old: the prototype's 5–110 age rule
+      const kid = new Date();
+      kid.setFullYear(kid.getFullYear() - 3);
+      await fillAccount(page, {
+        full: 'Pequeno Teste',
+        name: 'Peq',
+        birth: kid.toISOString().slice(0, 10),
+        email: `u1-kid-${vp}-${id8()}@e2e.test`,
+        pass: 'senha-123',
+      });
+      await btn(page, /^Continuar/).click();
+      await expect(v.getByText('Confira a data de nascimento.')).toBeVisible();
+      expect(signups).toBe(0);
+      // terms sheet from step 1
+      await v.getByRole('link', { name: 'Termos de Uso' }).click();
+      await expect(page).toHaveURL(/#\/cadastro\/1\?doc=termos$/);
+      await expect(page.getByRole('dialog', { name: 'Termos de Uso' })).toBeVisible();
+      await page.getByRole('dialog').getByRole('button', { name: 'Fechar' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      // the form keeps what was typed after the sheet closes
+      await expect(v.locator('#onb-fullname')).toHaveValue('Pequeno Teste');
+      // a valid adult account, Continuar tapped twice quickly: one account, one request
+      await page.locator('#onb-birth').fill('1988-08-08');
+      const email = `u1-dbl-${vp}-${id8()}@e2e.test`;
+      await page.locator('#onb-email').fill(email);
+      const cont = btn(page, /^Continuar/);
+      await cont.dblclick();
+      await expect(page).toHaveURL(/#\/cadastro\/2$/, { timeout: 20_000 });
+      await page.waitForTimeout(500);
+      expect(signups, 'signup requests for one double tap').toBe(1);
+      // signed in now (X on step 1 = logout is covered elsewhere); signed out, X goes to entrar
+      await context.clearCookies();
+      await page.goto('/#/entrar');
+      await page.reload();
+      await page.goto('/#/cadastro/1');
+      await expect(page.locator('#onb-pass')).toBeVisible({ timeout: 20_000 });
+      await view(page).getByRole('button', { name: 'Sair' }).click();
+      await expect(page).toHaveURL(/#\/entrar$/);
+      await expectClean(page, w);
+    });
+
+    test(`entrar: a double tap on Entrar sends one login (${vp})`, async ({ page, context }) => {
+      await prep(context);
+      const w = watch(page, SIGNED_OUT);
+      let logins = 0;
+      page.on('request', (r) => {
+        if (r.url().endsWith('/api/auth/login')) logins++;
+      });
+      await page.goto('/#/entrar');
+      await expect(page.locator('#login-email')).toBeVisible({ timeout: 20_000 });
+      await page.locator('#login-email').fill(emailOf(`u1-x-csp-${vp}`));
+      await page.locator('#login-pass').fill(FIXTURE_PASSWORD);
+      await btn(page, /^Entrar$/).dblclick();
+      await expect(page).toHaveURL(/#\/inicio$/, { timeout: 20_000 });
+      await page.waitForTimeout(400);
+      expect(logins, 'login requests for one double tap').toBe(1);
+      await expectClean(page, w);
+    });
+
+    test(`strict CSP: zero violations of any kind on entrar, cadastro, perfil (${vp})`, async ({ page, context }) => {
+      await prep(context);
+      const all: string[] = [];
+      const grab = async () => {
+        all.push(...((await page.evaluate(() => (window as any).__csp as string[]).catch(() => [])) ?? []));
+      };
+      const consoleCsp: string[] = [];
+      page.on('console', (m) => {
+        if (/Content Security Policy|Refused to/i.test(m.text())) consoleCsp.push(m.text());
+      });
+      for (const r of ['entrar', 'cadastro/1', 'entrar?doc=privacidade']) {
+        await page.goto(`/#/${r}`);
+        await expect(page.locator('.view').last()).toBeVisible({ timeout: 20_000 });
+        await page.locator('input').first().focus(); // warms Turnstile (script-src challenges.cloudflare.com)
+        await page.waitForTimeout(600);
+        await grab();
+        await page.reload();
+      }
+      await context.addCookies([
+        { name: COOKIES.app, value: sessionToken(`u1-x-csp-${vp}`), url: sl.origin, httpOnly: true, sameSite: 'Lax' },
+      ]);
+      await page.reload();
+      await expect(page).toHaveURL(/#\/inicio$/, { timeout: 20_000 });
+      await page.goto('/#/perfil');
+      await expect(view(page).locator('.avpick')).toHaveCount(6, { timeout: 20_000 });
+      await page.waitForTimeout(800);
+      await grab();
+      expect(all, 'securitypolicyviolation events').toEqual([]);
+      expect(consoleCsp, 'CSP console reports').toEqual([]);
+    });
+
+    test(`perfil: Escape closes the sheets and focus returns into the page (${vp})`, async ({ page, context }) => {
+      await prep(context, { key: `u1-x-csp-${vp}` });
+      const w = watch(page);
+      await page.goto('/#/perfil');
+      await expect(btn(page, /^Zerar progresso$/)).toBeVisible({ timeout: 20_000 });
+      await btn(page, /^Zerar progresso$/).focus();
+      await page.keyboard.press('Enter');
+      const sheet = page.getByRole('dialog', { name: 'Zerar o seu progresso?' });
+      await expect(sheet).toBeVisible();
+      // focus moved into the dialog
+      await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[role=dialog]'))).toBe(true);
+      // Tab stays inside the modal
+      for (let i = 0; i < 6; i++) {
+        await page.keyboard.press('Tab');
+        expect(
+          await page.evaluate(() => !!document.activeElement?.closest('[role=dialog]')),
+          `focus inside dialog after Tab ${i + 1}`,
+        ).toBe(true);
+      }
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      const back = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
+      expect.soft(back, 'focus returns to the opener').toBe('Zerar progresso');
+      const st = await serverState(page);
+      expect(st.game.points, 'nothing reset by Escape').toBeGreaterThan(0);
+      await expectClean(page, w);
+    });
+  });
+}
+
 // ---------------------------------------------------------------- security: headers + client bundle
 
 test.describe('U1 security', () => {
@@ -1310,7 +1468,10 @@ test.describe('U1 security', () => {
       .filter(([, m]) => m)
       .map(([f, m]) => `${f.slice(dist.length)}: ${m}`);
     expect(hits, 'secrets / persona in client bundle').toEqual([]);
-    expect(files.filter((f) => f.endsWith('.map')), 'source maps shipped').toEqual([]);
+    expect(
+      files.filter((f) => f.endsWith('.map')),
+      'source maps shipped',
+    ).toEqual([]);
     const slice = ['screens/entrada', 'screens/cadastro', 'screens/perfil'].flatMap((d) =>
       readdirSync(join(root, 'apps/app/web/src', d)).map((f) => join(root, 'apps/app/web/src', d, f)),
     );
@@ -1318,6 +1479,178 @@ test.describe('U1 security', () => {
       /innerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|document\.write/.test(readFileSync(f, 'utf8')),
     );
     expect(html, 'innerHTML in U1 slice code').toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------- security: API probes behind the U1 screens
+
+test.describe('U1 security (API probes)', () => {
+  const O = sl.origin;
+  const ck = (key: string) => `${COOKIES.app}=${sessionToken(key)}`;
+  const J = { 'Content-Type': 'application/json', Origin: O };
+  const TOKEN = 'XXXX.DUMMY.TOKEN.XXXX';
+  /** The error body without per-request fields, so two refusals can be compared. */
+  const errShape = async (r: { json(): Promise<unknown> }) =>
+    JSON.stringify(await r.json(), (k, v) => (/^request_?id$/i.test(k) ? undefined : v));
+
+  test('login: Turnstile required, CSRF enforced, no account enumeration, session cookie flags', async ({
+    playwright,
+  }) => {
+    const r = await playwright.request.newContext({ baseURL: O });
+    const email = emailOf('u1-api-login');
+    const good = { email, password: FIXTURE_PASSWORD, turnstileToken: TOKEN };
+    const noTs = await r.post('/api/auth/login', { headers: J, data: { email, password: FIXTURE_PASSWORD } });
+    expect(noTs.status(), 'login without Turnstile token').toBeGreaterThanOrEqual(400);
+    expect(noTs.status()).toBeLessThan(500);
+    expect(noTs.headers()['set-cookie'] ?? '').not.toContain(`${COOKIES.app}=`);
+    const evil = await r.post('/api/auth/login', { headers: { ...J, Origin: 'https://evil.example' }, data: good });
+    expect(evil.status(), 'foreign Origin').toBe(403);
+    const noOrigin = await r.post('/api/auth/login', { headers: { 'Content-Type': 'application/json' }, data: good });
+    expect(noOrigin.status(), 'missing Origin').toBe(403);
+    const plain = await r.post('/api/auth/login', {
+      headers: { 'Content-Type': 'text/plain', Origin: O },
+      data: JSON.stringify(good),
+    });
+    expect(plain.status(), 'text/plain (HTML-form CSRF)').toBeGreaterThanOrEqual(400);
+    expect(plain.headers()['set-cookie'] ?? '').not.toContain(`${COOKIES.app}=`);
+    const wrong = await r.post('/api/auth/login', { headers: J, data: { ...good, password: 'senha-errada-123' } });
+    const unknown = await r.post('/api/auth/login', {
+      headers: J,
+      data: { ...good, email: `ninguem-${id8()}@parity.test` },
+    });
+    expect(wrong.status()).toBe(401);
+    expect(unknown.status(), 'unknown e-mail answers like a wrong password').toBe(wrong.status());
+    expect(await errShape(unknown)).toBe(await errShape(wrong));
+    const ok = await r.post('/api/auth/login', { headers: J, data: good });
+    expect(ok.status()).toBe(200);
+    const sc = ok.headers()['set-cookie'] ?? '';
+    expect(sc).toContain(`${COOKIES.app}=`);
+    expect(sc).toMatch(/HttpOnly/i);
+    expect(sc).toMatch(/SameSite=(Lax|Strict)/i);
+    expect(sc).toMatch(/Path=\//i);
+    const body = JSON.stringify(await ok.json());
+    expect(body).not.toMatch(/pass_?hash|token_?hash|"password"/i);
+    await r.dispose();
+  });
+
+  test('signed-out and cross-site writes are refused; profile writes are validated server-side', async ({
+    playwright,
+  }) => {
+    const r = await playwright.request.newContext({ baseURL: O });
+    expect((await r.get('/api/me/state')).status()).toBe(401);
+    expect((await r.put('/api/me/profile', { headers: J, data: { minutes: 30 } })).status()).toBe(401);
+    const A = { ...J, Cookie: ck('u1-api-a') };
+    // a cross-site write with a valid session cookie
+    const xs = await r.put('/api/me/profile', {
+      headers: { ...A, Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' },
+      data: { minutes: 50 },
+    });
+    expect(xs.status(), 'cross-site PUT with cookie').toBe(403);
+    // limits enforced by the server, not only by the UI
+    const tooMany = await r.put('/api/me/profile', { headers: A, data: { goals: ['a', 'b', 'c', 'd'] } });
+    expect(tooMany.status(), '4 goals').toBe(400);
+    const longName = await r.put('/api/me/profile', { headers: A, data: { name: 'x'.repeat(5000) } });
+    expect(longName.status(), '5000-char name').toBe(400);
+    const badRem = await r.put('/api/me/profile', { headers: A, data: { reminders: ['25:99'] } });
+    expect(badRem.status(), 'invalid reminder').toBe(400);
+    // points/plan are server-authoritative: a profile write cannot set them
+    const before = (await (await r.get('/api/me/state', { headers: A })).json()) as Any;
+    const sneaky = await r.put('/api/me/profile', {
+      headers: A,
+      data: { points: 999999, plan: { name: 'Premium', aiMinutesMonth: 9999 } },
+    });
+    expect(sneaky.status()).toBeLessThan(500);
+    const after = (await (await r.get('/api/me/state', { headers: A })).json()) as Any;
+    expect(after.game?.points).toBe(before.game?.points);
+    expect(after.plan).toEqual(before.plan);
+    // reset-progress and account deletion require an explicit confirmation (and the password)
+    const noConfirm = await r.post('/api/me/reset-progress', { headers: A, data: {} });
+    expect(noConfirm.status(), 'reset-progress without confirm').toBe(400);
+    const delNoPass = await r.delete('/api/me', { headers: A, data: { confirm: true } });
+    expect(delNoPass.status(), 'delete without password').toBe(400);
+    const delWrong = await r.delete('/api/me', { headers: A, data: { confirm: true, password: 'senha-errada-123' } });
+    expect(delWrong.status(), 'delete with a wrong password').toBe(401);
+    expect((await r.get('/api/me/state', { headers: A })).status(), 'account still there').toBe(200);
+    await r.dispose();
+  });
+
+  test('photo: only the owner reads it; non-images are refused; the name renders as text', async ({
+    playwright,
+    page,
+  }) => {
+    await prep(page.context(), { key: 'u1-api-a' });
+    await page.goto('/#/perfil');
+    await expect(view(page).locator('.avpick')).toHaveCount(6, { timeout: 20_000 });
+    const jpeg = Buffer.from(
+      await page.evaluate(() => {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 256;
+        const g = c.getContext('2d')!;
+        g.fillStyle = '#2A6FF5';
+        g.fillRect(0, 0, 256, 256);
+        return c.toDataURL('image/jpeg', 0.85).split(',')[1] as string;
+      }),
+      'base64',
+    );
+    const field = meApi.photoUpload.multipart.field;
+    const r = await playwright.request.newContext({ baseURL: O });
+    const up = await r.post('/api/me/photo', {
+      headers: { Origin: O, Cookie: ck('u1-api-a') },
+      multipart: { [field]: { name: 'foto.jpg', mimeType: 'image/jpeg', buffer: jpeg } },
+    });
+    expect(up.status()).toBeLessThan(300);
+    const url = String(((await up.json()) as Any).photo);
+    expect(url).toMatch(/^\/m\//);
+    expect((await r.get(url, { headers: { Cookie: ck('u1-api-a') } })).status(), 'owner').toBe(200);
+    expect((await r.get(url)).status(), 'anonymous').not.toBe(200);
+    expect((await r.get(url, { headers: { Cookie: ck('u1-api-b') } })).status(), 'another student').not.toBe(200);
+    const fake = await r.post('/api/me/photo', {
+      headers: { Origin: O, Cookie: ck('u1-api-a') },
+      multipart: { [field]: { name: 'x.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('<svg onload=alert(1)>') } },
+    });
+    expect(fake.status(), 'non-image bytes').toBeGreaterThanOrEqual(400);
+    expect(fake.status()).toBeLessThan(500);
+    const xsrf = await r.post('/api/me/photo', {
+      headers: { Origin: 'https://evil.example', Cookie: ck('u1-api-a') },
+      multipart: { [field]: { name: 'foto.jpg', mimeType: 'image/jpeg', buffer: jpeg } },
+    });
+    expect(xsrf.status(), 'cross-site upload').toBe(403);
+    // a markup-looking name is stored and shown as plain text
+    const evilName = '<img src=x onerror="window.__xss=1">';
+    expect(
+      (
+        await r.put('/api/me/profile', { headers: { ...J, Cookie: ck('u1-api-a') }, data: { name: evilName } })
+      ).status(),
+    ).toBe(200);
+    await page.reload();
+    await expect(view(page).locator('.card.navy .h1')).toHaveText(evilName, { timeout: 20_000 });
+    expect(await page.evaluate(() => (window as any).__xss ?? 0)).toBe(0);
+    expect(await view(page).locator('img[src="x"]').count()).toBe(0);
+    await r.dispose();
+  });
+
+  test('perfil: the photo upload is reachable and operable from the keyboard', async ({ page }) => {
+    // The prototype's <label class="btn"> around an <input type=file hidden> had no Tab stop; the app
+    // renders a real button that opens the hidden input.
+    await prep(page.context(), { key: 'u1-api-b' });
+    await page.goto('/#/perfil');
+    await expect(view(page).locator('.avpick')).toHaveCount(6, { timeout: 20_000 });
+    // From the last avatar, the next Tab stop must be the upload control (a focusable file input or a
+    // button that opens the picker).
+    await view(page).locator('.avpick').last().focus();
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 3000 }).catch(() => null),
+      (async () => {
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Enter');
+      })(),
+    ]);
+    const focused = await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 160) ?? '');
+    expect(
+      chooser,
+      `Enter on the next Tab stop after the avatars opens the file picker (focused: ${focused})`,
+    ).not.toBe(null);
   });
 });
 
@@ -1460,11 +1793,23 @@ test.describe('U1 DOM parity with the prototype', () => {
           /"O microfone só liga quando .*(No modo demo a nota é estimada|a nota é uma estimativa)\."$/,
           /^\+ app .*(div\.sm$|"Marque pelo menos um para continuar"$|"\d+ escolhidos?"$)/,
         ];
-        const unexpected = ds.filter((l) => !INTENDED.some((re) => re.test(l)));
+        // Cadastro 3: each format tile carries a pictogram badge (`i.fmt-ic` with its icon's svg).
+        const FMT_IC = /^\+ app +@\d+: +i\.fmt-ic$/;
+        let badgeSvgs = ds.filter((l) => FMT_IC.test(l)).length;
+        // Cadastro 6: the week summary card under the reminders (`div.card.onb-sum`).
+        const WEEK_SUM =
+          /^\+ app +@\d+: +(div\.card\.mt24\.onb-sum\.row|svg|div\.grow|div\.h3|"\d+ min de inglês por semana"|"Marque pelo menos um dia"|"\d+ dias? × \d+ min[^"]*")$/;
+        const unexpected = ds.filter((l) => {
+          if (INTENDED.some((re) => re.test(l)) || FMT_IC.test(l)) return false;
+          if (name === 'cadastro-6' && WEEK_SUM.test(l)) return false;
+          if (badgeSvgs > 0 && /^\+ app +@\d+: +svg$/.test(l)) {
+            badgeSvgs--;
+            return false;
+          }
+          return true;
+        });
         if (/^cadastro-[2-7]$/.test(name))
-          expect
-            .soft(unexpected, `DOM diff ${name} ${vp} (out/u1-auth/dom-${name}-${vp}.diff.txt)`)
-            .toEqual([]);
+          expect.soft(unexpected, `DOM diff ${name} ${vp} (out/u1-auth/dom-${name}-${vp}.diff.txt)`).toEqual([]);
         writeFileSync(join(OUT, `dom-${name}-${vp}.proto.txt`), sigs.proto.join('\n'));
         writeFileSync(join(OUT, `dom-${name}-${vp}.app.txt`), sigs.app.join('\n'));
         writeFileSync(join(OUT, `dom-${name}-${vp}.diff.txt`), d.join('\n'));

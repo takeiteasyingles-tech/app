@@ -67,12 +67,23 @@ export const InviteParams = z.object({ token: z.string().min(16).max(200) });
 export const InviteInfo = z.object({ email: z.string(), role: Role, expiresAt: Timestamp });
 export type InviteInfo = z.infer<typeof InviteInfo>;
 
+/** Staff passwords are longer than the student minimum (spec 05 note #3). */
+export const STAFF_PASSWORD_MIN = 10;
+export const StaffPassword = Password.pipe(z.string().min(STAFF_PASSWORD_MIN));
+
 export const InviteAcceptBody = z.strictObject({
   token: z.string().min(16).max(200),
-  password: Password,
+  password: StaffPassword,
   turnstileToken: TurnstileToken,
 });
 export type InviteAcceptBody = z.infer<typeof InviteAcceptBody>;
+
+/** Staff password change: every session of the account is revoked; this device gets a fresh one. */
+export const AdminPasswordBody = z.strictObject({
+  currentPassword: PasswordAttempt,
+  newPassword: StaffPassword,
+});
+export type AdminPasswordBody = z.infer<typeof AdminPasswordBody>;
 
 /** Creates an admin_invite token for a new staff member; the granter must be allowed to grant `role`. */
 export const CreateInviteBody = z.strictObject({ email: Email, role: Role.exclude(['super_admin']) });
@@ -503,6 +514,15 @@ export const AlbumEdit = editable(AlbumRow);
 export const TrackEdit = editable(TrackRow);
 export const AssistantEdit = editable(AssistantRow);
 export const MissionEdit = editable(MissionRow);
+/**
+ * Assistant create also takes an optional persona (spec 05 note #1): the column is NOT NULL, so it
+ * is stored as '' when absent. Sending it needs ai.persona; afterwards it is edited only through
+ * adminAiApi.setPersona.
+ */
+export const AssistantCreateBody = AssistantEdit.create.extend({
+  persona: z.string().trim().min(1).max(4000).optional(),
+});
+export type AssistantCreateBody = z.infer<typeof AssistantCreateBody>;
 
 export const OptionListItemInput = z.strictObject({
   scope: z.string().max(40).default(''),
@@ -695,8 +715,24 @@ export type AppSetting = z.infer<typeof AppSetting>;
 export const SettingPutBody = z.strictObject({ value: z.string().max(10_000) });
 
 export const AdminStats = z.object({
-  users: z.object({ total: z.int(), active7d: z.int(), active30d: z.int(), new7d: z.int(), suspended: z.int() }),
-  ai: z.object({ secondsThisMonth: z.int(), calls24h: z.int(), errors24h: z.int() }),
+  users: z.object({
+    total: z.int(),
+    /** Distinct learners active since local midnight (America/Sao_Paulo). */
+    activeToday: z.int(),
+    active7d: z.int(),
+    active30d: z.int(),
+    new7d: z.int(),
+    suspended: z.int(),
+  }),
+  ai: z.object({
+    secondsThisMonth: z.int(),
+    /** secondsThisMonth / 60, rounded up. */
+    minutesThisMonth: z.int(),
+    calls24h: z.int(),
+    errors24h: z.int(),
+    /** errors24h / calls24h (0 when there were no calls), 0..1. */
+    failureRate24h: z.number().min(0).max(1),
+  }),
   moderation: z.object({ pending: z.int(), flaggedSessions: z.int() }),
   content: z.object({ current: z.string().nullable(), publishedAt: Timestamp.nullable() }),
 });
@@ -731,6 +767,22 @@ export const adminAuthApi = {
     access: 'public',
     body: InviteAcceptBody,
     res: AdminAuthRes,
+    rateLimit: 'RL_AUTH',
+  }),
+} as const;
+
+/**
+ * The signed-in staff member's own account (any staff role, no permission). Kept out of `adminApi`
+ * because every endpoint listed there names a permission (shared contracts test); the admin Worker
+ * routes it all the same.
+ */
+export const adminAccountApi = {
+  password: endpoint({
+    method: 'POST',
+    path: '/admin-api/auth/password',
+    access: 'staff',
+    body: AdminPasswordBody,
+    res: Ok,
     rateLimit: 'RL_AUTH',
   }),
 } as const;
@@ -888,7 +940,7 @@ export const adminContentApi = {
   extras: crud('extras', ExtraRow, ExtraEdit.create, ExtraEdit.update),
   albums: crud('albums', AlbumRow, AlbumEdit.create, AlbumEdit.update),
   tracks: crud('tracks', TrackRow, TrackEdit.create, TrackEdit.update),
-  assistants: crud('assistants', AssistantRow, AssistantEdit.create, AssistantEdit.update),
+  assistants: crud('assistants', AssistantRow, AssistantCreateBody, AssistantEdit.update),
   missions: crud('missions', MissionRow, MissionEdit.create, MissionEdit.update),
   blobs: {
     list: endpoint({

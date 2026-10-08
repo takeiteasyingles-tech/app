@@ -32,8 +32,7 @@
   font-weight: 700;
 }
 
-/* Rails: the cards of a rail are as tall as each other and the "why" line sits at the same height
-   in every card (title and kind flow naturally above it), and the first card keeps the gutter when
+/* Rails: the cards of a rail are as tall as each other, and the first card keeps the gutter when
    scroll snapping kicks in. */
 .x-scr .rail {
   align-items: stretch;
@@ -44,45 +43,111 @@
   flex-direction: column;
 }
 .x-cat .rail > .cover .why {
-  margin-top: auto;
   padding-top: 4px;
-  /* Two lines: one- and two-line reasons start on the same row. */
-  min-height: calc(2.6em + 4px);
 }
 .x-scr .cover .ttl {
   text-wrap: balance;
 }
-
-/* Phones: a soft fade at the right edge says "there is more" on the rails. */
-.app[data-layout="mobile"] .x-cat .rail {
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+/* The Barbara's Kitchen cover is cut from a wide street scene: keep the shop sign in the frame. */
+.x-cat .cover .art img[src$="/bg/home.webp"] {
+  object-position: 23% 50%;
 }
-/* Phones: the shelf tabs wrap onto two rows, so no tab is cut at the screen edge. */
+
+/* Rail header: the title on its own line; the subtitle under it, and on phones a quiet "Ver mais"
+   link at the end of the subtitle's line (or of the title's, with no subtitle). */
+.x-railhd {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+}
+.x-railhd > :not(.x-more) {
+  grid-column: 1;
+}
+.x-railhd.x-hassub > .h2 {
+  grid-column: 1 / -1;
+}
+.x-railhd > .x-more {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+.x-railhd.x-hassub > .x-more {
+  grid-row: 2;
+}
+.app[data-layout="mobile"] .x-cat .x-rail .h2 {
+  font-size: 1.1rem;
+}
+.x-railhd > .x-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  min-height: 32px;
+  padding: 0 0 0 8px;
+  background: none;
+  color: #ffb08f;
+  font-weight: 800;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.x-railhd > .x-more:focus-visible {
+  outline: 2px solid #ffd27a;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* Phones: exactly two whole cards per screen width (no half-cut card at the edge); the rail pages
+   by snapping, and "Ver mais" says there is more. */
+.app[data-layout="mobile"] .x-cat .x-rail .rail > .cover {
+  width: calc((100% - 18px) / 2);
+}
+/* A gap as wide as the page gutter: the third card starts exactly past the screen edge. */
+.app[data-layout="mobile"] .x-cat .x-rail .rail {
+  gap: 18px;
+}
+/* Phones: the shelf tabs as a tidy 4 × 2 grid of equal buttons (every tab visible at once), instead
+   of one row cut at the screen edge. */
 .app[data-layout="mobile"] .x-cat .shelf-tabs {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
   overflow: visible;
   margin: 0;
   padding: 0;
-  gap: 8px 6px;
 }
 .app[data-layout="mobile"] .x-cat .shelf-tabs button {
-  min-height: 38px;
-  padding: 0 13px;
-  font-size: 0.86rem;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 4px;
+  font-size: 0.84rem;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.app[data-layout="mobile"] .x-cat .shelf-tabs .x-dchip svg {
+  display: none;
 }
 
-/* Coverflow: the front cover and its two neighbours are captioned (the ones further back are
-   hidden behind them); arrows stay above the side covers, and on desktop sit close to the covers. */
+/* ---- coverflow (XFlow) ---- */
 .x-cat .flow .item .cap {
   transition: opacity 0.35s;
 }
+.x-cat .flow .item img {
+  transition: filter 0.55s;
+}
+.x-cat .flow .item.n1 img {
+  filter: brightness(0.7);
+}
+.x-cat .flow .item.n2 img {
+  filter: brightness(0.58);
+}
+/* The side covers' captions: a deeper shade than the front one's, kept clear of the edge the cover
+   in front of them hides. */
 .x-cat .flow .item:not(.on) .cap {
-  opacity: 0;
-  padding: 34px 10px 10px;
+  padding: 46px 14px 14px;
+  background: linear-gradient(transparent, rgba(6, 18, 40, 0.92) 45%, rgba(6, 18, 40, 0.98));
 }
 .x-cat .flow .item:not(.on) .cap b {
-  font-size: 0.86rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -90,48 +155,107 @@
 }
 .x-cat .flow .item:not(.on) .cap span {
   display: block;
-  font-size: 0.7rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Right neighbour: the item after the front one (or the first, when the front one is the last).
-   Left neighbour: the item before the front one (or the last, when the front one is the first). */
-.x-cat .flow > .item.on + .item .cap,
-.x-cat .flow:has(> .item.on:nth-last-of-type(2)) > .item:first-child .cap,
-.x-cat .flow > .item:has(+ .item.on) .cap,
-.x-cat .flow:has(> .item.on:first-child) > .item:nth-last-of-type(2) .cap {
+  margin-top: 3px;
+  font-weight: 700;
   opacity: 1;
-}
-/* The front cover hides the inner edge of its neighbours, so their captions keep clear of it. */
-.x-cat .flow > .item.on + .item .cap,
-.x-cat .flow:has(> .item.on:nth-last-of-type(2)) > .item:first-child .cap {
-  padding-left: 56px;
-}
-/* Phones: only a strip of each neighbour shows (the screen edge cuts the outer part), so the
-   caption is a narrow block in that strip. */
-.app[data-layout="mobile"] .x-cat .flow > .item.on + .item .cap,
-.app[data-layout="mobile"] .x-cat .flow:has(> .item.on:nth-last-of-type(2)) > .item:first-child .cap {
-  padding-left: 76px;
-  padding-right: 18px;
-}
-.app[data-layout="mobile"] .x-cat .flow > .item:has(+ .item.on) .cap,
-.app[data-layout="mobile"] .x-cat .flow:has(> .item.on:first-child) > .item:nth-last-of-type(2) .cap {
-  padding-left: 18px;
-  padding-right: 76px;
-}
-.app[data-layout="mobile"] .x-cat .flow .item:not(.on) .cap b {
-  font-size: 0.78rem;
-  -webkit-line-clamp: 3;
+  color: #e7ecf7;
 }
 .x-cat .flow .arrow {
   z-index: 20;
   box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.5);
 }
+
+/* Desktop: five covers in a shallow fan across the column (XFlow's desktop poses). The captions are
+   sized up by the inverse of each cover's scale, so they read at the front cover's size. */
 .app[data-layout="desktop"] .x-cat .flow {
   width: 100%;
-  max-width: 820px;
-  margin-inline: auto;
+  height: 440px;
+  perspective: 1600px;
+}
+.app[data-layout="desktop"] .x-cat .flow .item {
+  width: 250px;
+  margin-left: -125px;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.on .cap {
+  padding: 56px 16px 16px;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.on .cap b {
+  font-size: 1.3rem;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.on .cap span {
+  font-size: 0.86rem;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n1 .cap b {
+  font-size: 1.15rem;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n1 .cap span {
+  font-size: 0.86rem;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n1.nr .cap {
+  padding-left: 24px;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n1.nl .cap {
+  padding-right: 24px;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n2 .cap b {
+  font-size: 1.3rem;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n2 .cap span {
+  font-size: 1rem;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n2.nr .cap {
+  padding-left: 66px;
+}
+.app[data-layout="desktop"] .x-cat .flow .item.n2.nl .cap {
+  padding-right: 66px;
+}
+.app[data-layout="desktop"] .x-cat .flow .arrow {
+  width: 44px;
+  height: 44px;
+}
+.app[data-layout="desktop"] .x-cat .flow .arrow.l {
+  left: max(0px, calc(50% - 506px));
+}
+.app[data-layout="desktop"] .x-cat .flow .arrow.r {
+  right: max(0px, calc(50% - 506px));
+}
+
+/* Phones: the front cover and a strip of each neighbour (the screen edge cuts the outer part); the
+   neighbour's caption is its title only, in that strip. The arrows flank the dots under the covers. */
+.app[data-layout="mobile"] .x-cat .flow {
+  height: 346px;
+}
+.app[data-layout="mobile"] .x-cat .flow .item.nr .cap {
+  padding-left: 76px;
+  padding-right: 16px;
+}
+.app[data-layout="mobile"] .x-cat .flow .item.nl .cap {
+  padding-left: 16px;
+  padding-right: 76px;
+}
+.app[data-layout="mobile"] .x-cat .flow .item:not(.on) .cap b {
+  font-size: 0.86rem;
+  -webkit-line-clamp: 3;
+}
+.app[data-layout="mobile"] .x-cat .flow .item:not(.on) .cap span {
+  display: none;
+}
+.app[data-layout="mobile"] .x-cat .flow .arrow {
+  top: auto;
+  bottom: 0;
+  transform: none;
+  width: 34px;
+  height: 34px;
+}
+.app[data-layout="mobile"] .x-cat .flow .arrow.l {
+  left: calc(50% - 104px);
+}
+.app[data-layout="mobile"] .x-cat .flow .arrow.r {
+  right: calc(50% - 104px);
+  left: auto;
+}
+.app[data-layout="mobile"] .x-cat .flow .dots {
+  bottom: 13px;
 }
 
 /* Locked premieres: a bottom shade with the "Sexta" pill instead of graying out the whole cover. */
@@ -142,21 +266,28 @@
   padding: 10px;
 }
 
-/* Desktop: the rails fill their row; the cards widen (150px up to ~210px) instead of leaving the
-   right of the page empty. --n is the rail's card count. */
-.app[data-layout="desktop"] .x-cat .x-rail {
-  max-width: calc(var(--n) * 212px + (var(--n) - 1) * 12px + var(--x-pad, 0px));
-}
+/* ---- desktop shelves: every shelf is a panel ---- */
+/* The cards of a rail share its width, and their text rows (title, kind, reason) line up across the
+   rail through a subgrid: a title on two lines moves the rows below it in every card alike. */
 .app[data-layout="desktop"] .x-cat .x-rail .rail {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(150px, 1fr);
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(4, auto);
+  overflow: visible;
 }
 .app[data-layout="desktop"] .x-cat .x-rail .rail > .cover {
   width: auto;
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  align-content: start;
+}
+.app[data-layout="desktop"] .x-cat .x-rail .rail > .cover .why {
+  padding-top: 6px;
 }
 
-/* Desktop: short rails share rows (each one a shelf panel) instead of one half-empty row each. */
 .x-group {
   --x-pad: 43px;
   display: flex;
@@ -165,12 +296,14 @@
   gap: 20px;
 }
 .x-group > section {
-  flex: var(--n) 1 calc(var(--n) * 150px + (var(--n) - 1) * 12px + var(--x-pad));
   min-width: 0;
-  padding: 16px 20px 2px;
+  padding: 16px 20px 4px;
   border-radius: 20px;
   background: rgba(22, 53, 102, 0.55);
   border: 1.5px solid var(--navy3);
+}
+.x-group > section {
+  flex: var(--n) 1 calc(var(--n) * 150px + (var(--n) - 1) * 12px + var(--x-pad));
 }
 .x-group .rail {
   margin: 0;
@@ -180,8 +313,21 @@
 .x-group > .x-dwrap {
   flex: 3 1 270px;
 }
+/* Tidy rows: the poster shelves share the first row at one card width (--cw); the music panel below
+   gives its square covers room for a one-line title (--mw), and the Desafio card takes the rest. */
+.x-tidy > section {
+  flex: var(--n) 1 calc(var(--n) * var(--cw) + (var(--n) - 1) * 12px + var(--x-pad));
+}
+.x-tidy > section.x-sq {
+  flex: 0 1 calc(var(--n) * var(--mw, 190px) + (var(--n) - 1) * 12px + var(--x-pad));
+}
+.x-tidy > .x-dwrap {
+  flex: 1 1 340px;
+}
 
-/* The Desafio card: wide = one row; narrow (phones, or a slot in the desktop row) = stacked. */
+/* ---- the Desafio card ---- */
+/* Wide = one row; a panel slot = head, steps side by side, record | play; narrow (phones, or the
+   slot beside the music panel) = stacked, with the steps as a short list. */
 .x-dwrap {
   container-type: inline-size;
   container-name: xdc;
@@ -200,7 +346,7 @@
   background:
     radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.18), transparent 55%),
     linear-gradient(135deg, #ff7b47, var(--orange) 55%, #dd4a1d);
-  box-shadow: 0 18px 34px -22px rgba(244, 90, 40, 0.9);
+  box-shadow: 0 12px 24px -20px rgba(244, 90, 40, 0.8);
 }
 .x-dcard .ic {
   width: 52px;
@@ -254,7 +400,7 @@
 .x-dcard .go span {
   display: none;
 }
-/* "How it works" fills the tall card in the desktop row; elsewhere the card stays compact. */
+/* "How it works" fills the card in the desktop row; elsewhere the card stays compact. */
 .x-dcard .steps {
   display: none;
 }
@@ -262,11 +408,11 @@
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 8px 12px;
   border-radius: 14px;
   background: rgba(10, 30, 63, 0.2);
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   line-height: 1.25;
   font-weight: 700;
 }
@@ -274,6 +420,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 34px;
 }
 .x-dcard .steps b {
   width: 24px;
@@ -287,11 +434,87 @@
   justify-content: center;
   font-size: 0.78rem;
 }
-@container xdc (max-width: 560px) {
+/* Any card narrower than one long row: "60 segundos" rides above the title as its eyebrow (no
+   dangling "·" when the title wraps), and "Jogar agora" is spelled out on the button. */
+@container xdc (max-width: 760px) {
+  .x-dcard .tx .h3 {
+    display: flex;
+    flex-direction: column;
+  }
+  .x-dcard .tx .h3 .x-sep {
+    display: none;
+  }
+  .x-dcard .tx .h3 .x-sec {
+    order: -1;
+    margin-bottom: 2px;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.9;
+  }
+  .x-dcard .go span {
+    display: inline;
+  }
+  .x-dcard .go {
+    width: auto;
+    height: 46px;
+    padding: 0 20px;
+    border-radius: 14px;
+  }
+}
+/* Panel slot: head, the three steps side by side (number beside its text, no empty band), then
+   record | play. */
+@container xdc (min-width: 461px) and (max-width: 760px) {
+  .x-scr .x-dcard {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "ic tx tx"
+      "steps steps steps"
+      "meta meta go";
+    align-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 22px;
+  }
+  .x-dcard .ic {
+    grid-area: ic;
+    align-self: start;
+  }
+  .x-dcard .tx {
+    grid-area: tx;
+  }
+  .x-dcard .tx .h3 {
+    font-size: 1.3rem;
+  }
+  .x-group .x-dcard .steps {
+    grid-area: steps;
+    flex-direction: row;
+    gap: 10px;
+    padding: 0;
+    background: none;
+  }
+  .x-group .x-dcard .steps > span {
+    flex: 1 1 0;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(10, 30, 63, 0.2);
+  }
+  .x-dcard .meta {
+    grid-area: meta;
+  }
+  .x-dcard .go {
+    grid-area: go;
+  }
+}
+/* Narrow: stacked; the head, the steps as a list, then the record and the play button across. */
+@container xdc (max-width: 460px) {
   .x-scr .x-dcard {
     grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
     align-content: space-between;
+    gap: 14px;
   }
   .x-dcard .ic {
     width: 46px;
@@ -299,52 +522,87 @@
     border-radius: 14px;
   }
   .x-dcard .meta {
-    grid-column: 2;
+    grid-column: 1 / -1;
   }
   .x-dcard .go {
     grid-column: 1 / -1;
     align-self: end;
     width: 100%;
-    height: 46px;
-    border-radius: 14px;
   }
-  .x-dcard .go span {
-    display: inline;
-  }
+}
+/* Phones: the record sits under the copy, beside the icon column. */
+.app[data-layout="mobile"] .x-dcard .meta {
+  grid-column: 2;
 }
 
 /* ---------- title page ---------- */
 
-.x-det .hero-extra {
-  min-height: 280px;
+/* The scene runs to the top of the screen; the bar floats on it, its back button labelled "EXTRA".
+   Once the hero scrolls away the bar turns solid and shows kind · title. */
+.x-det {
+  position: relative;
 }
-.app[data-layout="desktop"] .x-det .hero-extra {
-  min-height: 360px;
+.x-det .topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  transition:
+    background 0.25s,
+    box-shadow 0.25s;
 }
-.x-det .hero-extra .shade {
-  background: linear-gradient(
-    180deg,
-    rgba(10, 30, 63, 0.3) 0%,
-    transparent 26%,
-    rgba(15, 42, 85, 0.78) 62%,
-    var(--navy) 100%
-  );
+.app[data-layout="desktop"] .x-det .topbar {
+  max-width: none;
+  padding-inline: max(32px, calc((100% - var(--x-w, 1100px)) / 2 + 32px));
 }
-.app[data-layout="desktop"] .x-det .hero-extra .shade {
-  /* Fully opaque at the left edge: the page navy runs into the hero with no seam by the side nav. */
-  background:
-    linear-gradient(90deg, var(--navy) 0%, rgba(15, 42, 85, 0.86) 16%, rgba(15, 42, 85, 0.55) 40%, transparent 70%),
-    linear-gradient(180deg, var(--navy) 0%, transparent 14%, transparent 40%, var(--navy) 100%);
+.x-det.x-past .topbar {
+  background: var(--navy);
+  box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.8);
 }
-/* The bar shows the kind; the title joins it once the hero (with its own big title) scrolls away. */
+.x-det:not(.x-past) .topbar .h2 {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+  letter-spacing: 0.02em;
+}
+.x-det:not(.x-past) .topbar .iconbtn {
+  background: rgba(10, 30, 63, 0.55);
+  border-color: rgba(255, 255, 255, 0.4);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
 .x-det .topbar .ttl {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-self: stretch;
 }
-.x-det:not(.x-past) .topbar .ttl .h2 {
-  display: none;
+.x-det .hero-extra {
+  min-height: 272px;
+}
+.app[data-layout="desktop"] .x-det .hero-extra {
+  min-height: 340px;
+}
+.x-det .hero-extra .shade {
+  background: linear-gradient(
+    180deg,
+    rgba(10, 30, 63, 0.55) 0%,
+    transparent 28%,
+    rgba(15, 42, 85, 0.78) 62%,
+    var(--navy) 100%
+  );
+}
+.app[data-layout="desktop"] .x-det .hero-extra .shade {
+  /* Opaque at the left edge (the page navy runs into the hero with no seam by the side nav), clear
+     on the right, navy at the foot. */
+  background:
+    linear-gradient(
+      90deg,
+      var(--navy) 0%,
+      rgba(15, 42, 85, 0.72) 12%,
+      rgba(15, 42, 85, 0.3) 32%,
+      transparent 52%
+    ),
+    linear-gradient(180deg, rgba(10, 30, 63, 0.5) 0%, transparent 20%, transparent 46%, var(--navy) 100%);
 }
 .x-det .hero-extra .inner {
   max-width: var(--x-w, 1100px);
@@ -352,6 +610,9 @@
 }
 .app[data-layout="desktop"] .x-det .hero-extra .inner {
   padding: 32px 32px 30px;
+}
+.app[data-layout="mobile"] .x-det .hero-extra .inner {
+  padding-bottom: 14px;
 }
 .x-det .hero-extra .h1 {
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
@@ -369,11 +630,15 @@
   color: #fff;
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
 }
+.x-det .scroll > .wrap {
+  padding-bottom: 40px;
+}
 .x-det-body {
   display: grid;
   gap: 18px;
 }
-/* Desktop: both columns end on the same line (the actions sit at the foot of the story column). */
+/* Desktop: story | vocabulary, both columns ending on the same line (the actions sit at the foot of
+   the story column, the vocabulary rows share out the card's height). */
 .app[data-layout="desktop"] .x-det-body {
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 24px 44px;
@@ -385,59 +650,62 @@
   gap: 16px;
   min-width: 0;
 }
+.app[data-layout="desktop"] .x-det-body > .card:not(.x-vocab) {
+  align-self: start;
+}
 .app[data-layout="desktop"] .x-det-main > .x-acts {
   margin-top: auto;
 }
+.app[data-layout="desktop"] .x-det .x-vocab {
+  display: flex;
+  flex-direction: column;
+}
+.app[data-layout="desktop"] .x-det .x-vocab > .stack {
+  flex: 1;
+}
+.app[data-layout="desktop"] .x-det .x-vocab .listrow {
+  flex: 1 1 auto;
+}
+/* The cast: compact chips (avatar + name), all on one row. */
 .x-scr .x-cast {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 14px;
+  gap: 8px;
 }
 .x-scr .x-cast .pill.m {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  width: 66px;
-  padding: 0;
-  background: none;
-  white-space: normal;
-  text-align: center;
+  gap: 8px;
+  padding: 4px 14px 4px 4px;
+  border-radius: 999px;
+  background: var(--navy2);
+  box-shadow: inset 0 0 0 1.5px var(--navy3);
+  white-space: nowrap;
 }
 .x-cast .av {
-  width: 48px;
-  height: 48px;
+  width: 34px;
+  height: 34px;
+  flex: none;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   letter-spacing: 0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  box-shadow:
-    0 0 0 2px #fff,
-    0 8px 16px -8px rgba(0, 0, 0, 0.7);
 }
 .x-cast .nm {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #fff;
   line-height: 1.2;
 }
-/* Phones: the cast spreads over the full row (4 per row) instead of bunching up on the left. */
+/* Phones: the chips share the row out evenly (2 per row), so no name is left alone on a line. */
 .app[data-layout="mobile"] .x-scr .x-cast {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px 8px;
-}
-.app[data-layout="mobile"] .x-scr .x-cast .pill.m {
-  width: auto;
-}
-.app[data-layout="mobile"] .x-cast .av {
-  width: 44px;
-  height: 44px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .x-acts {
   display: grid;
@@ -523,26 +791,153 @@
 .app[data-layout="mobile"] .x-play .scene .sub .who {
   font-size: 0.68rem;
 }
-/* Desktop: the scene's words in two columns, so the player column ends level with the script. */
-.app[data-layout="desktop"] .x-play .x-vocab .stack {
+/* The scene's words: tiles with the word over its translation (no cramped label | translation). */
+.x-vgrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 28px;
+  gap: 8px;
 }
-.app[data-layout="desktop"] .x-play .x-vocab .stack > .listrow:nth-child(2) {
-  border-top: 0;
+.app[data-layout="desktop"] .x-vgrid {
+  gap: 10px;
 }
-.x-play .x-count {
+/* Phones: one word per row, the word on the left and its translation on the right (as on the title
+   page), so every row is the same width and no phrase breaks in two. */
+.app[data-layout="mobile"] .x-vgrid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app[data-layout="mobile"] .x-vtile {
+  min-height: 52px;
+}
+.app[data-layout="mobile"] .x-vtile .tx {
+  flex: 1;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.app[data-layout="mobile"] .x-vtile .tx span {
+  text-align: right;
+}
+/* An odd last word takes the whole row instead of leaving a hole beside it. */
+.x-vgrid > .x-vtile:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.x-vtile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px 8px 10px;
+  border-radius: 14px;
+  text-align: left;
+  background: rgba(10, 30, 63, 0.35);
+  border: 1.5px solid var(--navy3);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.x-vtile:hover {
+  background: rgba(10, 30, 63, 0.6);
+  border-color: #5b93ff;
+}
+.x-vtile:focus-visible {
+  outline: 2px solid #ffd27a;
+  outline-offset: 2px;
+}
+.x-vtile .tx {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.x-vtile .tx b {
+  color: #fff;
+  font-size: 0.95rem;
   font-weight: 800;
-  white-space: nowrap;
+}
+.x-vtile .tx span {
+  color: var(--onNavy);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+/* Script lines: balanced, no single word left alone on the last line. */
+.x-play .line .en,
+.x-play .line .pt {
+  text-wrap: pretty;
+}
+/* Phones: subtitles switch on one row, the dub switch on the next, both full width. */
+.app[data-layout="mobile"] .x-play .x-tools {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.app[data-layout="mobile"] .x-play .x-tools .seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.app[data-layout="mobile"] .x-play .x-tools .chip {
+  justify-content: center;
+}
+.x-scr .pill.x-count {
+  background: var(--navy3);
+  color: #fff;
+  font-size: 0.86rem;
+  padding: 6px 12px;
+  font-variant-numeric: tabular-nums;
+}
+/* Desktop: the player column runs as long as the script; the vocabulary card takes the slack and
+   shares it out between its tiles. */
+.x-play .x-pcol > .x-vocab {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.x-play .x-pcol > .x-vocab > .x-vgrid {
+  flex: 1;
+  grid-auto-rows: 1fr;
+}
+/* Phones, EN+PT: the translation sits on a dark strip under the picture (the scene box grows by the
+   strip), so only the English line and the speaker overlap the picture. */
+.app[data-layout="mobile"] .x-play .scene.x-strip {
+  aspect-ratio: auto;
+  height: 0;
+  padding-top: calc(75% + 54px);
+}
+.x-play .scene.x-strip .img {
+  bottom: 54px;
+}
+.x-play .scene.x-strip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 54px;
+  z-index: 4;
+  background: var(--navyD);
+}
+.app[data-layout="mobile"] .x-play .scene.x-strip .sub {
+  bottom: 0;
+  gap: 6px;
+}
+.app[data-layout="mobile"] .x-play .scene.x-strip .sub .ptl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  padding: 4px 6px;
+  background: none;
+  font-size: 0.8rem;
+  line-height: 1.3;
 }
 .x-play .segs i,
 .x-mus .segs i {
-  height: 6px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.22);
 }
 .x-play .segs i.done,
 .x-mus .segs i.done {
-  background: #5b93ff;
+  background: #6ea2ff;
 }
 .x-play .segs i.now,
 .x-mus .segs i.now {
@@ -557,12 +952,6 @@
 }
 .x-tools .chip {
   white-space: nowrap;
-}
-.app[data-layout="mobile"] .x-tools .seg button {
-  padding: 0 10px;
-}
-.app[data-layout="mobile"] .x-tools .chip {
-  padding: 0 12px;
 }
 .x-hint {
   display: flex;
@@ -585,13 +974,35 @@
 .app[data-layout="desktop"] .x-mus-grid {
   grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
   gap: 24px 40px;
-  align-items: start;
+  align-items: stretch;
 }
 .x-mus-col {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+}
+/* Desktop: art + track list | one player panel (controls, then the lyrics). Both columns end on the
+   same line: the track list and the player panel take the slack of their column. */
+.app[data-layout="desktop"] .x-mus .x-faixas,
+.app[data-layout="desktop"] .x-mus .x-player {
+  flex: 1 0 auto;
+}
+/* The track list is a panel (both layouts). */
+.x-mus .x-faixas {
+  padding: 16px 8px 8px;
+  border-radius: var(--r);
+  background: var(--navy2);
+  border: 1.5px solid var(--navy3);
+}
+.x-mus .x-faixas .x-lbl {
+  padding: 0 10px;
+}
+.x-mus .x-faixas .line {
+  padding: 12px 10px;
+}
+.x-mus .x-faixas .line.on {
+  background: var(--navy3);
 }
 .x-mus .x-head {
   display: flex;
@@ -613,26 +1024,37 @@
   border-radius: 20px;
   box-shadow: 0 24px 40px -24px rgba(0, 0, 0, 0.85);
 }
+.app[data-layout="desktop"] .x-mus .x-player {
+  padding: 22px 24px 14px;
+}
+.app[data-layout="desktop"] .x-mus .x-player .x-head .h2 {
+  font-size: 1.45rem;
+}
 .app[data-layout="desktop"] .x-mus .x-gapbtn {
   width: auto;
-  min-height: 44px;
+  min-height: 46px;
   gap: 8px;
 }
 .app[data-layout="desktop"] .x-mus .x-gapnote {
   margin-left: 6px;
 }
-/* Desktop: the lyrics sit on a panel beside the player. */
-.app[data-layout="desktop"] .x-mus .x-lyr {
-  padding: 16px 0 10px;
-  border-radius: var(--r);
-  background: var(--navy2);
-  border: 1.5px solid var(--navy3);
+/* The lyrics under the controls, past a divider, inside the same panel. */
+.x-mus .x-player .x-lyr {
+  margin: 4px -10px 0;
+  padding-top: 16px;
+  border-top: 1.5px solid var(--navy3);
 }
-.app[data-layout="desktop"] .x-mus .x-lyr .lyrics {
-  padding: 0 8px;
+.x-mus .x-player .x-lyr .x-lbl {
+  padding: 0 10px;
 }
-.app[data-layout="desktop"] .x-mus .x-lyr .lyric {
+.x-mus .x-player .lyric {
   padding: 10px;
+}
+.app[data-layout="desktop"] .x-mus .x-player .lyric {
+  padding: 11px 12px;
+}
+.x-mus .x-player .lyric.on {
+  background: var(--navy3);
 }
 .x-mus .x-prog {
   display: flex;
@@ -651,21 +1073,18 @@
   width: 100%;
   min-height: 48px;
   border-radius: 14px;
+  justify-content: center;
 }
+/* The reward rides next to the label as a solid badge, legible on the navy chip and the white one. */
 .x-gapbtn .x-gapnote {
-  margin-left: auto;
-  font-size: 0.8rem;
-  font-weight: 700;
-  opacity: 0.8;
-}
-.x-mus .lyric {
-  padding: 10px 18px;
-}
-.x-mus .line {
-  padding: 12px 18px;
-}
-.x-mus .x-lbl {
-  padding: 0 18px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--orange);
+  color: #fff;
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 .x-rep {
   margin-left: 8px;
@@ -677,92 +1096,102 @@
   font-size: 0.72rem;
   padding: 2px 8px;
 }
-.x-mus .fb.tip {
+.x-mus .x-player .pill.x-rep {
+  background: rgba(255, 255, 255, 0.16);
+}
+.x-mus .fb.tip.x-tip {
   margin: 0;
+  background: rgba(10, 30, 63, 0.45);
+  color: #fff;
 }
 
 /* ---------- Desafio ---------- */
 
-/* The intro's big title says it already; the bar's title shows from the round on. */
 .x-des .topbar .ttl {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-self: stretch;
 }
-.x-des.x-intro .topbar .ttl .h2 {
-  display: none;
-}
 .x-des .scroll > .x-des-wrap {
-  padding-top: 20px;
-  padding-bottom: 32px;
+  padding-top: 12px;
+  padding-bottom: 24px;
 }
-/* Desktop: a roomier intro (bigger title, field and answers) from the top of the page. */
+/* Desktop: the intro sits in the middle of the page under the bar; both columns are as tall as their
+   content (no stretched gaps), centred on each other. */
+.app[data-layout="desktop"] .x-des .scroll {
+  display: flex;
+  flex-direction: column;
+}
 .app[data-layout="desktop"] .x-des .scroll > .x-des-wrap {
-  padding-top: 48px;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 8px;
+  padding-bottom: 40px;
+}
+.app[data-layout="desktop"] .x-des-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 56px;
+  align-items: center;
 }
 .app[data-layout="desktop"] .x-des-copy {
-  gap: 18px;
+  gap: 28px;
 }
 .app[data-layout="desktop"] .x-des-copy .h1 {
-  font-size: 2.7rem;
+  font-size: 2.9rem;
+  white-space: nowrap;
 }
 .app[data-layout="desktop"] .x-des-copy .p {
-  font-size: 1.08rem;
+  font-size: 1.12rem;
   line-height: 1.6;
 }
-.app[data-layout="desktop"] .x-facts > div {
-  padding: 16px 18px;
-}
-.app[data-layout="desktop"] .x-facts b {
-  font-size: 1.9rem;
-}
-.app[data-layout="desktop"] .x-facts span {
-  font-size: 0.86rem;
-}
 .app[data-layout="desktop"] .x-record {
-  padding: 16px 18px;
+  padding: 14px 18px;
 }
 .app[data-layout="desktop"] .x-des-copy .btn {
   min-height: 60px;
 }
-.app[data-layout="desktop"] .x-demo {
-  gap: 12px;
-}
 .app[data-layout="desktop"] .x-demo .quiz-field {
-  height: 330px;
+  height: 250px;
 }
 .app[data-layout="desktop"] .x-demo .x-opt {
-  min-height: 56px;
+  min-height: 54px;
   font-size: 1rem;
 }
 .app[data-layout="desktop"] .x-demo .faller {
-  top: 64px;
-  font-size: 1.15rem;
+  font-size: 1.12rem;
 }
-.app[data-layout="desktop"] .x-demo .x-trail {
-  top: 136px;
-  bottom: 50px;
+.app[data-layout="desktop"] .x-des .x-result {
+  justify-content: center;
 }
 /* Answers: balanced lines (no word left alone on the second line). */
 .x-des .btn.light,
 .x-demo .x-opt {
   text-wrap: balance;
 }
+.x-des .btn.light {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  line-height: 1.3;
+}
 .x-des-grid {
   display: grid;
-  gap: 22px;
+  gap: 18px;
   align-items: start;
-}
-.app[data-layout="desktop"] .x-des-grid {
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  gap: 48px;
 }
 .x-des-copy {
   display: flex;
   flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.x-des-head {
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
+  gap: 10px;
 }
 .x-des-copy .h1 {
   font-size: 2.1rem;
@@ -771,31 +1200,66 @@
   color: var(--onNavy);
   margin: 0;
 }
-.x-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  width: 100%;
-}
-.x-facts > div {
+.x-des-foot {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 12px 14px;
-  border-radius: 16px;
+  gap: 12px;
+}
+.x-des-foot .btn {
+  width: 100%;
+}
+/* How the points work: three tiles side by side, a solid value badge over its rule. */
+.x-rules {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.x-rules li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
   background: var(--navy2);
   border: 1.5px solid var(--navy3);
-}
-.x-facts b {
-  font-size: 1.45rem;
-  line-height: 1.1;
-  font-weight: 800;
   color: #fff;
-}
-.x-facts span {
-  font-size: 0.78rem;
   font-weight: 700;
-  color: var(--onNavy);
+  font-size: 0.8rem;
+  line-height: 1.25;
+  text-wrap: pretty;
+}
+.x-rules b {
+  min-width: 44px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2501f;
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.app[data-layout="desktop"] .x-rules {
+  gap: 12px;
+}
+.app[data-layout="desktop"] .x-rules li {
+  gap: 12px;
+  padding: 16px 14px;
+  font-size: 0.95rem;
+}
+.app[data-layout="desktop"] .x-rules b {
+  height: 40px;
+  min-width: 56px;
+  border-radius: 12px;
+  font-size: 1.25rem;
 }
 .x-record {
   display: flex;
@@ -814,8 +1278,30 @@
   font-weight: 800;
   color: #fff;
 }
-.x-des-copy .btn {
+/* Phones: the record and the start button docked at the foot of the screen (always in reach while
+   the example and the rules scroll). */
+.x-dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--navy);
+  box-shadow: 0 -12px 24px -14px rgba(0, 0, 0, 0.7);
+  border-top: 1.5px solid var(--navy3);
+}
+.x-dock .btn {
   width: 100%;
+}
+.x-dock .x-record {
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 0.92rem;
+}
+.x-dock .x-record b {
+  font-size: 1.1rem;
 }
 .x-demo {
   position: relative;
@@ -823,47 +1309,83 @@
   flex-direction: column;
   gap: 10px;
 }
-.x-demo .quiz-field {
-  height: 270px;
+/* The example's score line: the same score · combo · time a round shows. */
+.x-hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.app[data-layout="mobile"] .x-demo .quiz-field {
+.x-hud .x-hudv {
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.x-hud .x-time {
+  margin-left: auto;
+  color: #ffd27a;
+}
+.x-demo .quiz-field {
   height: 200px;
 }
+.app[data-layout="mobile"] .x-demo .quiz-field {
+  height: 168px;
+}
+/* The line, a third of the way down: a fading trail above it (where it fell from) and a dashed
+   line with an arrow below it (where it is going). */
 .x-demo .faller {
-  top: 50px;
+  top: 36%;
+  transform: translate(-50%, -50%);
   z-index: 2;
   box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.6);
+}
+.x-demo .x-from {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  height: 36%;
+  width: 40%;
+  transform: translateX(-50%);
+  background: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.1));
+  border-radius: 0 0 12px 12px;
 }
 .x-demo .x-trail {
   position: absolute;
   left: 50%;
-  top: 112px;
-  bottom: 44px;
-  transform: translateX(-50%);
+  top: calc(36% + 30px);
+  bottom: 34px;
+  width: 18px;
+  margin-left: -9px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  border-left: 2px dashed rgba(255, 255, 255, 0.28);
   color: rgba(255, 255, 255, 0.6);
 }
+.x-demo .x-trail::before {
+  content: "";
+  flex: 1;
+  width: 0;
+  border-left: 2px dashed rgba(255, 255, 255, 0.28);
+}
 .x-demo .x-trail svg {
-  margin-left: -2px;
-  margin-bottom: -6px;
+  flex: none;
+  display: block;
+  margin-top: -8px;
 }
 .x-demo .x-groundnote {
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: 14px;
+  bottom: 10px;
   text-align: center;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: #ffb08f;
 }
-.app[data-layout="mobile"] .x-demo .x-trail {
-  top: 100px;
-  bottom: 40px;
+/* The ground: a thin line, so it reads as the floor and not as a progress bar. */
+.x-demo .quiz-field .ground {
+  height: 2px;
+  background: rgba(255, 176, 143, 0.7);
 }
 .x-demo .x-opt {
   display: flex;
@@ -881,6 +1403,7 @@
   font-size: 0.95rem;
 }
 .app[data-layout="mobile"] .x-demo .x-opt {
+  min-height: 42px;
   font-size: 0.9rem;
 }
 .x-demo .x-opt.ok {
@@ -890,45 +1413,6 @@
 }
 .x-demo .x-opt.ok svg {
   color: var(--green);
-}
-.x-demo .x-tag {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 2;
-}
-.x-steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 36px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.x-steps li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: var(--navy2);
-  border: 1.5px solid var(--navy3);
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.3;
-}
-.x-steps b {
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--orange);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
 }
 .x-result {
   display: flex;

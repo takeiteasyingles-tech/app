@@ -7,7 +7,7 @@ import type { OnbStep } from '@tie/shared/content/schema';
 import { meApi, type ProfilePatch } from '@tie/shared/contracts/me';
 import type { Draft } from '@tie/shared/state';
 import { toast } from '@tie/ui';
-import { call, errorMessage } from '../../api';
+import { call, errorMessage, urlFor } from '../../api';
 import { go } from '../../router';
 import { catalog, set, state } from '../../store';
 import { emailOk } from '../entrada/session';
@@ -161,6 +161,7 @@ export function flushDraft(extra: ProfilePatch = {}): Promise<boolean> {
   const body: ProfilePatch = { ...pending, ...extra };
   pending = {};
   if (!Object.keys(body).length || !state.value.user) return Promise.resolve(true);
+  inFlight++;
   const run = chain.then(() =>
     call(meApi.profile, { body }).then(
       () => true,
@@ -172,6 +173,9 @@ export function flushDraft(extra: ProfilePatch = {}): Promise<boolean> {
     ),
   );
   chain = run;
+  void run.finally(() => {
+    inFlight--;
+  });
   return run;
 }
 
@@ -197,6 +201,48 @@ export function patchDraft(p: Partial<Draft>): void {
   Object.assign(pending, toPatch(p));
   clearTimeout(timer);
   timer = setTimeout(() => void flushDraft(), 700);
+}
+
+let inFlight = 0;
+
+/**
+ * The page is being hidden or closed (tab switch, reload, app swipe-away) with answers still waiting for
+ * the 700 ms debounce: they go out at once in a `keepalive` request, which the browser completes even
+ * after the page is gone. The prototype saved every tap to localStorage immediately, so no answer may be
+ * lost between a tap and a reload. When an earlier send is still on its way, this one goes after it on
+ * the chain (and still with keepalive) so an older answer never lands last.
+ */
+function flushOnHide(): void {
+  if (!Object.keys(pending).length || !state.value.user) return;
+  clearTimeout(timer);
+  const body = pending;
+  pending = {};
+  const send = () =>
+    fetch(urlFor(meApi.profile), {
+      method: meApi.profile.method,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'same-origin',
+      keepalive: true,
+    }).then(
+      (r) => {
+        if (!r.ok) pending = { ...body, ...pending };
+        return r.ok;
+      },
+      () => {
+        pending = { ...body, ...pending };
+        return false;
+      },
+    );
+  if (inFlight) chain = chain.then(send);
+  else chain = send();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushOnHide);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushOnHide();
+  });
 }
 
 /** go(n): onbStep = n, saved with the pending answers, then the route. */

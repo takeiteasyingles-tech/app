@@ -10,7 +10,6 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { aiOnline, pronounce } from '../../core/aiClient';
 import { sfx } from '../../core/sound';
 import { canListen, canRecord, listen, record, say, stop as stopSpeech } from '../../core/speech';
-import { layoutOf } from '../../shell';
 import { catalog, catalogImage, state } from '../../store';
 import { AvatarVideo } from './AvatarVideo';
 import { patchDraft } from './onb';
@@ -24,18 +23,69 @@ const BARS = Array.from({ length: 18 }, (_, i) => i);
 const REST = BARS.map(
   (i) => `${Math.round(16 + 50 * Math.sin((i / 17) * Math.PI) ** 2 * (0.55 + 0.45 * Math.cos(i * 1.7) ** 2))}%`,
 );
-/** The resting bars in a pale blue (the meter's own --blue, faded), so the idle meter reads as a waveform. */
-const REST_BG = '#C9D8F6';
+/** The resting bars in a soft tint of the mic button's orange, so the meter belongs to the mic. */
+const REST_BG = '#F6B394';
 /** Desktop: the meter at the width of the phrase, so its 18 bars stay slim instead of 32px blocks. */
-const VU_DESK = { width: '100%', maxWidth: '420px' };
+const VU_DESK = { width: '100%', maxWidth: '360px' };
 const VU = { width: '100%' };
-/** Desktop: a 2:1 stage keeps the phrase card, the mic and the footer within the first screen. */
-const STAGE_DESK = { aspectRatio: '2 / 1' };
-/** Desktop: on the wide stage the name pill sits a little further from the rounded corner. */
-const STATUS_DESK = { color: '#fff', top: '16px', left: '16px' };
-const STATUS = { color: '#fff' };
+/**
+ * Desktop: the assistant and the practice card side by side (a portrait stage that matches the card's
+ * height), so the whole step, CTA included, fits the first screen and the captions sit under her face.
+ */
+const LAYOUT_DESK = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: '16px',
+  alignItems: 'stretch',
+};
+/**
+ * Desktop: the stage is a column, the picture taking the height the subtitle bar leaves (the video
+ * box in the flow instead of over the whole stage).
+ */
+const STAGE_DESK = {
+  aspectRatio: 'auto',
+  height: '100%',
+  minHeight: '380px',
+  display: 'flex',
+  flexDirection: 'column',
+};
+const VIDEO_DESK = { position: 'relative', inset: 'auto', flex: '1 1 auto', minHeight: '0' };
+const NOTE_DESK = { gridColumn: '1 / -1' };
+/** The name pill: white text (tie.css leaves it navy on navy) and a bright, haloed "online" dot. */
+const STATUS_DESK = { color: '#fff', top: '14px', left: '14px', paddingLeft: '11px' };
+const STATUS = { color: '#fff', paddingLeft: '11px' };
+const DOT = { background: '#3DD68C', boxShadow: '0 0 0 2px rgba(61,214,140,.28)', flex: 'none' };
+/**
+ * The captions as a navy subtitle bar under the picture instead of over it (on the overlay they
+ * covered her chest and the cup, and the small boxes cramped the Portuguese line). On a phone the
+ * stage keeps a 10:7 picture through its top padding, the bar flows below it, and the video is held
+ * to the picture area, so neither crops nor covers the other.
+ */
+const STAGE_PHONE = {
+  aspectRatio: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  paddingTop: '70%',
+};
+const CAPTION_BAR = {
+  position: 'relative',
+  left: 'auto',
+  right: 'auto',
+  bottom: 'auto',
+  background: 'var(--navyD)',
+  padding: '10px 16px 12px',
+};
+/** Desktop: the bar after the picture in the stage's column (the markup keeps the prototype's order). */
+const CAPTION_BAR_DESK = { ...CAPTION_BAR, order: '2', padding: '12px 18px 14px' };
+const CAPTION_EN = { background: 'transparent', padding: '0', fontSize: '1rem' };
+const CAPTION_PT = { background: 'transparent', padding: '0', color: '#C9D3E8', textWrap: 'balance' };
+const VIDEO_PHONE = { inset: '0 0 auto 0', aspectRatio: '10 / 7' };
+/** The tip's last words held together, so the line never ends on a lone "Nada" or "de". */
+const TIP_TEXT = { textAlign: 'left', width: '100%', textWrap: 'pretty' };
+/** Phone: the privacy note a step closer to the card it explains. */
+const NOTE_PHONE = { marginTop: '-4px' };
 
-export function Voz() {
+export function Voz({ desk = false }: { desk?: boolean }) {
   const d = state.value.draft;
   const name = d.name || 'Ana';
   const res = d.voice;
@@ -50,7 +100,6 @@ export function Voz() {
   });
   const c = catalog.value;
   const a = c ? getAssistant(c.assistants, DEFAULT_ASSISTANT) : undefined;
-  const desk = layoutOf(state.value) === 'desktop';
   const listening = phase === 'rec';
 
   useEffect(
@@ -139,8 +188,18 @@ export function Voz() {
       lis?.stop();
       setPhase('busy');
       meterReset();
-      const out = await handle.stop();
-      const r = await pronounce(out.b64, target, { heard });
+      let r: Awaited<ReturnType<typeof pronounce>>;
+      try {
+        const out = await handle.stop();
+        r = await pronounce(out.b64, target, { heard });
+      } catch {
+        // Neither the recording nor the score came back (e.g. the demo scorer failed to load offline):
+        // the mic is free again for another try.
+        if (!R.alive) return;
+        setPhase('idle');
+        toast('Não deu para avaliar a gravação. Tente de novo ou pule esta etapa.');
+        return;
+      }
       if (!R.alive) return;
       const voice: VoiceTest = {
         score: r.score,
@@ -166,14 +225,14 @@ export function Voz() {
           : 'Toque no microfone e diga a frase';
 
   return (
-    <div class="stack" style={{ '--gap': '16px' }}>
+    <div class="stack" style={desk ? LAYOUT_DESK : { '--gap': '16px' }}>
       {/* The @tie/ui Stage markup, with the status text set to white: tie.css gives the pill a navy
-          background but no text colour, so the name was navy on navy. On desktop the stage is 2:1,
-          so the phrase card and the mic stay on the first screen. */}
-      <div class="avatar-stage" id="av-onb" style={desk ? STAGE_DESK : undefined}>
+          background but no text colour, so the name was navy on navy. On desktop the stage sits beside
+          the phrase card, so the mic and the CTA stay on the first screen. */}
+      <div class="avatar-stage" id="av-onb" style={desk ? STAGE_DESK : STAGE_PHONE}>
         <div class="bg" style={{ backgroundImage: `url(${catalogImage('bg/maggie-set') ?? ''})` }} />
         <span class={`status${listening ? ' listen' : ''}`} style={desk ? STATUS_DESK : STATUS}>
-          <i />
+          <i style={listening ? { flex: 'none' } : DOT} />
           {listening ? 'Ouvindo' : (a?.name ?? 'Maggie')}
         </span>
         {listening ? (
@@ -183,19 +242,28 @@ export function Voz() {
             ))}
           </div>
         ) : null}
-        <div class="caption">
-          <span class="en">Hi, {name}. Can you say this for me?</span>
+        <div class="caption" style={desk ? CAPTION_BAR_DESK : CAPTION_BAR}>
+          <span class="en" style={CAPTION_EN}>
+            Hi, {name}. Can you say this for me?
+          </span>
           <span class="ptl">
-            <span>Oi, {name}. Você consegue dizer isto para mim?</span>
+            <span style={CAPTION_PT}>Oi, {name}. Você consegue dizer isto para mim?</span>
           </span>
         </div>
-        <AvatarVideo a={a} talking={talking} />
+        <AvatarVideo a={a} talking={talking} style={desk ? VIDEO_DESK : VIDEO_PHONE} />
       </div>
-      <div class="card stack tc" style={{ '--gap': '12px', alignItems: 'center' }}>
+      <div
+        class="card stack tc"
+        style={
+          desk
+            ? { '--gap': '12px', alignItems: 'center', justifyContent: 'center', padding: '20px 18px' }
+            : { '--gap': '12px', alignItems: 'center' }
+        }
+      >
         <div class="lbl">Diga em voz alta</div>
         <div class="h1">{target}</div>
-        <div class="fb tip" style={{ textAlign: 'left', width: '100%' }}>
-          <b>Dica de boca:</b> o H de hi é só ar. Nada de R de “rato”.
+        <div class="fb tip" style={TIP_TEXT}>
+          <b>Dica de boca:</b> o H de hi é só ar. Nada{' '}de{' '}R de{' '}“rato”.
         </div>
         <div class="vu" style={desk ? VU_DESK : VU} ref={vu}>
           {BARS.map((i) => (
@@ -222,7 +290,7 @@ export function Voz() {
         </div>
         {res ? <VoiceResult res={res} /> : null}
       </div>
-      <p class="xs">
+      <p class="xs" style={desk ? NOTE_DESK : NOTE_PHONE}>
         O microfone só liga quando você toca no botão. O áudio serve para a nota e não fica guardado.
         {aiOnline.value ? '' : ' Neste teste rápido, a nota é uma estimativa.'}
       </p>

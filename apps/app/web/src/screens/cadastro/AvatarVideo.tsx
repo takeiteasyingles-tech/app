@@ -3,6 +3,7 @@
 // Without clips, the initials. The 'on' class is managed here (Preact never sets class on the videos).
 import type { AssistantPublic, ClipState } from '@tie/shared/content/schema';
 import { assistInitials } from '@tie/ui';
+import type { JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 
 const CLIPS: readonly ClipState[] = ['idle', 'talk', 'talk-happy', 'talk-soft'];
@@ -22,10 +23,13 @@ export function AvatarVideo({
   a,
   talking = false,
   mood = 'happy',
+  style,
 }: {
   a: AssistantPublic | undefined;
   talking?: boolean;
   mood?: string;
+  /** Overrides the `.av2d` box (e.g. held to the picture area above a subtitle bar). */
+  style?: JSX.CSSProperties | undefined;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const clips = a ? CLIPS.filter((k) => !!a.clips[k]) : [];
@@ -66,7 +70,7 @@ export function AvatarVideo({
 
   if (!a) return null;
   return (
-    <div class="av2d vid" ref={wrap}>
+    <div class="av2d vid" ref={wrap} style={style}>
       {clips.length ? (
         clips.map((k) => (
           <video

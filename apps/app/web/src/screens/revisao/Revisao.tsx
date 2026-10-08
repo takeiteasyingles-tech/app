@@ -6,8 +6,9 @@ import type { Catalog } from '@tie/shared/content/schema';
 import { srsApi } from '@tie/shared/contracts/srs';
 import { current } from '@tie/shared/domain/guide';
 import { GRADES, gradeCard, nextIn, queue } from '@tie/shared/domain/srs';
+import type { DeckCard } from '@tie/shared/state';
 import { activator, Btn, Icon, Topbar } from '@tie/ui';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { say } from '../../core/speech';
 import type { ScreenProps } from '../../frame';
 import { clock, send, state } from '../../store';
@@ -49,43 +50,11 @@ const INFO_A = 'Do Take a Look (palavras da cena) e do Take Away (';
 const INFO_KEY = 'expressões-chave';
 const INFO_B = ') de cada episódio que você faz';
 
-/** The four grades as the desktop legend shows them, with their keys. */
-function GradeLegend({ grades, keys }: { grades: readonly (readonly [string, string])[]; keys: boolean }) {
-  return (
-    <div class="card stack" style={{ '--gap': '8px' }}>
-      <div class="lbl">Como avaliar</div>
-      <div class="stack" style={{ '--gap': '6px' }}>
-        {grades.map(([l, t], i) => (
-          <div key={l} class="row" style={{ '--gap': '10px' }}>
-            <span class="pill" style={KEYCAP}>
-              {i + 1}
-            </span>
-            <span class="p grow" style={{ fontWeight: 700 }}>
-              {l}
-            </span>
-            <span class="sm">{`volta em ${t}`}</span>
-          </div>
-        ))}
-      </div>
-      {keys ? <div class="sm">Espaço vira o cartão; as teclas 1 a 4 escolhem a nota.</div> : null}
-    </div>
-  );
-}
-
-const HINT_BTN = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '8px',
-  alignSelf: 'center',
-  minHeight: '44px',
-  padding: '0 18px',
-  borderRadius: '999px',
-  background: 'var(--blueT)',
-} as const;
-
 const KEYCAP = {
-  minWidth: '28px',
+  width: '28px',
+  height: '28px',
+  padding: '0',
+  flex: 'none',
   justifyContent: 'center',
   background: 'var(--cream)',
   border: '1.5px solid var(--line2)',
@@ -93,9 +62,120 @@ const KEYCAP = {
   fontWeight: 800,
 } as const;
 
-/** The deck at a glance: due now, coming back within a day, the whole deck (gamebar tiles, not links). */
-function DeckStats({ due, soon, total }: { due: number; soon: number; total: number }) {
-  const tile = (ic: string, color: string, v: number, t: string) => (
+/** A key named in running text, drawn as a small keycap. */
+const KEYCAP_INLINE = {
+  display: 'inline-block',
+  padding: '0 6px',
+  borderRadius: '6px',
+  border: '1.5px solid var(--line2)',
+  borderBottomWidth: '2.5px',
+  background: '#fff',
+  color: 'var(--navy)',
+  fontWeight: 800,
+  lineHeight: '1.4',
+} as const;
+
+/** One line of the keys note: text and keycaps on a shared centre line. */
+const NOTE_LINE = { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } as const;
+
+/** The four grades with their keys (desktop): a compact 2 × 2 legend. */
+function GradeLegend({ grades }: { grades: readonly (readonly [string, string])[] }) {
+  return (
+    <div class="card stack" style={{ '--gap': '10px', flex: '1 1 auto' }}>
+      <div class="lbl">Como avaliar</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px' }}>
+        {grades.map(([l, t], i) => (
+          <div key={l} class="row" style={{ '--gap': '10px', flexWrap: 'nowrap' }}>
+            <span class="pill" style={KEYCAP}>
+              {i + 1}
+            </span>
+            <span style={{ minWidth: '0', lineHeight: '1.25' }}>
+              <b style={{ display: 'block', color: 'var(--navy)' }}>{l}</b>
+              <span class="xs" style={{ color: 'var(--navy3)', fontWeight: 600 }}>{`volta em ${t}`}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      {/* A plain note under a rule (grey, not blue, so it never reads as a link), as two set lines
+          (one per key group) with the keycaps centred on the text, never a ragged wrap. Same text
+          content: the space between the two lines stays in the DOM. */}
+      <div
+        class="xs stack"
+        style={{
+          '--gap': '6px',
+          lineHeight: '1.4',
+          color: 'var(--muted)',
+          fontWeight: 600,
+          marginTop: 'auto',
+          paddingTop: '12px',
+          borderTop: '1.5px solid var(--line)',
+        }}
+      >
+        <span style={NOTE_LINE}>
+          <span style={KEYCAP_INLINE}>Espaço</span>
+          <span>{' vira o cartão; '}</span>
+        </span>
+        <span style={NOTE_LINE}>
+          <span>{'as teclas '}</span>
+          <span style={KEYCAP_INLINE}>1</span>
+          <span>{' a '}</span>
+          <span style={KEYCAP_INLINE}>4</span>
+          <span>{' escolhem a nota.'}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** The card's call to action (a solid blue pill: the screen's primary action). */
+const REVEAL = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '8px',
+  alignSelf: 'center',
+  minHeight: '44px',
+  padding: '0 20px',
+  borderRadius: '999px',
+  background: 'var(--blue)',
+  color: '#fff',
+  fontWeight: 800,
+  fontSize: '.95rem',
+  lineHeight: '1.2',
+} as const;
+
+/** Desktop: the same pill, a size larger (it sits in a bigger card). */
+const REVEAL_DESK = { minHeight: '50px', padding: '0 28px', fontSize: '1.02rem' } as const;
+/**
+ * Phone: the whole card is the button, so its action reads as a light tint (pale blue, blue text) at a
+ * compact size instead of a heavy solid bar across the card.
+ */
+const REVEAL_PHONE = {
+  minHeight: '40px',
+  padding: '0 16px',
+  fontSize: '.9rem',
+  background: 'var(--blueT)',
+  color: 'var(--blueD)',
+} as const;
+
+/**
+ * The deck at a glance (gamebar tiles, not links): due now, when the next reviewed card comes back
+ * (or, with every card due, how many were reviewed today), the whole deck.
+ */
+function DeckStats({
+  due,
+  next,
+  done,
+  total,
+  desk,
+}: {
+  due: number;
+  next: string;
+  done: number;
+  total: number;
+  desk: boolean;
+}) {
+  const tile = (ic: string, color: string, v: number | string, t: string) => (
     <div class="g">
       <span class="ic" style={{ color }}>
         <Icon name={ic} size={22} />
@@ -106,11 +186,113 @@ function DeckStats({ due, soon, total }: { due: number; soon: number; total: num
       </span>
     </div>
   );
+  // Phone: the title ("6 cartões hoje") and the bar's caption sit right above, so the "para agora"
+  // count would say it a third time; two wider tiles instead.
   return (
-    <div class="gamebar">
-      {tile('cards', 'var(--orange)', due, 'para agora')}
-      {tile('clock', 'var(--green)', soon, 'até amanhã')}
+    <div class="gamebar" style={desk ? undefined : { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+      {desk ? tile('cards', 'var(--orange)', due, 'para agora') : null}
+      {next ? tile('clock', 'var(--green)', next, 'próxima volta') : tile('check', 'var(--green)', done, 'feitos hoje')}
       {tile('book', 'var(--blue)', total, 'no baralho')}
+    </div>
+  );
+}
+
+/**
+ * Desktop: the cards already reviewed and when each comes back (English side only, so nothing is
+ * given away). The deck at a glance under the review, instead of a blank lower half.
+ */
+function ComingBack({ deck, now, desk }: { deck: readonly DeckCard[]; now: number; desk: boolean }) {
+  const later = deck.filter((x) => (x.at || 0) > now).sort((a, b) => (a.at || 0) - (b.at || 0));
+  if (!later.length) return null;
+  // Always full rows: desktop up to six in one row, or eight in two rows of four; a phone shows two
+  // rows of two.
+  const shown = desk ? later.slice(0, later.length >= 8 ? 8 : 6) : later.slice(0, later.length >= 4 ? 4 : 2);
+  const cols = desk ? (shown.length === 8 ? 4 : shown.length) : Math.min(2, shown.length);
+  const more = later.length - shown.length;
+  // Each card: the word, then when it returns as a small clock-and-time tag (blue: it is scheduled).
+  return (
+    <div class="card stack" style={desk ? { '--gap': '12px' } : { '--gap': '12px', padding: '18px 20px 20px' }}>
+      <div class="row between">
+        <div class="lbl">Voltam depois</div>
+        <span class="xs">{`${later.length} ${later.length === 1 ? 'agendado' : 'agendados'}`}</span>
+      </div>
+      <div
+        style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: desk ? '8px' : '10px' }}
+      >
+        {shown.map((x) => (
+          <div
+            key={x.id}
+            style={{
+              padding: desk ? '12px 14px' : '9px 12px',
+              borderRadius: '12px',
+              background: 'var(--cream)',
+              minWidth: '0',
+            }}
+          >
+            <b
+              style={{
+                display: 'block',
+                color: 'var(--navy)',
+                overflowWrap: 'anywhere',
+                lineHeight: '1.3',
+                fontSize: desk ? '1.05rem' : '1rem',
+              }}
+            >
+              {x.en}
+            </b>
+            {/* Desktop: where the card came from (one line), under the word. */}
+            {desk ? (
+              <span
+                class="xs"
+                style={{
+                  display: 'block',
+                  marginTop: '2px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+                title={x.scene}
+              >
+                {x.scene}
+              </span>
+            ) : null}
+            <span
+              class="xs"
+              style={
+                desk
+                  ? {
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      marginTop: '6px',
+                      padding: '2px 8px 2px 6px',
+                      borderRadius: '999px',
+                      background: 'var(--blueT)',
+                      color: 'var(--blueD)',
+                      fontWeight: 700,
+                    }
+                  : // Phone: the same tag without its pill, so the list stays short.
+                    {
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      marginTop: '2px',
+                      color: 'var(--blueD)',
+                      fontWeight: 700,
+                    }
+              }
+            >
+              <Icon name="clock" size={13} />
+              {`volta ${nextIn([x], now)}`}
+            </span>
+          </div>
+        ))}
+      </div>
+      {more > 0 ? (
+        <div class="xs" style={{ color: 'var(--muted)' }}>
+          {`e mais ${more} ${more === 1 ? 'cartão agendado' : 'cartões agendados'}`}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -175,6 +357,37 @@ function Review({ c }: { c: Catalog }) {
     setFlip(flipRef.current);
   };
 
+  // The queue is worked out at render time; re-render when the next reviewed card falls due, so it
+  // shows up (and the title's count follows) even while the learner sits on this screen.
+  const [, setTick] = useState(0);
+  const nextAt = s.deck.reduce((m, x) => ((x.at || 0) > now ? Math.min(m, x.at || 0) : m), Number.POSITIVE_INFINITY);
+  useEffect(() => {
+    if (!Number.isFinite(nextAt)) return;
+    const wait = nextAt - Date.now();
+    if (wait > 86_400_000) return; // a day or more away: the day's clock tick re-renders first
+    const t = setTimeout(() => setTick((k) => k + 1), Math.max(0, wait) + 250);
+    return () => clearTimeout(t);
+  }, [nextAt]);
+
+  // Desktop: the real "Ver a tradução" button sits exactly over its invisible twin inside the card
+  // (a button cannot nest in the card's button). The twin follows the centred group, so its offset is
+  // read after layout and again whenever the card or the word changes size.
+  const wordRef = useRef<HTMLSpanElement>(null);
+  const twinRef = useRef<HTMLSpanElement>(null);
+  const [revealTop, setRevealTop] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const twin = twinRef.current;
+    if (!desk || flip || !cardId || !twin) return;
+    const measure = () => setRevealTop(twin.offsetTop);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    const box = twin.closest('.flash');
+    if (box) ro.observe(box);
+    if (wordRef.current) ro.observe(wordRef.current);
+    return () => ro.disconnect();
+  }, [desk, flip, cardId]);
+
   const cur = current(s, publishedEpisodes(c));
   const empty = s.deck.length ? (
     <div class="card gr stack tc pop" style={{ '--gap': '10px', alignItems: 'center' }}>
@@ -194,25 +407,26 @@ function Review({ c }: { c: Catalog }) {
     </div>
   );
 
-  // The flashcard: the word (and, flipped, its translation) centred as the card's focal point, with
-  // a tighter card on a phone and a roomier one on desktop. The speaker is a real button laid over
-  // the card's corner (a button cannot nest in the card's button); an invisible twin keeps the
-  // card's header row the same height.
-  const pad = desk ? { y: 28, x: 28 } : { y: 22, x: 20 };
+  // The flashcard: header (where the card came from + the speaker), the word centred as the card's
+  // focal point (and, flipped, its translation), and the card's action at its foot. The speaker and,
+  // on desktop, "Ver a tradução" are real buttons laid over the card (a button cannot nest in the
+  // card's button); invisible twins inside the card keep their room.
+  const pad = desk ? { y: 26, x: 28 } : { y: 20, x: 20 };
   const flashCard = card ? (
     <>
-      {/* Desktop: the card fills its column down to the right column's end (both columns level),
-          from a compact 320px; a phone keeps a compact card so the word sits close to its label. */}
+      {/* Desktop: the card fills its column down to the right column's end (both columns level). */}
       <div
         style={
-          desk ? { position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 auto' } : { position: 'relative' }
+          desk
+            ? { position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 auto' }
+            : { position: 'relative' }
         }
       >
         <button
           type="button"
           class="flash"
           style={{
-            minHeight: desk ? '320px' : '232px',
+            minHeight: desk ? '340px' : '240px',
             flex: desk ? '1 1 auto' : undefined,
             padding: `${pad.y}px ${pad.x}px`,
             gap: '16px',
@@ -220,53 +434,76 @@ function Review({ c }: { c: Catalog }) {
           }}
           onClick={activator(undefined, toggle)}
         >
-          <span class="row between" style={{ textAlign: 'left' }}>
-            <span class="sm" style={{ fontWeight: 700 }}>
+          {/* A long scene label wraps inside the row (never widens the page); the speaker's twin
+              keeps its 44px. */}
+          <span class="row between" style={{ textAlign: 'left', flexWrap: 'nowrap', alignItems: 'center' }}>
+            <span class="sm" style={{ fontWeight: 700, minWidth: '0', flex: '1 1 auto', overflowWrap: 'anywhere' }}>
               {card.scene}
             </span>
             <span class="iconbtn" aria-hidden="true" style={{ border: '0', visibility: 'hidden' }} />
           </span>
-          <span style={{ display: 'block', overflowWrap: 'anywhere' }}>
-            <span class="h1" style={{ display: 'block', fontSize: desk ? '3.5rem' : '2.5rem', lineHeight: '1.1' }}>
-              {card.en}
-            </span>
-            {flip ? (
-              <span
-                class="p-read pop"
-                style={{
-                  display: 'block',
-                  marginTop: '14px',
-                  paddingTop: '14px',
-                  borderTop: '1.5px solid var(--line)',
-                  fontSize: desk ? '1.2rem' : undefined,
-                }}
-              >
-                {card.pt}
-                {card.note ? (
-                  <span class="sm" style={{ display: 'block', marginTop: '6px' }}>
-                    {card.note}
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
-          </span>
-          {/* Desktop shows a "Ver a tradução" button under the card instead of the tap hint; the hint
-              keeps its place (hidden) so the word stays centred. */}
-          {/* Unflipped on a phone the hint is drawn as a button (a blue pill with the eye icon): it is
-              the card's own action, so it reads as tappable. */}
+          {/* The word, its hint (or translation) and the card's action as one group, centred in the
+              room under the header: any extra height (desktop: the card is as tall as the right
+              column) goes evenly above and below it, never between the hint and the action. */}
           <span
-            class="sm"
-            aria-hidden={desk && !flip ? 'true' : undefined}
             style={{
-              fontWeight: 800,
-              color: 'var(--blue)',
-              fontSize: desk ? '1rem' : undefined,
-              visibility: desk && !flip ? 'hidden' : undefined,
-              ...(flip ? {} : HINT_BTN),
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              gap: desk ? '24px' : '20px',
+              flex: '1 1 auto',
+              // Desktop: the group sits a little above the card's centre (optical centre), so the
+              // header's room above the word does not read as an empty band.
+              paddingBottom: desk ? '48px' : '4px',
             }}
           >
-            {flip ? null : <Icon name="eye" size={18} />}
-            {flip ? 'Como foi? Escolha abaixo · +2 pontos' : 'Toque para ver a tradução'}
+            <span ref={wordRef} style={{ display: 'block', overflowWrap: 'anywhere' }}>
+              <span class="h1" style={{ display: 'block', fontSize: desk ? '4rem' : '2.5rem', lineHeight: '1.1' }}>
+                {card.en}
+              </span>
+              {flip ? (
+                <span
+                  class="p-read pop"
+                  style={{
+                    display: 'block',
+                    marginTop: '14px',
+                    paddingTop: '14px',
+                    borderTop: '1.5px solid var(--line)',
+                    fontSize: desk ? '1.2rem' : undefined,
+                  }}
+                >
+                  {card.pt}
+                  {card.note ? (
+                    <span class="sm" style={{ display: 'block', marginTop: '6px' }}>
+                      {card.note}
+                    </span>
+                  ) : null}
+                </span>
+              ) : (
+                <span
+                  class="sm"
+                  style={{ display: 'block', marginTop: '10px', fontSize: desk ? '1.02rem' : undefined }}
+                >
+                  Lembra o que significa?
+                </span>
+              )}
+            </span>
+            {flip ? (
+              <span class="sm" style={{ fontWeight: 800, color: 'var(--blue)', fontSize: desk ? '1rem' : undefined }}>
+                Como foi? Escolha abaixo · +2 pontos
+              </span>
+            ) : (
+              // Phone: the card's own action, drawn as a button. Desktop: the room for the real
+              // "Ver a tradução" button laid over it.
+              <span
+                ref={twinRef}
+                aria-hidden={desk ? 'true' : undefined}
+                style={{ ...REVEAL, ...(desk ? REVEAL_DESK : REVEAL_PHONE), visibility: desk ? 'hidden' : undefined }}
+              >
+                <Icon name="eye" size={desk ? 18 : 16} />
+                Toque para ver a tradução
+              </span>
+            )}
           </span>
         </button>
         <button
@@ -284,6 +521,26 @@ function Review({ c }: { c: Catalog }) {
         >
           <Icon name="speaker" size={18} />
         </button>
+        {desk && !flip ? (
+          <button
+            type="button"
+            style={{
+              ...REVEAL,
+              ...REVEAL_DESK,
+              position: 'absolute',
+              left: '50%',
+              top: `${revealTop ?? 0}px`,
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+              visibility: revealTop === null ? 'hidden' : undefined,
+            }}
+            onClick={activator(undefined, toggle)}
+          >
+            <Icon name="eye" size={18} />
+            Ver a tradução
+          </button>
+        ) : null}
       </div>
       {flip ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '8px' }}>
@@ -307,26 +564,23 @@ function Review({ c }: { c: Catalog }) {
             </button>
           ))}
         </div>
-      ) : desk ? (
-        // Desktop: an explicit way to turn the card for mouse users, where the grades will appear.
-        <Btn label="Ver a tradução" kind="blue" cls="block" icon="eye" onClick={toggle} />
       ) : null}
     </>
   ) : (
     empty
   );
 
-  // The bar with what it measures spelled out (the prototype's bare bar read as "40% of this card").
+  // The bar with what it measures spelled out: today's reviews out of today's total and the share done
+  // (the title already says how many are left).
   const progress = (
     <div class="stack" style={{ '--gap': '6px' }}>
       {s.deck.length ? (
         <div class="row between xs" style={{ fontWeight: 700 }}>
-          {/* Worded from the title's side ("6 cartões hoje" = the ones still to do). */}
           <span>
             {n
-              ? `${done} feitos hoje · faltam ${n}`
+              ? `${done} de ${done + n} revisados hoje`
               : done
-                ? `${done} feitos hoje · tudo em dia`
+                ? `${done} revisados hoje · tudo em dia`
                 : 'Nada para revisar agora'}
           </span>
           <span>{`${pct}%`}</span>
@@ -343,7 +597,7 @@ function Review({ c }: { c: Catalog }) {
     <div class="card soft" style={{ background: '#fff', borderColor: 'var(--line)' }}>
       <div class="lbl">De onde vêm os cartões</div>
       {/* Same text content as the prototype's string (one run per stretch between the <b>s). */}
-      <p class="p mt4">
+      <p class="p mt4" style={desk ? undefined : { fontSize: '.95rem', lineHeight: '1.5' }}>
         {INFO_A}
         <span style={{ whiteSpace: 'nowrap' }}>{INFO_KEY}</span>
         {`${INFO_B}${taken ? ', mais ' : `. Toque numa palavra da legenda dos Extras para trazer mais.${deckLine}`}`}
@@ -355,8 +609,10 @@ function Review({ c }: { c: Catalog }) {
     </div>
   );
 
-  const soon = s.deck.filter((x) => (x.at || 0) > now && (x.at || 0) <= now + 86_400_000).length;
-  const stats = s.deck.length ? <DeckStats due={n} soon={soon} total={s.deck.length} /> : null;
+  // "em 2 dias" → "2 dias", "amanhã" stays (the tile's label says what it is).
+  const later = s.deck.filter((x) => (x.at || 0) > now);
+  const next = later.length ? nextIn(later, now).replace(/^em /, '') : '';
+  const stats = s.deck.length ? <DeckStats due={n} next={next} done={done} total={s.deck.length} desk={desk} /> : null;
 
   return (
     <>
@@ -387,9 +643,10 @@ function Review({ c }: { c: Catalog }) {
                 <div class="stack" style={{ '--gap': '16px' }}>
                   {stats}
                   {info}
-                  {card ? <GradeLegend grades={grades} keys /> : null}
+                  {card ? <GradeLegend grades={grades} /> : null}
                 </div>
               </div>
+              <ComingBack deck={s.deck} now={now} desk />
             </>
           ) : (
             <>
@@ -397,7 +654,7 @@ function Review({ c }: { c: Catalog }) {
               {flashCard}
               {stats}
               {info}
-              {card ? <GradeLegend grades={grades} keys={false} /> : null}
+              <ComingBack deck={s.deck} now={now} desk={false} />
             </>
           )}
         </div>

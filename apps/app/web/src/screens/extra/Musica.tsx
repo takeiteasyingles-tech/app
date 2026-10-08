@@ -201,6 +201,48 @@ export default function Musica({ params }: ScreenProps) {
     return r;
   };
 
+  const lyricRows = tr.lines.map((l, i) => {
+    const on = i === K.line;
+    // The repeat of the line above stays folded into it unless it is the one being sung.
+    const folded = repeatOf(i) && !on;
+    const times = repeatOf(i) ? 1 : repeats(i);
+    const g = stripGap(l.gap);
+    const key = `${K.tr}-${i}`;
+    const picked = K.picks[key];
+    const parts = K.gap ? splitAtGap(l.en, g) : null;
+    let opts: string[] | null = null;
+    if (K.gap && on && !picked) {
+      K.opts[key] ??= gapOpts(tr, i);
+      opts = K.opts[key] ?? null;
+    }
+    return (
+      <div key={key} class={`lyric${on ? ' on' : ''}`} id={`ly${i}`} style={folded ? { display: 'none' } : undefined}>
+        <div class="en">
+          {parts ? (
+            <>
+              {parts[0]}
+              <span class={`gap${picked ? ' filled' : ''}`}>{picked || '____'}</span>
+              {parts[1]}
+            </>
+          ) : (
+            l.en
+          )}
+          {times > 1 && K.line !== i + 1 ? <span class="pill x-rep">{`×${times}`}</span> : null}
+        </div>
+        <div class="pt">{l.pt}</div>
+        {opts ? (
+          <div class="chips mt8">
+            {opts.map((o, j) => (
+              <button type="button" key={j} class="chip" onClick={act(() => kGap(o))}>
+                {o}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  });
+
   const gapBtn = (
     <button type="button" class={`chip x-gapbtn${K.gap ? ' on' : ''}`} aria-pressed={K.gap} onClick={act(kGapMode)}>
       <span class="ck">{K.gap ? <Icon name="check" size={12} /> : null}</span>
@@ -210,7 +252,7 @@ export default function Musica({ params }: ScreenProps) {
   );
 
   const player = (
-    <div class="card stack" style={{ '--gap': '14px' }}>
+    <div class="card stack x-player" style={{ '--gap': '14px' }}>
       <div class="x-head">
         {desk ? null : <img class="x-cover" src={k.img ?? ''} alt="" />}
         <div class="grow">
@@ -237,7 +279,7 @@ export default function Musica({ params }: ScreenProps) {
         <button type="button" class="iconbtn" aria-label="Anterior" onClick={act(() => kTrack(-1))}>
           <Icon name="back" size={20} />
         </button>
-        <button type="button" class="playbtn" aria-label="Tocar" onClick={act(kPlay)}>
+        <button type="button" class="playbtn" aria-label="Tocar" aria-pressed={K.playing} onClick={act(kPlay)}>
           <Icon name={K.playing ? 'pause' : 'play'} size={24} />
         </button>
         <button type="button" class="iconbtn" aria-label="Próxima" onClick={act(() => kTrack(1))}>
@@ -252,11 +294,22 @@ export default function Musica({ params }: ScreenProps) {
         ) : null}
       </div>
       {desk ? null : gapBtn}
+      {K.gap ? (
+        <div class="fb tip x-tip">
+          Uma palavra some em cada verso. Escolha antes do verso acabar. Acertos: <b>{K.right}</b>
+          {` · +${exRight} cada`}
+        </div>
+      ) : null}
+      {/* The lyrics belong to the player: one panel, the words under the controls. */}
+      <div class="stack x-lyr" style={{ '--gap': '6px' }}>
+        <div class="lbl x-lbl">Letra</div>
+        <div class="lyrics">{lyricRows}</div>
+      </div>
     </div>
   );
 
   const faixas = (
-    <div class="stack" style={{ '--gap': '6px' }}>
+    <div class="stack x-faixas" style={{ '--gap': '6px' }}>
       <div class="lbl x-lbl">Faixas</div>
       {tracks.map((t, i) => (
         <button type="button" key={t.id} class={`line${i === K.tr ? ' on' : ''}`} onClick={act(() => kSel(i))}>
@@ -283,63 +336,6 @@ export default function Musica({ params }: ScreenProps) {
             ) : null}
             <div class="x-mus-col">
               {player}
-              {K.gap ? (
-                <div class="fb tip" style={{ background: 'var(--navy2)', color: '#fff' }}>
-                  Uma palavra some em cada verso. Escolha antes do verso acabar. Acertos: <b>{K.right}</b>
-                  {` · +${exRight} cada`}
-                </div>
-              ) : null}
-              <div class="stack x-lyr" style={{ '--gap': '6px' }}>
-                <div class="lbl x-lbl">Letra</div>
-                <div class="lyrics">
-                  {tr.lines.map((l, i) => {
-                    const on = i === K.line;
-                    // The repeat of the line above stays folded into it unless it is the one being sung.
-                    const folded = repeatOf(i) && !on;
-                    const times = repeatOf(i) ? 1 : repeats(i);
-                    const g = stripGap(l.gap);
-                    const key = `${K.tr}-${i}`;
-                    const picked = K.picks[key];
-                    const parts = K.gap ? splitAtGap(l.en, g) : null;
-                    let opts: string[] | null = null;
-                    if (K.gap && on && !picked) {
-                      K.opts[key] ??= gapOpts(tr, i);
-                      opts = K.opts[key] ?? null;
-                    }
-                    return (
-                      <div
-                        key={key}
-                        class={`lyric${on ? ' on' : ''}`}
-                        id={`ly${i}`}
-                        style={folded ? { display: 'none' } : undefined}
-                      >
-                        <div class="en">
-                          {parts ? (
-                            <>
-                              {parts[0]}
-                              <span class={`gap${picked ? ' filled' : ''}`}>{picked || '____'}</span>
-                              {parts[1]}
-                            </>
-                          ) : (
-                            l.en
-                          )}
-                          {times > 1 && K.line !== i + 1 ? <span class="pill x-rep">{`×${times}`}</span> : null}
-                        </div>
-                        <div class="pt">{l.pt}</div>
-                        {opts ? (
-                          <div class="chips mt8">
-                            {opts.map((o, j) => (
-                              <button type="button" key={j} class="chip" onClick={act(() => kGap(o))}>
-                                {o}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
               {desk ? null : faixas}
             </div>
           </div>

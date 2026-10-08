@@ -5,15 +5,19 @@ import routes from './routes/index';
 
 const MULTIPART = new Set([`POST ${adminApi.media.upload.path}`]);
 
-const app = createApp({ multipart: (path, method) => MULTIPART.has(`${method} ${path}`) });
+/** The admin app: shared middleware (headers, config guard, CSRF, JSON cap) + every admin route. */
+export function buildAdminApp() {
+  const app = createApp({ multipart: (path, method) => MULTIPART.has(`${method} ${path}`) });
+  app.route('/', routes);
+  app.all('*', (c) => {
+    const p = c.req.path;
+    if (p.startsWith('/admin-api/') || p === '/admin-api' || p.startsWith('/m/')) throw fail('not_found');
+    return c.env.ASSETS.fetch(c.req.raw);
+  });
+  return app;
+}
 
-app.route('/', routes);
-
-app.all('*', (c) => {
-  const p = c.req.path;
-  if (p.startsWith('/admin-api/') || p === '/admin-api' || p.startsWith('/m/')) throw fail('not_found');
-  return c.env.ASSETS.fetch(c.req.raw);
-});
+const app = buildAdminApp();
 
 export default {
   fetch: app.fetch,

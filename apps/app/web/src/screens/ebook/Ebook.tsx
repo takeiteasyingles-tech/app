@@ -15,11 +15,15 @@ import {
   pad2,
   seasonCefr,
   testIntro,
+  testIntroParts,
   useEbook,
 } from './common';
 
-/** The dashed cards (Take It Out, Na próxima) at the weight of their siblings' edge (1.5px, not 2px). */
-const DASH = { '--gap': '6px', borderWidth: '1.5px', background: 'rgba(255,255,255,.45)' };
+/**
+ * The dashed "Na próxima" card (what is still to come): a 1.5px dash (tie.css's 2px dark dash was heavy) in a
+ * sand tone strong enough to read as an edge on the cream page, over a faint white body.
+ */
+const DASH = { '--gap': '6px', borderWidth: '1.5px', borderColor: '#A3946B', background: '#fff' };
 
 export default function Ebook(_props: ScreenProps) {
   useChrome({ title: `E-book ${EB}` });
@@ -43,34 +47,90 @@ export default function Ebook(_props: ScreenProps) {
     if (s.epsDone[n]) return 'Concluído · abrir de novo';
     const p = s.prog[n] ?? 1;
     if (p > 1) return `Em andamento · etapa ${p} de ${c?.steps.length ?? 10}`;
+    // Not started: the next one in line says what comes first (as the Trilha's "A seguir" does).
+    const prev = eb?.episodes.filter((x) => x < n && !s.epsDone[x]) ?? [];
+    if (prev.length) return `A fazer · depois do episódio ${pad2(prev[prev.length - 1] ?? n - 1)}`;
     return 'A fazer';
   };
 
-  const testCard = eb ? (
-    <div class="card navy stack" style={{ '--gap': '12px' }}>
+  const testText = eb ? (
+    <>
       <div class="lbl" style={{ color: 'var(--onNavy)' }}>
         Take a test
       </div>
       <div class="h2" style={{ color: '#fff' }}>
         Take the episode test
       </div>
-      <p class="p">{testIntro(eb)}</p>
+      {desk ? (
+        // Desktop: o escopo numa linha e "Recomenda, não bloqueia." como nota abaixo (a frase inteira
+        // quebrava deixando "não bloqueia." sozinha ao lado do botão).
+        <p class="p">
+          {testIntroParts(eb)[0]}
+          <span class="sm" style={{ display: 'block', marginTop: '2px' }}>
+            {testIntroParts(eb)[1]}
+          </span>
+        </p>
+      ) : (
+        <p class="p">{testIntro(eb)}</p>
+      )}
       {last != null ? (
         <div class="h3" style={{ color: '#fff' }}>
           {`Última tentativa: ${last}/${eb.test.reduce((a, p) => a + p.qs.length, 0)}`}
         </div>
       ) : null}
-      <Btn label={last != null ? 'Refazer o teste' : `Fazer o teste · +${testPts} pontos`} go={`ebook/${EB}/teste`} />
-    </div>
+    </>
   ) : null;
+  const testBtn = (
+    <Btn
+      label={last != null ? 'Refazer o teste' : `Fazer o teste · +${testPts} pontos`}
+      go={`ebook/${EB}/teste`}
+      cls="block"
+    />
+  );
+  // Desktop: one full-width card, the text on the left and the button (its own width, centred on the
+  // text block) on the right, with the same padding all round. Phone: the prototype's stack.
+  const testCard = eb ? (
+    desk ? (
+      <div class="card navy row" style={{ '--gap': '32px', padding: '24px', alignItems: 'center' }}>
+        <div class="stack grow" style={{ '--gap': '8px', minWidth: '0' }}>
+          {testText}
+        </div>
+        <div style={{ flex: 'none' }}>
+          <Btn
+            label={last != null ? 'Refazer o teste' : `Fazer o teste · +${testPts} pontos`}
+            go={`ebook/${EB}/teste`}
+          />
+        </div>
+      </div>
+    ) : (
+      <div class="card navy stack" style={{ '--gap': '12px' }}>
+        {testText}
+        {testBtn}
+      </div>
+    )
+  ) : null;
+  // "Na próxima": the prototype's dashed card (what is still to come), on white with a clearly visible
+  // edge and a book mark, as wide as the test card above it and only as tall as its text.
   const teaser = eb?.teaser ? (
     <div
       class={`card dash stack${desk ? '' : ' mt8'}`}
-      style={{ ...DASH, justifyContent: desk ? 'center' : undefined }}
+      style={{ ...DASH, '--gap': '6px', padding: desk ? '18px 24px' : '16px' }}
     >
-      <div class="lbl or">Na próxima</div>
-      <div class="h3">{eb.teaser.title}</div>
-      <p class="p">{eb.teaser.sub}</p>
+      {/* Hierarquia: o rótulo "Na próxima" com o livro (na mesma linha, sem uma coluna de ícone que
+          estreitava o texto no celular); a frase da história como corpo principal; a referência
+          (e-book, lições) como meta discreta embaixo. */}
+      <span class="row" style={{ '--gap': '8px' }}>
+        <span aria-hidden="true" style={{ color: 'var(--orange)', display: 'flex' }}>
+          <Icon name="book" size={16} />
+        </span>
+        <span class="lbl or">Na próxima</span>
+      </span>
+      <span class="p" style={{ color: 'var(--navy)', fontWeight: '700', lineHeight: '1.5', textWrap: 'pretty' }}>
+        {eb.teaser.title}
+      </span>
+      <span class="sm" style={{ fontWeight: '600' }}>
+        {eb.teaser.sub}
+      </span>
     </div>
   ) : null;
 
@@ -102,14 +162,32 @@ export default function Ebook(_props: ScreenProps) {
                     href={`#/episodio/${n}/1`}
                     style={{ '--gap': '12px', padding: '14px 16px' }}
                   >
-                    <span class="num" style={{ fontSize: '1.4rem', color: 'var(--green)', width: '38px' }}>
+                    {/* One number colour (the brand orange of the Trilha's numbers); the state goes in
+                        the status line, with a dot in its colour (green done, orange in progress). */}
+                    <span class="num" style={{ fontSize: '1.4rem', width: '38px', color: 'var(--orange)' }}>
                       {pad2(n)}
                     </span>
                     <span class="grow">
                       <span class="h3" style={{ display: 'block' }}>
                         {c?.titles[n - 1] ?? ''}
                       </span>
-                      <span class="sm">{epStatus(n)}</span>
+                      <span class="sm row" style={{ '--gap': '6px' }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            flex: 'none',
+                            borderRadius: '50%',
+                            background: s.epsDone[n]
+                              ? 'var(--green)'
+                              : (s.prog[n] ?? 1) > 1
+                                ? 'var(--orange)'
+                                : 'var(--line2)',
+                          }}
+                        />
+                        <span>{epStatus(n)}</span>
+                      </span>
                     </span>
                     <Icon name="next" size={20} />
                   </a>
@@ -120,33 +198,34 @@ export default function Ebook(_props: ScreenProps) {
               <div class="lbl">Take some extras · opcionais</div>
               {/* The prototype's grid: the four extras as cards of one shape (two columns on desktop).
                   A playable one carries a chevron by its meta; the one still in production is the same
-                  card, dashed, with a muted meta and nothing to open. */}
+                  card with an "Em produção" pill and nothing to open. */}
               <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: desk ? '1fr 1fr' : '1fr',
-                  // Desktop: every row as tall as the tallest card, so the grid reads as one block.
-                  gridAutoRows: desk ? '1fr' : undefined,
+                  // Each row as tall as its own taller card (equal rows left a short pair half empty).
                   gap: '10px',
                 }}
               >
                 {[...ready, ...soon].map((x) => {
                   const inner = (
                     <>
-                      <div class="row between base">
+                      <div class={`row between ${x.go ? 'base' : ''}`}>
                         <span class="h3">{x.name}</span>
-                        <span
-                          class="xs row"
-                          style={{
-                            '--gap': '2px',
-                            fontWeight: '800',
-                            color: x.go ? 'var(--blue)' : 'var(--muted)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {x.meta}
-                          {x.go ? <Icon name="next" size={16} /> : null}
-                        </span>
+                        {x.go ? (
+                          // The meta as a soft-blue pill with a full-size chevron (a bare 16px chevron
+                          // read small and sat on the card's edge).
+                          <span class="pill bl" style={{ gap: '2px', padding: '4px 6px 4px 10px' }}>
+                            {x.meta}
+                            <Icon name="next" size={18} />
+                          </span>
+                        ) : (
+                          // Not playable yet: an explicit status pill with a clock, not a muted word.
+                          <span class="pill" style={{ background: 'var(--goldT)', color: '#7A5400' }}>
+                            <Icon name="clock" size={13} />
+                            {x.meta}
+                          </span>
+                        )}
                       </div>
                       <div class="sm" style={{ fontWeight: '700' }}>
                         {x.pt}
@@ -159,27 +238,18 @@ export default function Ebook(_props: ScreenProps) {
                       {inner}
                     </a>
                   ) : (
-                    // The dashed card at the weight of its siblings' edge (1.5px), not tie.css's 2px.
-                    <div key={x.name} class="card dash stack" style={DASH}>
+                    // The same solid card as its siblings (a dashed edge read as noise beside them):
+                    // the "Em produção" pill and no chevron say it cannot be opened yet.
+                    <div key={x.name} class="card stack soon" style={{ '--gap': '6px' }}>
                       {inner}
                     </div>
                   );
                 })}
               </div>
             </div>
-            {/* Desktop: the test and "Na próxima" side by side (the page used to end on a long empty
-                stretch under a full-width teaser). Phone: one under the other, as in the prototype. */}
-            {desk && teaser ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: '14px' }}>
-                {testCard}
-                {teaser}
-              </div>
-            ) : (
-              <>
-                {testCard}
-                {teaser}
-              </>
-            )}
+            {/* The test, then "Na próxima", one under the other at the same width (as in the prototype). */}
+            {testCard}
+            {teaser}
           </div>
         ) : null}
       </div>

@@ -5,14 +5,15 @@ import { signal } from '@preact/signals';
 import type { Album, Catalog, ExtraMeta } from '@tie/shared/content/schema';
 import { FORMAT_WORD, label, type Ranked, rankAlbums, rankExtras } from '@tie/shared/domain/personalize';
 import type { Profile } from '@tie/shared/state';
-import { activator, Cover, Flow, Icon } from '@tie/ui';
-import type { ComponentChildren } from 'preact';
-import { useMemo } from 'preact/hooks';
+import { activator, Cover, Icon } from '@tie/ui';
+import type { ComponentChildren, Ref } from 'preact';
+import { useMemo, useRef } from 'preact/hooks';
 import { type ScreenProps, useChrome } from '../../frame';
 import { state } from '../../store/state';
 import { UserAvatarBtn } from '../../ui-blocks/chrome';
 import { isDesktop, useCatalog } from './data';
 import { LoadFailed, OnNavy } from './parts';
+import { XFlow } from './XFlow';
 
 /** Fallback when the catalog has no extras_shelves blob. */
 const SHELVES = [
@@ -49,22 +50,58 @@ function AlbumCover({ k }: { k: RankedAlbum }) {
   );
 }
 
-/** rail(title, items, sub): nothing when there are no items. */
-function Rail({ title, sub, children }: { title: string; sub?: string; children: ComponentChildren[] }) {
-  if (!children.length) return null;
+/**
+ * rail(title, items, sub): nothing when there are no items. `cls` tags the rail for extra.css
+ * (x-sq: square album covers).
+ */
+function Rail({
+  title,
+  sub,
+  cls = '',
+  children,
+}: {
+  title: string;
+  sub?: string;
+  cls?: string;
+  children: ComponentChildren[];
+}) {
+  const rail = useRef<HTMLDivElement>(null);
+  const items = children.filter(Boolean);
+  if (!items.length) return null;
+  // Phones show two whole cards per screen; a longer rail gets a "more" link that pages it.
+  const more = !isDesktop() && items.length > 2;
+  const page = () => {
+    const el = rail.current;
+    if (!el) return;
+    const end = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
+    el.scrollTo({ left: end ? 0 : el.scrollLeft + el.clientWidth - 18, behavior: 'smooth' });
+  };
   // --n (the card count) lets the desktop rows share their width out by cards (extra.css).
   return (
-    <section class="stack x-rail" style={{ '--gap': '8px', '--n': String(children.length) }}>
-      <div>
+    <section class={`stack x-rail ${cls}`} style={{ '--gap': '8px', '--n': String(items.length) }}>
+      <div class={`x-railhd${sub ? ' x-hassub' : ''}`}>
         <div class="h2" style={{ color: '#fff' }}>
           {title}
         </div>
-        {sub ? <div class="xs mt4">{sub}</div> : null}
+        {sub ? <div class="xs">{sub}</div> : null}
+        {more ? (
+          <button type="button" class="x-more" aria-label={`Ver mais: ${title}`} onClick={activator(undefined, page)}>
+            Ver mais
+            <Icon name="next" size={16} />
+          </button>
+        ) : null}
       </div>
-      <div class="rail">{children}</div>
+      <div class="rail" ref={rail as Ref<HTMLDivElement>}>
+        {items}
+      </div>
     </section>
   );
 }
+
+/** Horizontal room taken by a desktop shelf panel besides its cards (padding + borders), and the gaps. */
+const PANEL_PAD = 43;
+const PANEL_GAP = 20;
+const CARD_GAP = 12;
 
 function ForYou({ c, p, open, soon, albums }: ShelfProps) {
   // Foundation note #2: Flow restarts when its items array changes identity, so key it on the ids.
@@ -73,25 +110,32 @@ function ForYou({ c, p, open, soon, albums }: ShelfProps) {
   // Memoized on the ids on purpose.
   const flowItems = useMemo(() => top, [flowKey]);
   const fw = c.personalize?.formatWord ?? FORMAT_WORD;
-  const formatRails = p.formats
+  const desk = isDesktop();
+  const shelvesByFormat = p.formats
     .filter((f) => f !== 'musica')
-    .map((f) => {
-      const it = open.filter((x) => x.format === f);
-      return it.length ? (
-        <Rail key={f} title={label(c.onboarding.formats, f)}>
-          {it.map((x) => (
-            <Cover key={x.id} x={x} why={false} />
-          ))}
-        </Rail>
-      ) : null;
-    });
+    .map((f) => ({ f, it: open.filter((x) => x.format === f) }))
+    .filter((r) => r.it.length);
+  const formatRails = shelvesByFormat.map(({ f, it }) => (
+    <Rail key={f} title={label(c.onboarding.formats, f)}>
+      {it.map((x) => (
+        <Cover key={x.id} x={x} why={false} />
+      ))}
+    </Rail>
+  ));
   const music = (
-    <Rail title="Música" sub="Karaokê com lacunas">
+    <Rail title="Música" sub="Karaokê com lacunas" cls="x-sq">
       {albums.map((k) => (
         <AlbumCover key={k.id} k={k} />
       ))}
     </Rail>
   );
+  const topRail = open[0] ? (
+    <Rail title={open[0].why} sub="Os mais parecidos com o seu perfil">
+      {open.slice(0, 6).map((x) => (
+        <Cover key={x.id} x={x} />
+      ))}
+    </Rail>
+  ) : null;
   const premieres = (
     <Rail title="Estreias sexta">
       {soon.map((x) => (
@@ -99,20 +143,30 @@ function ForYou({ c, p, open, soon, albums }: ShelfProps) {
       ))}
     </Rail>
   );
+  // Desktop, tidy rows: when the poster shelves (formats + premieres) fit one row, they take it at one
+  // card width (--cw); the music panel below gives its square covers room for one-line titles, with
+  // the Desafio card beside it.
+  const posterCounts = [...shelvesByFormat.map((r) => r.it.length), ...(soon.length ? [soon.length] : [])];
+  const nPanels = posterCounts.length;
+  const nCards = posterCounts.reduce((a, b) => a + b, 0);
+  const tidy = desk && nPanels >= 2 && nPanels <= 3 && nCards >= 4 && nCards <= 6 && albums.length > 0;
+  const fixed = (nPanels - 1) * PANEL_GAP + nPanels * PANEL_PAD + (nCards - nPanels) * CARD_GAP;
   return (
     <>
-      <Flow items={flowItems} id="flow-home" />
+      <XFlow items={flowItems} id="flow-home" />
       <div class="tc xs">
         {`Arraste ou toque numa capa. Sugestões pelo que você marcou: ${p.formats.map((f) => fw[f] ?? f).join(', ')}.`}
       </div>
-      {open[0] ? (
-        <Rail title={open[0].why} sub="Os mais parecidos com o seu perfil">
-          {open.slice(0, 6).map((x) => (
-            <Cover key={x.id} x={x} />
-          ))}
-        </Rail>
-      ) : null}
-      {isDesktop() ? (
+      {/* Desktop: a panel like every other shelf, so the row keeps its margins. */}
+      {topRail && desk ? <div class="x-group">{topRail}</div> : topRail}
+      {tidy ? (
+        <div class="x-group x-tidy" style={{ '--cw': `min(220px, calc((100% - ${fixed}px) / ${nCards}))` }}>
+          {formatRails}
+          {premieres}
+          {music}
+          <DesafioCard />
+        </div>
+      ) : desk ? (
         // Desktop: the short rails share rows (with the Desafio card) instead of leaving the width empty.
         <div class="x-group">
           {formatRails}
@@ -132,8 +186,6 @@ function ForYou({ c, p, open, soon, albums }: ShelfProps) {
   );
 }
 
-const NBSP = String.fromCharCode(160);
-
 /** The Desafio relâmpago card (the prototype's orange a.card), with the record as a highlight. */
 function DesafioCard() {
   const best = state.value.extras.best;
@@ -144,8 +196,12 @@ function DesafioCard() {
           <Icon name="game" size={28} />
         </span>
         <span class="tx">
-          {/* No-break space: "Desafio relâmpago ·" stays together when the title wraps. */}
-          <span class="h3">{`Desafio relâmpago${NBSP}· 60 segundos`}</span>
+          {/* The prototype's title. When the card is narrow, "60 segundos" drops to its own line
+              (the separator hides), so the title never ends on a dangling "·". */}
+          <span class="h3">
+            Desafio relâmpago<span class="x-sep"> · </span>
+            <span class="x-sec">60 segundos</span>
+          </span>
           <span class="xs">As falas dos Extras caem na tela. Escolha a tradução certa.</span>
         </span>
         <span class="meta">
@@ -161,7 +217,7 @@ function DesafioCard() {
             <b>2</b> Toque na tradução certa
           </span>
           <span>
-            <b>3</b> Acertos seguidos valem até x5
+            <b>3</b> Acertos seguidos: até x5
           </span>
         </span>
         <span class="go">
@@ -260,6 +316,7 @@ export default function Extra(_props: ScreenProps) {
               ))}
               <button
                 type="button"
+                class="x-dchip"
                 style={{ background: 'var(--orange)', color: '#fff' }}
                 onClick={activator('extra/desafio', undefined)}
               >

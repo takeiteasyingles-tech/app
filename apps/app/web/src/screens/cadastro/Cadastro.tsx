@@ -36,16 +36,46 @@ import {
   toggled,
   weekdayName,
 } from './onb';
-import { Block, Cta, Field, OptChips, OptIcon } from './ui';
+import { ADD_ROW, BELL_TILE, Block, Cta, Field, OptChips, OptIcon } from './ui';
 import { Voz } from './Voz';
+import './cadastro.css';
 
 /** An empty date input shows dd/mm/aaaa in the placeholder colour of .input, not as a typed value. */
 const EMPTY_DATE = { color: '#8D93A3', fontWeight: '500' };
 
 const LIMIT_MSG = (max: number) => `Até ${max}. Desmarque um para trocar.`;
 
-/** Desktop: room under the CTA row, so it does not sit on the bottom edge of the window. */
-const FOOT_DESK = { paddingBottom: '28px' };
+/**
+ * The body takes the free height, so the CTA row (a white bar docked at the foot, cadastro.css) always
+ * rests at the bottom of the screen: the step starts under the progress header, and the bar closes the
+ * page like the header opens it.
+ */
+const SCROLL_FLEX = { display: 'flex', flexDirection: 'column' };
+const BODY_FILL = { flex: '1 0 auto' };
+/**
+ * Desktop: the header's row is the content column's width (684px, like the title and the options),
+ * with the close/back button hanging in the margin to its left, so the step label and the progress bar
+ * start on the same line as everything below them.
+ */
+const HEAD_ROW_DESK = { maxWidth: '684px', minHeight: '44px', position: 'relative' };
+const HEAD_BTN_DESK = { position: 'absolute', left: '-54px', top: '50%', transform: 'translateY(-50%)' };
+
+/** Chips as grid cells: radio and label start at the cell's left edge, so the radios line up in a column. */
+const CHIP_CELL = { justifyContent: 'flex-start', padding: '0 14px' };
+/** Desktop: wide grid cells keep radio and label together in the middle of the pill. */
+const CHIP_MID = { justifyContent: 'center', padding: '0 12px' };
+/** Phone: a set of short chips in two equal columns, so none is left alone on the last row. */
+const PAIRS_PHONE = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' };
+/** Desktop: eight short chips as two rows of four. */
+const FOURS_DESK = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' };
+/**
+ * Desktop: a set of three longer options on one row, each chip as wide as its own label (they grow to
+ * fill the row), so the longest one is not squeezed into a third of it.
+ */
+const ROW_DESK = { gap: '6px', flexWrap: 'nowrap' };
+const CHIP_GROW = { flex: '1 1 auto', justifyContent: 'center', padding: '0 9px', fontSize: '.92rem', gap: '7px' };
+/** Phone: one option per row, every pill the full width (no half pills beside a whole one). */
+const LIST_PHONE = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)' };
 
 type O = OnboardingLists;
 
@@ -71,6 +101,7 @@ function Conta({
   const [show, setShow] = useState(false);
   return (
     <div class="stack" style={{ '--gap': '14px' }} onFocusIn={creating ? warm : undefined}>
+      {creating ? null : <AccountDone email={f.email} />}
       <Field label="Nome completo" err={err.fullName}>
         <input
           class="input"
@@ -134,20 +165,9 @@ function Conta({
           </Field>
           <div ref={turnstileRef} style={{ display: 'contents' }} />
         </>
-      ) : (
-        <>
-          {/* The account exists: e-mail and password are shown locked (muted, with a padlock), not as
-              editable fields; the password is never kept on the device, so it is not shown at all. */}
-          <Field label="E-mail">
-            <LockedInput id="onb-email" type="email" value={f.email} />
-          </Field>
-          <Field label="Senha">
-            <LockedInput id="onb-pass" type="password" value="" placeholder="Senha já criada" />
-          </Field>
-        </>
-      )}
-      <p class="xs">
-        {creating ? 'Ao continuar você aceita os ' : 'A sua conta já está criada. Você aceitou os '}
+      ) : null}
+      <p class="xs" style={LEGAL}>
+        {creating ? 'Ao continuar você aceita os ' : 'Você aceitou os '}
         <LegalLink path="cadastro/1" doc="termos">
           Termos de Uso
         </LegalLink>{' '}
@@ -161,58 +181,96 @@ function Conta({
   );
 }
 
-/** Locked: a darker beige fill and a dashed border, so it reads as fixed next to the white editable fields. */
-const LOCKED = {
-  background: '#EDE7D6',
-  borderStyle: 'dashed',
-  borderColor: '#BFB59B',
-  color: 'var(--muted)',
-  fontSize: '.95rem',
-  paddingRight: '48px',
-  textOverflow: 'ellipsis',
-  cursor: 'default',
+/** The terms in a readable slate at .875rem, flowing as one paragraph without short orphan lines. */
+const LEGAL = { fontSize: '.875rem', color: '#3C4357', textWrap: 'pretty', lineHeight: '1.5' };
+
+const DONE_CARD = {
+  '--gap': '12px',
+  padding: '12px 14px',
+  background: 'var(--greenT)',
+  borderColor: 'transparent',
+  alignItems: 'center',
 };
-const LOCK_ICON = {
-  position: 'absolute',
-  right: '4px',
-  top: '4px',
-  width: '44px',
-  height: '44px',
-  display: 'flex',
+const DONE_ICON = {
+  width: '30px',
+  height: '30px',
+  flex: 'none',
+  borderRadius: '50%',
+  background: 'var(--green)',
+  color: '#fff',
+  display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
+};
+/**
+ * The e-mail under "Conta criada", beside the check (a two-line summary); a very long address breaks
+ * after the "@" (the <wbr>), never inside the name or the domain.
+ */
+const DONE_EMAIL = {
   color: 'var(--navy)',
-  pointerEvents: 'none',
+  fontWeight: '700',
+  fontSize: '.86rem',
+  lineHeight: '1.35',
+  overflowWrap: 'break-word',
 };
 
-/** A read-only field of the existing account, in the `.input-wrap` of the password field. */
-function LockedInput({
-  id,
-  type,
-  value,
-  placeholder,
-}: {
-  id: string;
-  type: string;
-  value: string;
-  placeholder?: string;
-}) {
+/** The step's title while the account already exists (the catalog's "Primeiro, a sua conta." asks for one). */
+const CONTA_DONE = {
+  h: 'Agora, sobre você.',
+  s: 'Sua conta já está criada. Confira o nome e a data de nascimento.',
+};
+/** The account's e-mail field itself: read-only and visually hidden (the text above shows it). */
+const SR_ONLY = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  padding: '0',
+  margin: '-1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  border: '0',
+  whiteSpace: 'nowrap',
+};
+
+/**
+ * Signed in (the account was created on an earlier visit): a green "Conta criada" summary with the
+ * e-mail replaces the e-mail and password fields, which can no longer change here. The password is
+ * never kept on the device, so it is not shown at all.
+ */
+function AccountDone({ email }: { email: string }) {
+  const at = email.indexOf('@');
   return (
-    <span class="input-wrap">
-      <input
-        class="input"
-        id={id}
-        type={type}
-        value={value}
-        title={value || undefined}
-        placeholder={placeholder}
-        readOnly
-        style={LOCKED}
-      />
-      <span style={LOCK_ICON} title="Já faz parte da sua conta">
-        <Icon name="lock" size={18} />
+    <div class="card row" style={DONE_CARD}>
+      <span style={DONE_ICON} aria-hidden="true">
+        <Icon name="check" size={18} />
       </span>
-    </span>
+      <div class="grow" style={{ minWidth: '0', position: 'relative' }}>
+        <div class="sm" style={{ fontWeight: '800', color: 'var(--green)', lineHeight: '1.3' }}>
+          Conta criada com o e-mail
+        </div>
+        <div style={DONE_EMAIL}>
+          {at > 0 ? (
+            <>
+              {email.slice(0, at + 1)}
+              <wbr />
+              {email.slice(at + 1)}
+            </>
+          ) : (
+            email
+          )}
+        </div>
+        <input
+          id="onb-email"
+          type="email"
+          value={email}
+          aria-label="E-mail da conta"
+          readOnly
+          tabIndex={-1}
+          aria-hidden="true"
+          style={SR_ONLY}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -263,13 +321,17 @@ function Objetivo({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
 
 const genreKeys = (O: O, f: string): string[] => (O.genres[f] ?? []).map((g) => g.k);
 
-/** The empty check circle gets a shadow, so it stays visible on dark photos. */
+/**
+ * The empty check circle: a thick white ring over a frosted white disc with a dark halo, so it stands
+ * out on a dark photo (Novelas, Business) as clearly as on a bright one (Artes, Viagens).
+ */
 const FMT_CK_OFF = {
-  boxShadow: '0 0 0 3px rgba(10,30,63,.28), 0 1px 6px rgba(0,0,0,.5)',
-  background: 'rgba(10,30,63,.72)',
+  boxShadow: '0 0 0 1px rgba(10,30,63,.35), 0 2px 8px rgba(0,0,0,.55)',
+  background: 'rgba(255,255,255,.3)',
+  borderWidth: '3px',
 };
 
-function Gostos({ d, O }: { d: Draft; O: O }) {
+function Gostos({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
   const fmt = (k: string) => {
     const formats = toggled(d.formats, k) ?? d.formats;
     let genres = d.genres;
@@ -319,6 +381,8 @@ function Gostos({ d, O }: { d: Draft; O: O }) {
         <OptChips
           list={O.themes}
           sel={d.themes}
+          style={desk ? (O.themes.length % 4 === 0 ? FOURS_DESK : undefined) : PAIRS_PHONE}
+          chipStyle={desk ? (O.themes.length % 4 !== 0 ? undefined : CHIP_MID) : CHIP_CELL}
           onPick={(t) => patchDraft({ themes: toggled(d.themes, t) ?? d.themes })}
         />
       </Block>
@@ -326,14 +390,23 @@ function Gostos({ d, O }: { d: Draft; O: O }) {
   );
 }
 
+/** Desktop: a little more room at the right edge of the 2-column cards for the longest label. */
+const TRAVA_DESK = { minHeight: '64px', gap: '12px', paddingRight: '20px' };
+const TRAVA_LABEL_DESK = { fontSize: '.98rem' };
+
 function Trava({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
   const pick = (k: string) => {
     const diffs = toggled(d.diffs, k) ?? d.diffs;
     patchDraft({ diffs, mainDiff: diffs.includes(d.mainDiff) ? d.mainDiff : (diffs[0] ?? '') });
   };
   const mine = d.diffs.flatMap((k) => O.diffs.filter((x) => x.k === k));
+  const n = d.diffs.length;
   return (
     <>
+      {/* As in Objetivo and Estilo: says why Continuar waits while nothing is marked. */}
+      <div class="sm" style={{ fontWeight: '700', marginBottom: '12px' }}>
+        {n ? `${n} ${n === 1 ? 'escolhido' : 'escolhidos'}` : 'Marque pelo menos um para continuar'}
+      </div>
       <div class="stack" style={desk ? CARDS_DESK : { '--gap': '10px' }}>
         {O.diffs.map((x) => {
           const on = d.diffs.includes(x.k);
@@ -343,13 +416,15 @@ function Trava({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
               key={x.k}
               class={`optcard${on ? ' on' : ''}`}
               aria-pressed={on}
-              style={{ minHeight: '60px' }}
+              style={desk ? TRAVA_DESK : { minHeight: '60px' }}
               onClick={activator(undefined, () => pick(x.k))}
             >
               <span class="ico">
                 <OptIcon name={x.icon ?? ''} />
               </span>
-              <span class="h3 grow">{x.t}</span>
+              <span class="h3 grow" style={desk ? TRAVA_LABEL_DESK : undefined}>
+                {x.t}
+              </span>
               {on ? <Icon name="check" size={22} extra={{ style: { color: 'var(--orange)' } }} /> : null}
             </button>
           );
@@ -372,19 +447,18 @@ function Trava({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
 }
 
 /**
- * The labels share a two-line box, top-aligned, so when "Vendo vídeos" wraps on a phone its first line
- * stays level with "Ouvindo" and "Falando", and every card of the row keeps the same height.
+ * Phone: the six options as three rows of two compact tiles, a small icon beside a one-line label (as
+ * on desktop), so the grid stays short and even "Vendo vídeos" has room on both sides.
  */
-const STYLE_LABEL = {
-  fontSize: '.95rem',
-  lineHeight: '1.2',
-  minHeight: '2.4em',
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'center',
-};
+const STYLE_GRID_PHONE = { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' };
+const STYLE_CARD_PHONE = { gap: '10px', padding: '8px 10px', minHeight: '56px', borderRadius: '14px' };
+const STYLE_ICO_PHONE = { width: '36px', height: '36px', borderRadius: '10px' };
+const STYLE_LABEL_PHONE = { fontSize: '.95rem', lineHeight: '1.2', whiteSpace: 'nowrap' };
+/** Desktop: icon beside the label, as the other steps' option cards. */
+const STYLE_CARD_DESK = { gap: '12px', padding: '12px 14px', minHeight: '64px' };
+const STYLE_LABEL_DESK = { fontSize: '1rem' };
 
-function Estilo({ d, O }: { d: Draft; O: O }) {
+function Estilo({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
   const n = d.styles.length;
   return (
     <>
@@ -393,37 +467,53 @@ function Estilo({ d, O }: { d: Draft; O: O }) {
       <div class="sm" style={{ fontWeight: '700', marginBottom: '12px' }}>
         {n ? `${n} ${n === 1 ? 'escolhido' : 'escolhidos'}` : 'Marque pelo menos um para continuar'}
       </div>
-      <div class="grid3">
+      <div class="grid3" style={desk ? undefined : STYLE_GRID_PHONE}>
         {O.styles.map((x) => (
           <button
             type="button"
             key={x.k}
             class={`optcard${d.styles.includes(x.k) ? ' on' : ''}`}
             aria-pressed={d.styles.includes(x.k)}
-            style={{ flexDirection: 'column', textAlign: 'center', gap: '8px', padding: '14px 8px' }}
+            style={desk ? STYLE_CARD_DESK : STYLE_CARD_PHONE}
             onClick={activator(undefined, () => patchDraft({ styles: toggled(d.styles, x.k) ?? d.styles }))}
           >
-            <span class="ico">
-              <OptIcon name={x.icon ?? ''} />
+            <span class="ico" style={desk ? undefined : STYLE_ICO_PHONE}>
+              <OptIcon name={x.icon ?? ''} size={desk ? 22 : 20} />
             </span>
-            <span class="h3" style={STYLE_LABEL}>
+            <span class="h3" style={desk ? STYLE_LABEL_DESK : STYLE_LABEL_PHONE}>
               {x.t}
             </span>
           </button>
         ))}
       </div>
+      {/* Desktop: each set of three options on one row, every chip as wide as its label. Phone: one
+          option per row, every pill the full width, the radios in one column. */}
       <Block title="Você rende mais…">
-        <OptChips list={O.company} sel={d.company} single onPick={(k) => patchDraft({ company: k })} />
+        <OptChips
+          list={O.company}
+          sel={d.company}
+          single
+          style={desk ? (O.company.length === 3 ? ROW_DESK : undefined) : LIST_PHONE}
+          chipStyle={desk ? (O.company.length === 3 ? CHIP_GROW : undefined) : CHIP_CELL}
+          onPick={(k) => patchDraft({ company: k })}
+        />
       </Block>
       <Block title="Quando você erra, prefere que a Maggie…">
-        <OptChips list={O.feedback} sel={d.feedback} single onPick={(k) => patchDraft({ feedback: k })} />
+        <OptChips
+          list={O.feedback}
+          sel={d.feedback}
+          single
+          style={desk ? (O.feedback.length === 3 ? ROW_DESK : undefined) : LIST_PHONE}
+          chipStyle={desk ? (O.feedback.length === 3 ? CHIP_GROW : undefined) : CHIP_CELL}
+          onPick={(k) => patchDraft({ feedback: k })}
+        />
       </Block>
     </>
   );
 }
 
-/** Desktop: the 7 days span the column as 56px-tall tiles (squares would be 92px in a 720px body). */
-const DAY_DESK = { aspectRatio: 'auto', height: '56px' };
+/** Desktop: the 7 days span the column as 48px-tall tiles (squares would be 92px in a 720px body). */
+const DAY_DESK = { aspectRatio: 'auto', height: '48px' };
 /** Desktop: the four minute options as equal columns, in line with the days above. */
 const MINUTES_DESK = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' };
 /** Phone: the four minute options as a 2×2 grid instead of three in a row and "50 min" alone below. */
@@ -469,6 +559,7 @@ function Ritmo({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
           sel={d.minutes}
           single
           style={O.minutes.length !== 4 ? undefined : desk ? MINUTES_DESK : MINUTES_PHONE}
+          chipStyle={O.minutes.length !== 4 ? undefined : desk ? CHIP_MID : CHIP_CELL}
           onPick={(k) => patchDraft({ minutes: k })}
         />
       </Block>
@@ -477,7 +568,7 @@ function Ritmo({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
           {R.length ? (
             R.map((t, i) => (
               <div key={i} class="row" style={{ '--gap': '10px' }}>
-                <Icon name="bell" size={22} extra={{ style: { color: 'var(--blue)', flex: 'none' } }} />
+                <Icon name="bell" size={20} extra={{ style: BELL_TILE }} />
                 <input
                   class="input grow"
                   id={`onb-rem${i}`}
@@ -500,30 +591,46 @@ function Ritmo({ d, O, desk }: { d: Draft; O: O; desk: boolean }) {
             <div class="sm">Sem lembrete. Dá para adicionar agora ou depois, no seu perfil.</div>
           )}
           {R.length < max ? (
-            <button
-              type="button"
-              class="btn light compact"
-              style={{ alignSelf: 'flex-start' }}
-              onClick={activator(undefined, add)}
-            >
+            <button type="button" class="btn light compact" style={ADD_ROW} onClick={activator(undefined, add)}>
               <Icon name="plus" size={18} />
               <span>{R.length ? 'Adicionar outro lembrete' : 'Adicionar lembrete'}</span>
             </button>
           ) : null}
         </div>
       </Block>
+      <WeekSummary days={days} minutes={d.minutes} reminders={R} />
     </>
+  );
+}
+
+const SUM_CARD = { '--gap': '12px', padding: '14px 16px' };
+const SUM_ICON = { ...BELL_TILE, background: 'var(--orangeT)', color: 'var(--orange)' };
+
+/** What the choices add up to, live: the week's minutes and when the reminders ring. */
+function WeekSummary({ days, minutes, reminders }: { days: number; minutes: number; reminders: readonly string[] }) {
+  const times = reminders.filter((t) => /^\d\d:\d\d$/.test(t)).sort();
+  const when = times.length
+    ? ` · ${times.length === 1 ? 'lembrete às' : 'lembretes às'} ${times.slice(0, -1).join(', ')}${times.length > 1 ? ' e ' : ''}${times[times.length - 1]}`
+    : '';
+  return (
+    <div class="card row mt24 onb-sum" style={SUM_CARD} aria-live="polite">
+      <Icon name="target" size={20} extra={{ style: SUM_ICON }} />
+      <div class="grow">
+        <div class="h3">{days ? `${days * minutes} min de inglês por semana` : 'Marque pelo menos um dia'}</div>
+        <div class="sm">{`${days} ${days === 1 ? 'dia' : 'dias'} × ${minutes} min${when}`}</div>
+      </div>
+    </div>
   );
 }
 
 function StepBody({ k, d, c, desk }: { k: string; d: Draft; c: Catalog; desk: boolean }) {
   const O = c.onboarding;
   if (k === 'objetivo') return <Objetivo d={d} O={O} desk={desk} />;
-  if (k === 'gostos') return <Gostos d={d} O={O} />;
+  if (k === 'gostos') return <Gostos d={d} O={O} desk={desk} />;
   if (k === 'trava') return <Trava d={d} O={O} desk={desk} />;
-  if (k === 'estilo') return <Estilo d={d} O={O} />;
+  if (k === 'estilo') return <Estilo d={d} O={O} desk={desk} />;
   if (k === 'ritmo') return <Ritmo d={d} O={O} desk={desk} />;
-  if (k === 'voz') return <Voz />;
+  if (k === 'voz') return <Voz desk={desk} />;
   return null;
 }
 
@@ -697,14 +804,15 @@ export default function Cadastro({ params, q }: ScreenProps) {
     ) : null;
 
   return (
-    <div class="scroll">
+    <div class="scroll" data-u1="onb" style={SCROLL_FLEX}>
       <div class="wiz-head">
-        <div class="row" style={{ '--gap': '10px' }}>
+        <div class="row" style={desk ? { '--gap': '10px', ...HEAD_ROW_DESK } : { '--gap': '10px' }}>
           {n > 1 ? (
             <button
               type="button"
               class="iconbtn"
               aria-label="Voltar"
+              style={desk ? HEAD_BTN_DESK : undefined}
               onClick={activator(undefined, () => goStep(Math.max(1, n - 1)))}
             >
               <Icon name="back" size={20} />
@@ -714,6 +822,7 @@ export default function Cadastro({ params, q }: ScreenProps) {
               type="button"
               class="iconbtn"
               aria-label="Sair"
+              style={desk ? HEAD_BTN_DESK : undefined}
               onClick={activator(
                 signedIn ? undefined : 'entrar',
                 signedIn ? () => void logout().then((out) => out && resetDraftQueue()) : undefined,
@@ -734,16 +843,14 @@ export default function Cadastro({ params, q }: ScreenProps) {
           </div>
         </div>
       </div>
-      <div class="wiz-body">
+      <div class="wiz-body" style={BODY_FILL}>
         <div class="stack" style={{ '--gap': '6px', marginBottom: '18px' }}>
-          <h1 class="h1">{st?.h}</h1>
-          <p class="p muted">{st?.s}</p>
+          <h1 class="h1">{k === 'conta' && signedIn ? CONTA_DONE.h : st?.h}</h1>
+          <p class="p muted">{k === 'conta' && signedIn ? CONTA_DONE.s : st?.s}</p>
         </div>
         {body}
       </div>
-      <div class="wiz-foot" style={desk ? FOOT_DESK : undefined}>
-        {foot}
-      </div>
+      <div class="wiz-foot">{foot}</div>
       {k === 'conta' && isLegalDoc(q.doc) ? <LegalSheet path="cadastro/1" doc={q.doc} /> : null}
     </div>
   );

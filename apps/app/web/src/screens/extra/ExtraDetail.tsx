@@ -1,6 +1,7 @@
 // EXTRA title page (TIE.screens.extraDetail): hero, synopsis, why it was suggested, cast, and either
 // the Friday premiere notice or watch / dub / talk about it plus the scene vocabulary.
 // Desktop: the hero text lines up with the content column, which splits into story | vocabulary.
+// The watch button lives with the other actions only (no second play button on the hero).
 import { DEFAULT_ASSISTANT } from '@tie/shared/constants';
 import { assistantThe, getAssistant } from '@tie/shared/domain/assist';
 import { rankExtras } from '@tie/shared/domain/personalize';
@@ -130,8 +131,9 @@ export default function ExtraDetail({ params }: ScreenProps) {
 
   return (
     <OnNavy cls={`x-det${past ? ' x-past' : ''}`} w={1100}>
-      {/* The prototype's bar (kind · title); the title shows once the hero's own title scrolls away. */}
-      <Topbar back="extra" kicker={x.kind} title={x.title} />
+      {/* The prototype's bar. Over the hero it names where the back button goes (the hero has the big
+          title); once the hero scrolls away it turns solid and shows kind · title. */}
+      <Topbar back="extra" kicker={past ? x.kind : undefined} title={past ? x.title : 'EXTRA'} />
       <div
         class="scroll"
         onScroll={(ev) => {
@@ -142,18 +144,20 @@ export default function ExtraDetail({ params }: ScreenProps) {
         <div class="hero-extra" style={{ borderRadius: '0' }}>
           <img src={x.scene ?? ''} alt="" />
           <div class="shade" />
-          <div class="inner stack" style={{ '--gap': '8px' }}>
-            <div class="row wrapx" style={{ '--gap': '8px' }}>
-              <span class="pill x-dark">{x.kind}</span>
-              <span class="pill lvl">{x.level}</span>
-              <span class="pill x-dark">
-                <Icon name="clock" size={13} /> {x.dur}
-              </span>
+          <div class="inner x-hero-in">
+            <div class="stack" style={{ '--gap': '8px' }}>
+              <div class="row wrapx" style={{ '--gap': '8px' }}>
+                <span class="pill x-dark">{x.kind}</span>
+                <span class="pill lvl">{x.level}</span>
+                <span class="pill x-dark">
+                  <Icon name="clock" size={13} /> {x.dur}
+                </span>
+              </div>
+              <div class="h1" style={{ color: '#fff' }}>
+                {x.title}
+              </div>
+              <div class="sm">{x.ep}</div>
             </div>
-            <div class="h1" style={{ color: '#fff' }}>
-              {x.title}
-            </div>
-            <div class="sm">{x.ep}</div>
           </div>
         </div>
         <div class="wrap" style={{ '--wrap': '1100px' }}>
@@ -164,7 +168,7 @@ export default function ExtraDetail({ params }: ScreenProps) {
                 {x.why}
               </div>
               {x.cast.length ? (
-                <div class="stack" style={{ '--gap': '10px' }}>
+                <div class="stack x-castbox" style={{ '--gap': '10px' }}>
                   <div class="lbl">Elenco</div>
                   <div class="chips x-cast">
                     {x.cast.map((m) => (

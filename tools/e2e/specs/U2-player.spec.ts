@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { type BrowserContext, expect, type Page, type Response, test } from '@playwright/test';
 import { fixtureStatements } from '@tie/seed/fixtureToSql';
 import { COOKIES } from '@tie/shared/constants';
-import { type ViewportName, VIEWPORTS } from '../../parity/src/config';
+import { VIEWPORTS, type ViewportName } from '../../parity/src/config';
 import { prepareContext } from '../../parity/src/determinism';
 import { type FixtureSql, namespaceCards, passHash } from '../../parity/src/fixture/sql';
 import {
@@ -35,7 +35,12 @@ const VPS: ViewportName[] = ['mobile', 'desktop'];
 /** VIEWPORTS[vp] as Playwright context options (width/height go under `viewport`). */
 function vpOpts(vp: ViewportName) {
   const v = VIEWPORTS[vp];
-  return { viewport: { width: v.width, height: v.height }, isMobile: v.isMobile, hasTouch: v.hasTouch, deviceScaleFactor: v.deviceScaleFactor };
+  return {
+    viewport: { width: v.width, height: v.height },
+    isMobile: v.isMobile,
+    hasTouch: v.hasTouch,
+    deviceScaleFactor: v.deviceScaleFactor,
+  };
 }
 const EVAL_PROBE = new Set<string>();
 test.afterAll(() => {
@@ -46,17 +51,23 @@ test.afterAll(() => {
 
 // Chrome's fake microphone (a beep) for the real recording path; other tests refuse the mic.
 test.use({
-  launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] },
+  launchOptions: {
+    args: [
+      '--use-fake-device-for-media-stream',
+      '--use-fake-ui-for-media-stream',
+      '--autoplay-policy=no-user-gesture-required',
+    ],
+  },
 });
 
 // ---------------------------------------------------------------- users
 
 type Kind = 'start' | 'main' | 'ep2' | 's9' | 's10' | 'dl';
 const TESTS: Record<Kind, string[]> = {
-  start: ['flow', 'refuse', 'leave', 'race'],
+  start: ['flow', 'refuse', 'leave', 'race', 'locked'],
   dl: ['pdf'],
-  main: ['map', 'train', 'fakemic', 'ia', 'a11y', 'cmp-a'],
-  ep2: ['synth'],
+  main: ['map', 'train', 'fakemic', 'ia', 'a11y', 'cmp-a', 'focus2'],
+  ep2: ['synth', 'cmp-c'],
   s9: [],
   s10: ['done', 'cmp-b'],
 };
@@ -169,7 +180,9 @@ interface Watch {
 }
 
 async function prepApp(ctx: BrowserContext, key: string, o: { ai?: boolean; noMic?: boolean } = {}): Promise<void> {
-  await ctx.addCookies([{ name: COOKIES.app, value: sessionToken(key), url: sl.origin, httpOnly: true, sameSite: 'Lax' }]);
+  await ctx.addCookies([
+    { name: COOKIES.app, value: sessionToken(key), url: sl.origin, httpOnly: true, sameSite: 'Lax' },
+  ]);
   await ctx.addInitScript({ content: INIT });
   if (o.noMic) await ctx.addInitScript({ content: NO_MIC });
   await ctx.route('**/api/health', (route) =>
@@ -182,13 +195,15 @@ function watch(page: Page): Watch {
   page.on('pageerror', (e) => w.errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
     if (/^Failed to load resource/.test(m.text())) return; // covered (with the URL) by the response listener
-    if (m.type() === 'error' || /Content Security Policy/i.test(m.text())) w.errors.push(`console.${m.type()}: ${m.text()}`);
+    if (m.type() === 'error' || /Content Security Policy/i.test(m.text()))
+      w.errors.push(`console.${m.type()}: ${m.text()}`);
   });
   page.on('response', (r) => {
     const u = r.url();
     if (u.includes('/api/')) {
       w.api.push({ method: r.request().method(), url: u, status: r.status(), body: r.request().postData() });
-      if (r.status() >= 400 && !w.ignore.some((re) => re.test(u))) w.errors.push(`http ${r.status()} ${r.request().method()} ${u}`);
+      if (r.status() >= 400 && !w.ignore.some((re) => re.test(u)))
+        w.errors.push(`http ${r.status()} ${r.request().method()} ${u}`);
     }
     if (u.includes('/m/') && r.status() >= 400) w.errors.push(`media ${r.status()} ${u}`);
   });
@@ -199,7 +214,12 @@ async function expectClean(page: Page, w: Watch): Promise<void> {
   const csp = await page.evaluate(() => (window as any).__csp as string[]).catch(() => [] as string[]);
   // zod v4's allowsEval probe (Function('') in try/catch, shared code) reports 'script-src eval': noted separately.
   if (csp.some((c) => c.startsWith('script-src eval'))) EVAL_PROBE.add(test.info().title);
-  expect.soft(csp.filter((c) => !c.startsWith('script-src eval')), 'CSP violations').toEqual([]);
+  expect
+    .soft(
+      csp.filter((c) => !c.startsWith('script-src eval')),
+      'CSP violations',
+    )
+    .toEqual([]);
   expect.soft(w.errors, 'console/page/API errors').toEqual([]);
   await expect.soft(page.getByText('Algo deu errado nesta tela.')).toHaveCount(0);
 }
@@ -218,11 +238,17 @@ async function atStep(page: Page, ep: number, step: number): Promise<void> {
   await expect(head(page)).toContainText(`Episódio ${ep} · etapa ${step} de 10`, { timeout: 20_000 });
 }
 
-const isApi = (path: string, method = 'POST') => (r: Response) =>
-  r.url().includes(path) && r.request().method() === method;
+const isApi =
+  (path: string, method = 'POST') =>
+  (r: Response) =>
+    r.url().includes(path) && r.request().method() === method;
 
 /** Waits for the API call `trigger` causes and returns its status + JSON. */
-async function apiCall(page: Page, path: string, trigger: () => Promise<unknown>): Promise<{ status: number; json: Any; req: Any }> {
+async function apiCall(
+  page: Page,
+  path: string,
+  trigger: () => Promise<unknown>,
+): Promise<{ status: number; json: Any; req: Any }> {
   const [res] = await Promise.all([page.waitForResponse(isApi(path), { timeout: 20_000 }), trigger()]);
   let json: Any = {};
   try {
@@ -246,7 +272,14 @@ async function endMedia(page: Page, tag: 'AUDIO' | 'VIDEO' = 'AUDIO'): Promise<s
     if (a.duration > 0 && Number.isFinite(a.duration)) {
       const ok = await new Promise<boolean>((r) => {
         const to = setTimeout(() => r(false), 8000);
-        a.addEventListener('ended', () => { clearTimeout(to); r(true); }, { once: true });
+        a.addEventListener(
+          'ended',
+          () => {
+            clearTimeout(to);
+            r(true);
+          },
+          { once: true },
+        );
         a.currentTime = Math.max(0, a.duration - 0.35);
         if (a.paused) void a.play().catch(() => {});
       });
@@ -274,12 +307,18 @@ function captureEpisodes(page: Page): Map<number, Any> {
 async function unnamedControls(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const out: string[] = [];
-    for (const el of Array.from(document.querySelectorAll('.app button, .app a[href], .app [role=button], #overlayroot button'))) {
+    for (const el of Array.from(
+      document.querySelectorAll('.app button, .app a[href], .app [role=button], #overlayroot button'),
+    )) {
       const h = el as HTMLElement;
       if (h.offsetParent === null && getComputedStyle(h).position !== 'fixed') continue;
       const name =
-        h.getAttribute('aria-label') || h.getAttribute('title') || (h.textContent || '').trim() ||
-        Array.from(h.querySelectorAll('img[alt]')).map((i) => i.getAttribute('alt')).join('');
+        h.getAttribute('aria-label') ||
+        h.getAttribute('title') ||
+        (h.textContent || '').trim() ||
+        Array.from(h.querySelectorAll('img[alt]'))
+          .map((i) => i.getAttribute('alt'))
+          .join('');
       if (!name) out.push(h.outerHTML.slice(0, 160));
     }
     return out;
@@ -290,7 +329,12 @@ async function focusRing(page: Page): Promise<{ fv: boolean; outline: string; sh
   return page.evaluate(() => {
     const a = document.activeElement as HTMLElement;
     const cs = getComputedStyle(a);
-    return { fv: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`, shadow: cs.boxShadow, tag: a.outerHTML.slice(0, 80) };
+    return {
+      fv: a.matches(':focus-visible'),
+      outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`,
+      shadow: cs.boxShadow,
+      tag: a.outerHTML.slice(0, 80),
+    };
   });
 }
 const visibleRing = (r: { outline: string; shadow: string }) =>
@@ -349,7 +393,9 @@ for (const vp of VPS) {
       await card1.getByRole('button', { name: 'Ouvir a abertura' }).click();
       await expect(card1.getByRole('button', { name: 'Pausar a abertura' })).toBeVisible();
       await expect(card1.locator('#pl-time')).toHaveText(/^\d:\d\d \/ \d:\d\d$/, { timeout: 10_000 });
-      const so1 = await apiCall(page, '/api/progress/step-ok', () => endMedia(page).then((m) => log.push(`intro:${m}`)));
+      const so1 = await apiCall(page, '/api/progress/step-ok', () =>
+        endMedia(page).then((m) => log.push(`intro:${m}`)),
+      );
       expect(so1.status).toBe(200);
       expect(so1.req).toEqual({ ep: 1, step: 1 });
       await expect(kicker(page)).toHaveText('Próxima · 02 · +10');
@@ -360,7 +406,9 @@ for (const vp of VPS) {
       await expect(ptsToast(page, 10).first()).toBeVisible();
       await atStep(page, 1, 2);
       // Media stopped on step change.
-      expect(await page.evaluate(() => ((window as any).__media as HTMLMediaElement[]).every((m) => m.paused))).toBe(true);
+      expect(await page.evaluate(() => ((window as any).__media as HTMLMediaElement[]).every((m) => m.paused))).toBe(
+        true,
+      );
 
       // ---- 2 · song, synced lyrics, translation toggle
       await expect(dock(page)).toContainText('Música · 1ª passada');
@@ -378,10 +426,14 @@ for (const vp of VPS) {
       await expect(lyr).toHaveCount(nRows);
       if (nRows < ep1().lyrics.length) await expect(body(page).locator('.pl-rep')).not.toHaveCount(0);
       await expect(body(page).locator('.dialog-line .pt')).toHaveCount(nRows);
-      await dock(page).getByRole('button', { name: /Tradução/ }).click();
+      await dock(page)
+        .getByRole('button', { name: /Tradução/ })
+        .click();
       await expect(body(page).locator('.dialog-line .pt')).toHaveCount(0);
       await expect(dock(page).locator('.toggle')).not.toHaveClass(/\bon\b/);
-      await dock(page).getByRole('button', { name: /Tradução/ }).click();
+      await dock(page)
+        .getByRole('button', { name: /Tradução/ })
+        .click();
       await expect(body(page).locator('.dialog-line .pt')).toHaveCount(nRows);
       await dock(page).getByRole('button', { name: 'Tocar' }).click();
       await expect(dock(page).locator('.playbtn')).not.toHaveClass(/navy/);
@@ -395,10 +447,12 @@ for (const vp of VPS) {
         return { t: a.currentTime, d: a.duration };
       });
       const expectLine = Math.min(ep1().lyrics.length - 1, Math.floor((mid.t / mid.d) * ep1().lyrics.length));
-      await expect(lyr.nth(rowOf[expectLine] ?? expectLine)).toHaveClass(/\bon\b/, { timeout: 3000 }).catch(async () => {
-        // timeupdate may have advanced one line in the meantime
-        await expect(body(page).locator('.dialog-line.on')).toHaveCount(1);
-      });
+      await expect(lyr.nth(rowOf[expectLine] ?? expectLine))
+        .toHaveClass(/\bon\b/, { timeout: 3000 })
+        .catch(async () => {
+          // timeupdate may have advanced one line in the meantime
+          await expect(body(page).locator('.dialog-line.on')).toHaveCount(1);
+        });
       const so2 = await apiCall(page, '/api/progress/step-ok', () => endMedia(page).then((m) => log.push(`song:${m}`)));
       expect(so2.status).toBe(200);
       const dashed = body(page).locator('button.card.row', { hasText: 'Próximo: baixar o e-book 1.' });
@@ -410,10 +464,17 @@ for (const vp of VPS) {
       // ---- 3 · e-book download
       await expect(body(page)).toContainText('E-book 01 · Episódios 1–2');
       await expect(body(page)).toContainText(ep1().ebookTitle);
-      await expect(body(page).locator('.pl-inside .pill')).toHaveText(['Diálogo bilíngue', 'Take Away', 'Exercícios', 'Gabarito']);
+      await expect(body(page).locator('.pl-inside .pill')).toHaveText([
+        'Diálogo bilíngue',
+        'Take Away',
+        'Exercícios',
+        'Gabarito',
+      ]);
       await expect(kicker(page)).toHaveText('Baixe o e-book para seguir');
       const dlP = page.waitForEvent('download', { timeout: 6000 }).catch(() => null);
-      const dl = await apiCall(page, '/api/ebooks/1/download', () => body(page).getByRole('button', { name: 'Baixar e-book 1' }).click());
+      const dl = await apiCall(page, '/api/ebooks/1/download', () =>
+        body(page).getByRole('button', { name: 'Baixar e-book 1' }).click(),
+      );
       expect(dl.status).toBe(200);
       log.push(`ebook pdf: ${dl.json.pdf}`);
       await expect(body(page).locator('.card.gr')).toContainText('E-book baixado.');
@@ -444,7 +505,9 @@ for (const vp of VPS) {
         v.muted = true;
         void v.play();
       });
-      const so4 = await apiCall(page, '/api/progress/step-ok', () => endMedia(page, 'VIDEO').then((m) => log.push(`video:${m}`)));
+      const so4 = await apiCall(page, '/api/progress/step-ok', () =>
+        endMedia(page, 'VIDEO').then((m) => log.push(`video:${m}`)),
+      );
       expect(so4.status).toBe(200);
       await expect(kicker(page)).toHaveText('Próxima · 05 · +10');
       const a4 = await advance(page);
@@ -487,7 +550,8 @@ for (const vp of VPS) {
       const expected = (ep1().dialog as Any[]).filter((d) => !d.stage).map((d) => d.en);
       for (const e of expected) expect(said).toContain(e);
       // Per-character voices: a male character (Zach) and a female one (Becky) do not share a pitch.
-      const lineOf = (who: string) => (ep1().dialog as Any[]).find((d) => d.who === who && !d.stage)?.en as string | undefined;
+      const lineOf = (who: string) =>
+        (ep1().dialog as Any[]).find((d) => d.who === who && !d.stage)?.en as string | undefined;
       const zach = sp.find((s) => s.text === lineOf('Zach'));
       const becky = sp.find((s) => s.text === lineOf('Becky'));
       if (zach && becky) expect(zach.pitch, 'per-character voice (pitch) for Zach vs Becky').not.toBe(becky.pitch);
@@ -502,7 +566,9 @@ for (const vp of VPS) {
       await expect(dock(page)).toContainText(`Frase 1 de ${nMic} · diga em voz alta`);
       await expect(dock(page)).toContainText(ep1().mic[0].en);
       await expect(dock(page)).toContainText('Toque no microfone e fale · +5 a +15');
-      await expect(body(page)).toContainText('A nota mede quanto da sua fala foi entendida, não quanto você soa americano.');
+      await expect(body(page)).toContainText(
+        'A nota mede quanto da sua fala foi entendida, não quanto você soa americano.',
+      );
       await dock(page).getByRole('button', { name: 'Ouvir' }).click();
       await expect.poll(async () => (await spoken(page)).map((s) => s.text)).toContain(ep1().mic[0].en);
       const phraseBtns = body(page).locator('button.card.row');
@@ -527,7 +593,9 @@ for (const vp of VPS) {
         if (i === 0) await expect(page.locator('.pts-toast').first()).toBeVisible();
         if (i < nMic - 1) {
           const left = nMic - i - 1;
-          await expect(kicker(page)).toHaveText(left === 1 ? 'Falta gravar 1 frase' : `Faltam ${left} frases para gravar`);
+          await expect(kicker(page)).toHaveText(
+            left === 1 ? 'Falta gravar 1 frase' : `Faltam ${left} frases para gravar`,
+          );
         }
       }
       await expect(kicker(page)).toHaveText('Próxima · 07 · +10');
@@ -567,16 +635,24 @@ for (const vp of VPS) {
       for (let k = 0; k < items.length; k++) {
         const { x, j, it, ex } = items[k]!;
         await expect(body(page)).toContainText(`Exercício ${x + 1} de ${ep1().ex.length}`);
-        await expect(body(page).locator('.card.pop .lbl').first()).toContainText(`Pergunta ${j + 1} de ${ex.items.length}`);
+        await expect(body(page).locator('.card.pop .lbl').first()).toContainText(
+          `Pergunta ${j + 1} de ${ex.items.length}`,
+        );
         await expect(body(page).locator('.card.pop .h2')).toHaveText(it.q);
         if (j === 0 && (ex.audio === 'tts' || ex.audio === 'song')) {
           const before = await page.evaluate(() => (window as any).__media.length + (window as any).__spoken.length);
-          await body(page).getByRole('button', { name: ex.audioLabel || 'Ouvir' }).click();
-          await expect.poll(() => page.evaluate(() => (window as any).__media.length + (window as any).__spoken.length)).toBeGreaterThan(before);
+          await body(page)
+            .getByRole('button', { name: ex.audioLabel || 'Ouvir' })
+            .click();
+          await expect
+            .poll(() => page.evaluate(() => (window as any).__media.length + (window as any).__spoken.length))
+            .toBeGreaterThan(before);
         }
         const wrong = !wrongDone && x === 1 && j === 0;
         const choice = wrong ? (it.a + 1) % it.opts.length : it.a;
-        const r = await apiCall(page, '/api/progress/exercise', () => body(page).locator('.card.pop button.opt').nth(choice).click());
+        const r = await apiCall(page, '/api/progress/exercise', () =>
+          body(page).locator('.card.pop button.opt').nth(choice).click(),
+        );
         expect(r.status).toBe(200);
         expect(r.json.correct).toBe(!wrong);
         const fb = body(page).locator('.card.pop .fb');
@@ -594,7 +670,9 @@ for (const vp of VPS) {
         await expect(body(page).locator('.card.pop button.opt:not([disabled])')).toHaveCount(0);
         if (k < items.length - 1) {
           const lastIt = j === ex.items.length - 1;
-          await body(page).getByRole('button', { name: lastIt ? 'Próximo exercício' : 'Próxima pergunta' }).click();
+          await body(page)
+            .getByRole('button', { name: lastIt ? 'Próximo exercício' : 'Próxima pergunta' })
+            .click();
         }
       }
       await expect(body(page)).toContainText('Última pergunta. Siga para Take the Mic abaixo.');
@@ -608,10 +686,12 @@ for (const vp of VPS) {
 
       // ---- 10 · sing-along → song award → concluir
       await expect(dock(page)).toContainText('Música · cante junto');
-      await expect(body(page)).toContainText('Agora é sua vez. Cante junto');
+      await expect(body(page)).toContainText('Agora é sua vez: cante junto');
       await expect(kicker(page)).toHaveText('Cante a música até o fim');
       await dock(page).getByRole('button', { name: 'Tocar' }).click();
-      const so10 = await apiCall(page, '/api/progress/step-ok', () => endMedia(page).then((m) => log.push(`song10:${m}`)));
+      const so10 = await apiCall(page, '/api/progress/step-ok', () =>
+        endMedia(page).then((m) => log.push(`song10:${m}`)),
+      );
       expect(so10.status).toBe(200);
       expect(so10.json.award?.awarded).toBe(true);
       await expect(ptsToast(page, so10.json.award.points).first()).toBeVisible();
@@ -741,7 +821,9 @@ for (const vp of VPS) {
       await expect(dock(page).locator('.fb')).toContainText('Ver nota');
       await expect(dock(page)).toContainText('Toque no microfone para tentar de novo');
       await phraseBtns.nth(4).click();
-      const r = await apiCall(page, '/api/progress/mic', () => dock(page).getByRole('button', { name: 'Gravar' }).click());
+      const r = await apiCall(page, '/api/progress/mic', () =>
+        dock(page).getByRole('button', { name: 'Gravar' }).click(),
+      );
       expect(r.status).toBe(200);
       await expect(dock(page).locator('.fb .pl-reveal')).toHaveText('Ver nota');
       await expect(dock(page).locator('.fb .num')).toHaveCount(0);
@@ -783,7 +865,14 @@ for (const vp of VPS) {
         route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ score: 9, praise_pt: 'Muito bem.', heard: 'hello', issues: [{ word: 'hello', tip_pt: 'Solte o ar.', ok: false }], source: 'ia', attempt: 'forged.token' }),
+          body: JSON.stringify({
+            score: 9,
+            praise_pt: 'Muito bem.',
+            heard: 'hello',
+            issues: [{ word: 'hello', tip_pt: 'Solte o ar.', ok: false }],
+            source: 'ia',
+            attempt: 'forged.token',
+          }),
         }),
       );
       const w = watch(page);
@@ -821,7 +910,9 @@ for (const vp of VPS) {
       await expect(dock(page).locator('.fb')).toContainText('hello:');
       await expect(dock(page).locator('.fb')).toContainText('Solte o ar.');
       await expect(dock(page).locator('.fb .pl-reveal')).toBeVisible();
-      await dock(page).getByRole('button', { name: /Ver nota/ }).click();
+      await dock(page)
+        .getByRole('button', { name: /Ver nota/ })
+        .click();
       await expect(dock(page).locator('.fb .num')).toContainText('9/10');
       await expect(dock(page).locator('.fb')).toHaveClass(/\bok\b/);
       await expectClean(page, w);
@@ -881,7 +972,11 @@ for (const vp of VPS) {
       expect(far).toBe(409);
       // Client: the step's media "finishes" but the server still refuses → toast + back to step 1.
       await context.route('**/api/progress/advance', (route) =>
-        route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'gated', message: 'Ouça a abertura até o fim' } }) }),
+        route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'gated', message: 'Ouça a abertura até o fim' } }),
+        }),
       );
       await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
       await apiCall(page, '/api/progress/step-ok', () => endMedia(page));
@@ -911,7 +1006,9 @@ for (const vp of VPS) {
       await expect(body(page).locator('.now-card .btn.light')).toHaveText('Ouvir a abertura');
       await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
       await expect.poll(playing).toBe(true);
-      await page.evaluate(() => { location.hash = '#/trilha'; });
+      await page.evaluate(() => {
+        location.hash = '#/trilha';
+      });
       await expect(page).toHaveURL(/#\/trilha$/);
       await expect(page.locator('.player-head')).toHaveCount(0);
       expect(await playing()).toBe(false);
@@ -933,7 +1030,9 @@ for (const vp of VPS) {
       await page.goto('/#/episodio/1/1');
       await atStep(page, 1, 1);
       await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
-      await expect(page.locator('.toast', { hasText: 'O navegador bloqueou o áudio. Toque de novo.' }).first()).toBeVisible();
+      await expect(
+        page.locator('.toast', { hasText: 'O navegador bloqueou o áudio. Toque de novo.' }).first(),
+      ).toBeVisible();
       await expect(body(page).getByRole('button', { name: 'Ouvir a abertura' })).toBeVisible();
       await expect(kicker(page)).toHaveText('Ouça a abertura até o fim');
       await expectClean(page, w);
@@ -951,7 +1050,11 @@ for (const vp of VPS) {
       await context.route('**/api/ebooks/1/download', async (route) => {
         const real = await route.fetch();
         const j = await real.json();
-        await route.fulfill({ status: real.status(), contentType: 'application/json', body: JSON.stringify({ ...j, pdf: pdfUrl }) });
+        await route.fulfill({
+          status: real.status(),
+          contentType: 'application/json',
+          body: JSON.stringify({ ...j, pdf: pdfUrl }),
+        });
       });
       await expect(kicker(page)).toHaveText('Baixe o e-book para seguir');
       const btn = body(page).getByRole('button', { name: 'Baixar e-book 1' });
@@ -1005,10 +1108,16 @@ for (const vp of VPS) {
       await apiCall(page, '/api/progress/step-ok', () => endMedia(page));
       await apiCall(page, '/api/progress/episode-done', () => nextBtn(page).click());
       await expect(page).toHaveURL(/#\/concluido\/1$/);
-      await page.getByRole('button', { name: 'Abrir o episódio 2' }).or(page.getByRole('link', { name: 'Abrir o episódio 2' })).click();
+      await page
+        .getByRole('button', { name: 'Abrir o episódio 2' })
+        .or(page.getByRole('link', { name: 'Abrir o episódio 2' }))
+        .click();
       await atStep(page, 2, 1);
       await page.goto('/#/concluido/1');
-      await page.getByRole('button', { name: 'Voltar para Hoje' }).or(page.getByRole('link', { name: 'Voltar para Hoje' })).click();
+      await page
+        .getByRole('button', { name: 'Voltar para Hoje' })
+        .or(page.getByRole('link', { name: 'Voltar para Hoje' }))
+        .click();
       await expect(page).toHaveURL(/#\/inicio$/);
       // Trilha shows episode 1 done now.
       await expectClean(page, w);
@@ -1049,6 +1158,110 @@ for (const vp of VPS) {
       expect.soft(visibleRing(ring2), `focus ring on a dialogue line: ${JSON.stringify(ring2)}`).toBe(true);
       await expectClean(page, w);
     });
+
+    test(`locked episode: no progress is written past the trilha lock (${vp})`, async ({ page, context }) => {
+      await prepApp(context, `u2-locked-${vp}`, { noMic: true });
+      const w = watch(page);
+      // The server refuses every write on episode 2 while episode 1 is unfinished.
+      w.ignore.push(/\/api\/progress\//);
+      const log: string[] = [];
+      await page.goto('/#/episodio/2/1');
+      await page.waitForTimeout(2500);
+      log.push(`url after deep link: ${page.url()}`);
+      const inPlayer = (await page.locator('.player-head').count()) > 0;
+      log.push(`player shown: ${inPlayer}`);
+      const direct = await page.evaluate(async () => {
+        const r = await fetch('/api/progress/step-ok', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ep: 2, step: 1 }),
+        });
+        return { status: r.status, body: await r.text() };
+      });
+      log.push(`direct step-ok ep2: ${direct.status} ${direct.body}`);
+      expect(direct.status).toBe(409);
+      expect(direct.body).toContain('Termine o episódio 1');
+      if (inPlayer) {
+        // The episode 2 step 1 has no media in the seed: the jingle runs 15 s, then step-ok is refused.
+        const btn = body(page).locator('.now-card .btn.light');
+        log.push(`intro button: ${await btn.textContent()}`);
+      }
+      // Concluído deep link for an episode the learner has not finished.
+      await page.goto('/#/concluido/1');
+      await page.waitForTimeout(1500);
+      log.push(`concluido/1 unfinished → ${page.url()} card=${await page.locator('.now-card').count()}`);
+      // Never a celebration for an unfinished episode: the progress card, the goal and the way back.
+      await expect(page).toHaveURL(/#\/concluido\/1$/);
+      await expect(page.locator('.cc-todo')).toHaveCount(1);
+      await expect(page.locator('.cc-spark')).toHaveCount(0);
+      await expect(page.locator('.cc-todo')).toContainText('Ao concluir');
+      await expect(page.locator('.cc-todo .cc-pts')).toHaveText('+40 pontos');
+      await expect(page.getByRole('button', { name: /^Continuar na etapa \d\d$/ })).toBeVisible();
+      const st = await page.request.get(`${sl.origin}/api/me/state`);
+      if (st.ok()) {
+        const sj = await st.json();
+        const s = sj.state ?? sj;
+        log.push(
+          `state prog=${JSON.stringify(s.prog)} epsDone=${JSON.stringify(s.epsDone)} points=${s.game?.points ?? s.points}`,
+        );
+        expect(s.epsDone?.['1'] ?? s.epsDone?.[1]).toBeFalsy();
+        expect(s.prog?.['2'] ?? s.prog?.[2] ?? 1).toBeLessThanOrEqual(1);
+      }
+      mkdirSync(OUT, { recursive: true });
+      writeFileSync(join(OUT, `locked-${vp}.log`), log.join('\n'));
+      await expectClean(page, w);
+    });
+
+    test(`visible keyboard focus on map rows, options, toggles and cards (${vp})`, async ({ page, context }) => {
+      await prepApp(context, `u2-focus2-${vp}`, { noMic: true });
+      const w = watch(page);
+      const res: Record<string, string> = {};
+      const check = async (label: string, sel: string) => {
+        const el = page.locator(sel).first();
+        if (!(await el.count())) {
+          res[label] = 'absent';
+          return;
+        }
+        // Keyboard focus: focus the previous focusable then Tab, so :focus-visible applies.
+        await el.evaluate((e) => (e as HTMLElement).focus({ focusVisible: true } as any));
+        const r = await focusRing(page);
+        res[label] = `${r.fv && visibleRing(r) ? 'ok' : 'NO RING'} ${r.outline} | ${r.shadow}`;
+      };
+      await page.keyboard.press('Tab'); // switch the page into keyboard modality
+      await page.goto('/#/episodio/1/2');
+      await atStep(page, 1, 2);
+      await page.keyboard.press('Tab');
+      await check('song: Tradução toggle', '.player-dock button[aria-pressed]');
+      await check('song: play', '.player-dock .playbtn');
+      await check('head: Mapa', '.player-head .iconbtn[aria-label="Mapa"]');
+      await check('head: segs bar', '.player-head button.stack');
+      await check('foot: prev', '.player-foot .btn.prev');
+      await page.goto('/#/episodio/1/4');
+      await atStep(page, 1, 4);
+      await page.keyboard.press('Tab');
+      await check('look: video play', '.pl-vplay');
+      await check('look: vocab card', '.pl-vocab button.card');
+      await page.goto('/#/episodio/1/6');
+      await atStep(page, 1, 6);
+      await page.keyboard.press('Tab');
+      await check('mic: record', '.player-dock button.mic');
+      await check('mic: phrase card', '#pl-scroll button.card.row');
+      await page.locator('.player-head .iconbtn[aria-label="Mapa"]').focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.overlay .sheet')).toBeVisible();
+      await expect(page.locator('.overlay .sheet .iconbtn[aria-label="Fechar"]')).toBeFocused();
+      await page.keyboard.press('Tab');
+      const r = await focusRing(page);
+      res['sheet: first steprow (Tab)'] = `${r.fv && visibleRing(r) ? 'ok' : 'NO RING'} ${r.tag}`;
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.overlay .sheet')).toHaveCount(0);
+      await expect(page.locator('.player-head .iconbtn[aria-label="Mapa"]')).toBeFocused();
+      mkdirSync(OUT, { recursive: true });
+      writeFileSync(join(OUT, `focus2-${vp}.json`), JSON.stringify(res, null, 2));
+      const bad = Object.entries(res).filter(([, v]) => v.startsWith('NO RING'));
+      expect.soft(bad, 'controls without a visible focus ring').toEqual([]);
+      await expectClean(page, w);
+    });
   });
 }
 
@@ -1066,7 +1279,16 @@ test('client bundle carries no secrets or assistant persona; strict CSP header',
   };
   walk(dist);
   const hits: string[] = [];
-  const pats = [/persona["']?\s*:/i, /MEDIA_TOKEN_KEY/, /ATTEMPT_SECRET/i, /CLOUDFLARE_API_TOKEN/, /TURNSTILE_SECRET/i, /sk-[A-Za-z0-9]{20,}/, /-----BEGIN/, /pbkdf2-sha256\$/];
+  const pats = [
+    /persona["']?\s*:/i,
+    /MEDIA_TOKEN_KEY/,
+    /ATTEMPT_SECRET/i,
+    /CLOUDFLARE_API_TOKEN/,
+    /TURNSTILE_SECRET/i,
+    /sk-[A-Za-z0-9]{20,}/,
+    /-----BEGIN/,
+    /pbkdf2-sha256\$/,
+  ];
   for (const f of files) {
     const t = readFileSync(f, 'utf8');
     for (const p of pats) if (p.test(t)) hits.push(`${f.replace(dist, '')}: ${p}`);
@@ -1101,7 +1323,10 @@ function signatureFn(sel: string): string[] {
         out.push(`${ind}svg`);
         continue;
       }
-      const cls = Array.from(e.classList).filter((c) => c !== 'enter' && c !== 'heard').sort().join('.');
+      const cls = Array.from(e.classList)
+        .filter((c) => c !== 'enter' && c !== 'heard')
+        .sort()
+        .join('.');
       const st: string[] = [];
       for (let i = 0; i < e.style.length; i++) {
         const p = e.style[i] as string;
@@ -1112,7 +1337,9 @@ function signatureFn(sel: string): string[] {
       st.sort();
       const attrs: string[] = [];
       for (const a of ['id', 'disabled', 'aria-label']) if (e.hasAttribute(a)) attrs.push(`${a}=${e.getAttribute(a)}`);
-      out.push(`${ind}${tag}${cls ? `.${cls}` : ''}${st.length ? ` {${st.join(';')}}` : ''}${attrs.length ? ` [${attrs.join(' ')}]` : ''}`);
+      out.push(
+        `${ind}${tag}${cls ? `.${cls}` : ''}${st.length ? ` {${st.join(';')}}` : ''}${attrs.length ? ` [${attrs.join(' ')}]` : ''}`,
+      );
       walk(e, d + 1);
     }
   };
@@ -1125,7 +1352,8 @@ function diff(a: string[], b: string[]): string[] {
   const m = b.length;
   const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--)
-    for (let j = m - 1; j >= 0; j--) dp[i]![j] = a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+    for (let j = m - 1; j >= 0; j--)
+      dp[i]![j] = a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
   const out: string[] = [];
   let i = 0;
   let j = 0;
@@ -1162,23 +1390,46 @@ test.describe('U2 parity with the prototype', () => {
         ['s4', `u2-cmp-a-${vp}`, 'main', 'episodio/1/4'],
         ['s5', `u2-cmp-a-${vp}`, 'main', 'episodio/1/5'],
         ['s6', `u2-cmp-a-${vp}`, 'main', 'episodio/1/6'],
-        ['s6-sheet', `u2-cmp-a-${vp}`, 'main', 'episodio/1/6', async (p) => { await p.locator('.player-head .iconbtn[aria-label="Mapa"]').click(); await p.waitForTimeout(300); }],
+        [
+          's6-sheet',
+          `u2-cmp-a-${vp}`,
+          'main',
+          'episodio/1/6',
+          async (p) => {
+            await p.locator('.player-head .iconbtn[aria-label="Mapa"]').click();
+            await p.waitForTimeout(300);
+          },
+        ],
         ['s7', `u2-cmp-b-${vp}`, 's10', 'episodio/1/7'],
         ['s8', `u2-cmp-b-${vp}`, 's10', 'episodio/1/8'],
         ['s9', `u2-cmp-b-${vp}`, 's10', 'episodio/1/9'],
         ['s10', `u2-cmp-b-${vp}`, 's10', 'episodio/1/10'],
-        ['concluido', `u2-cmp-b-${vp}`, 's10', 'concluido/1'],
+        // The celebration (episode 1 in epsDone) against the prototype's card; the unfinished deep link
+        // shows the app's progress card instead (an accepted deviation), diffed for the record only.
+        ['concluido', `u2-cmp-c-${vp}`, 'ep2', 'concluido/1'],
+        ['concluido-todo', `u2-cmp-b-${vp}`, 's10', 'concluido/1'],
       ];
       const summary: Record<string, number> = {};
       const sigs0: Record<string, number> = {};
       for (const [name, user, kind, route, steps] of cases) {
         const sigs: Record<'proto' | 'app', string[]> = { proto: [], app: [] };
         for (const side of ['proto', 'app'] as const) {
-          const ctx = await browser.newContext({ ...vpOpts(vp), locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce', serviceWorkers: 'block' });
+          const ctx = await browser.newContext({
+            ...vpOpts(vp),
+            locale: 'pt-BR',
+            timezoneId: 'America/Sao_Paulo',
+            reducedMotion: 'reduce',
+            serviceWorkers: 'block',
+          });
           try {
             if (side === 'proto') {
               const st = isolateState(stateOf(kind), user, emailOf(user));
-              await prepareContext(ctx, { side: 'prototype', seedKey: `${name}|${vp}`, storage: storageOf(st), allowOrigins: [new URL(proto.url).origin] });
+              await prepareContext(ctx, {
+                side: 'prototype',
+                seedKey: `${name}|${vp}`,
+                storage: storageOf(st),
+                allowOrigins: [new URL(proto.url).origin],
+              });
               await ctx.addInitScript({ content: INIT });
             } else {
               await prepApp(ctx, user);
@@ -1186,10 +1437,18 @@ test.describe('U2 parity with the prototype', () => {
             const page = await ctx.newPage();
             const base = side === 'proto' ? proto.url.replace(/\/?$/, '/') : `${sl.origin}/`;
             await page.goto(`${base}#/${route}`);
-            await expect(page.locator(name === 'concluido' ? '.now-card' : '.player-foot').first()).toBeVisible({ timeout: 20_000 });
+            const isDone = name.startsWith('concluido');
+            await expect(page.locator(isDone ? '.now-card' : '.player-foot').first()).toBeVisible({
+              timeout: 20_000,
+            });
             await page.waitForTimeout(700);
             if (steps) await steps(page);
-            const sel = name === 'concluido' ? '.view' : name === 's6-sheet' ? '.overlay' : vp === 'desktop' ? '.app' : '.view';
+            if (side === 'app' && name === 'concluido') {
+              await expect(page.locator('.now-card .kick')).toContainText('concluído');
+              await expect(page.locator('.cc-todo')).toHaveCount(0);
+            }
+            if (side === 'app' && name === 'concluido-todo') await expect(page.locator('.cc-todo')).toHaveCount(1);
+            const sel = isDone ? '.view' : name === 's6-sheet' ? '.overlay' : vp === 'desktop' ? '.app' : '.view';
             sigs[side] = await page.evaluate(signatureFn, sel);
           } finally {
             await ctx.close();
@@ -1206,7 +1465,8 @@ test.describe('U2 parity with the prototype', () => {
       writeFileSync(join(OUT, `dom-summary-${vp}.json`), JSON.stringify(summary, null, 2));
       // Report-only: the slice knowingly polishes several steps (cast strip, intro topics, reveal button,
       // exercise list…); the diff files are reviewed by hand. A missing root is still a failure.
-      for (const [k] of Object.entries(summary)) expect.soft(sigs0[k] ?? 1, `DOM root found for ${k} (${vp})`).toBeGreaterThan(0);
+      for (const [k] of Object.entries(summary))
+        expect.soft(sigs0[k] ?? 1, `DOM root found for ${k} (${vp})`).toBeGreaterThan(0);
       console.log(`[u2 parity ${vp}] ${JSON.stringify(summary)}`);
     });
   }

@@ -8,6 +8,7 @@ import type { JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { sfx } from '../../core/sound';
 import { type ScreenProps, useChrome } from '../../frame';
+import { replace } from '../../router';
 import { saveChallenge } from '../../store/actions';
 import { showToast } from '../../store/award';
 import { state } from '../../store/state';
@@ -142,9 +143,20 @@ export default function Desafio({ q }: ScreenProps) {
     return () => cancelAnimationFrame(G.raf ?? 0);
   }, [G.state, G.qn]);
 
+  // ?x= names a title that is not in the catalog or still locked (no lines yet): play with every
+  // Extra instead of a round that can never start (the prototype crashed here).
+  const onlyMeta = G.only && c ? (c.extras.find((x) => x.id === G.only) ?? null) : null;
+  const badOnly = !!G.only && !!c && (!onlyMeta || onlyMeta.locked);
+  useEffect(() => {
+    if (!badOnly || ref.current !== G) return;
+    G.only = '';
+    replace('extra/desafio');
+    re();
+  }, [badOnly]);
+
   const s = state.value;
   const best = s.extras.best;
-  const onlyTitle = G.only ? (c?.extras.find((x) => x.id === G.only)?.title ?? '') : '';
+  const onlyTitle = onlyMeta && !badOnly ? onlyMeta.title : '';
 
   const finish = () => {
     clearInterval(G.clock);
@@ -159,8 +171,13 @@ export default function Desafio({ q }: ScreenProps) {
     let extras = allExtrasNow();
     if (!extras.length) extras = await loadAllExtras().catch(() => []);
     if (ref.current !== G) return;
-    const pool = linePool(extras, G.only);
     const all = linePool(extras);
+    let pool = linePool(extras, G.only);
+    // A title whose lines this plan does not open: the round uses every Extra instead.
+    if (!pool.length && G.only && all.length) {
+      G.only = '';
+      pool = all;
+    }
     if (!pool.length || !all.length) {
       showToast('Não deu para carregar as falas. Tente de novo.');
       return;
@@ -193,62 +210,127 @@ export default function Desafio({ q }: ScreenProps) {
     re();
   };
 
+  const desk = isDesktop();
   let inner: JSX.Element;
+  let dock: JSX.Element | null = null;
   if (G.state !== 'play' || !G.q) {
     const over = G.state === 'over';
     // A sample line for the "how it works" field: the first line of the pool once the Extras load.
     const sampleFrom = linePool(allExtrasNow(), G.only || undefined);
     const sample = sampleFrom[1] ?? sampleFrom[0];
-    const others = sampleFrom.filter((l) => l.pt !== sample?.pt).slice(0, 2);
+    // The two wrong answers of the example: the shortest other lines, so each option fits one line.
+    const others = sampleFrom
+      .filter((l) => l.pt !== sample?.pt)
+      .sort((a, b) => a.pt.length - b.pt.length)
+      .slice(0, 2);
+    const cta = <Btn label={over ? 'Jogar de novo' : 'Começar'} onClick={() => void gStart()} icon="game" />;
+    const record = (
+      <div class="x-record">
+        <Icon name="trophy" size={22} />
+        <span>
+          Recorde: <b>{best}</b> pontos
+        </span>
+      </div>
+    );
+    // Phones: the record and the button stay docked at the foot of the screen while the page scrolls.
+    if (!desk) {
+      dock = (
+        <div class="x-dock">
+          {record}
+          {cta}
+        </div>
+      );
+    }
+    // How the points work, as three tiles side by side (the description says how a round goes).
+    const rules = (
+      <ul class="x-steps x-rules" aria-label="Pontuação">
+        <li>
+          <b>+10</b>
+          <span>por tradução certa</span>
+        </li>
+        <li>
+          <b>até x5</b>
+          <span>com acertos seguidos</span>
+        </li>
+        <li>
+          <b>x1</b>
+          <span>errou: a sequência recomeça</span>
+        </li>
+      </ul>
+    );
+    const demo = (
+      <div class="x-demo" aria-hidden="true">
+        {/* What a round looks like: the round's own score line over the field. */}
+        <div class="x-hud">
+          <span class="pill x-dark x-tag">Exemplo</span>
+          <span class="x-hudv">30 pts</span>
+          <span class="pill or">x3</span>
+          <span class="x-hudv x-time">42s</span>
+        </div>
+        <div class="quiz-field">
+          {/* The line on its way down: where it came from (the trail) and where it is going (the ground). */}
+          <div class="x-from" />
+          {sample ? <div class="faller">{sample.en}</div> : null}
+          <div class="x-trail">
+            <Icon name="down" size={18} />
+          </div>
+          <div class="x-groundnote">Responda antes de a fala chegar ao chão</div>
+          <div class="ground" />
+        </div>
+        {sample
+          ? [others[0], sample, others[1]].map((l) =>
+              l ? (
+                <div key={l.pt} class={`x-opt${l === sample ? ' ok' : ''}`}>
+                  {l.pt}
+                  {l === sample ? <Icon name="check" size={18} /> : null}
+                </div>
+              ) : null,
+            )
+          : null}
+      </div>
+    );
     inner = (
       <div class="wrap x-des-wrap" style={{ '--wrap': '960px' }}>
         <div class="x-des-grid">
           <div class="x-des-copy">
-            {over ? (
-              <>
-                <span class="pill x-dark">
-                  <Icon name="clock" size={14} /> Fim dos 60 segundos
-                </span>
-                <div class="h1" style={{ color: '#fff' }}>
-                  Tempo esgotado.
-                </div>
-                <div class="h2" style={{ color: '#fff' }}>
-                  {`${G.score} pontos · ${G.hits} acertos`}
-                </div>
-                {G.score >= best && G.score > 0 ? <span class="pill gold">Novo recorde</span> : null}
-              </>
-            ) : (
-              <>
-                <span class="pill x-dark">
-                  <Icon name="clock" size={14} /> 60 segundos
-                </span>
-                <div class="h1" style={{ color: '#fff' }}>
-                  Desafio relâmpago
-                </div>
-                <p class="p">
-                  As falas dos Extras caem na tela. Toque na tradução certa antes que a fala chegue ao chão. 60
-                  segundos. Cada acerto vale mais com a sequência.
-                </p>
-              </>
-            )}
-            <div class="x-facts">
-              <div>
-                <b>+10</b>
-                <span>por acerto</span>
-              </div>
-              <div>
-                <b>x5</b>
-                <span>combo máximo</span>
-              </div>
+            <div class="x-des-head">
+              {over ? (
+                <>
+                  <span class="pill x-dark">
+                    <Icon name="clock" size={14} /> Fim dos 60 segundos
+                  </span>
+                  <div class="h1" style={{ color: '#fff' }}>
+                    Tempo esgotado.
+                  </div>
+                  <div class="h2" style={{ color: '#fff' }}>
+                    {`${G.score} pontos · ${G.hits} acertos`}
+                  </div>
+                  {G.score >= best && G.score > 0 ? <span class="pill gold">Novo recorde</span> : null}
+                </>
+              ) : (
+                <>
+                  <span class="pill x-dark">
+                    <Icon name="clock" size={14} /> 60 segundos
+                  </span>
+                  <div class="h1" style={{ color: '#fff' }}>
+                    Desafio relâmpago
+                  </div>
+                  <p class="p">
+                    As falas dos Extras caem na tela. Toque na tradução certa antes que a fala chegue ao chão.
+                  </p>
+                </>
+              )}
+              {G.only && onlyTitle ? <div class="xs">{`Só com as falas de ${onlyTitle}`}</div> : null}
             </div>
-            <div class="x-record">
-              <Icon name="trophy" size={22} />
-              <span>
-                Recorde: <b>{best}</b> pontos
-              </span>
-            </div>
-            <Btn label={over ? 'Jogar de novo' : 'Começar'} onClick={() => void gStart()} icon="game" />
-            {G.only ? <div class="xs">{`Só com as falas de ${onlyTitle}`}</div> : null}
+            {/* Phones: the example comes right after the description; the rules follow. */}
+            {!desk && !over ? demo : null}
+            {rules}
+            {desk ? (
+              <div class="x-des-foot">
+                {record}
+                {cta}
+              </div>
+            ) : null}
           </div>
           {over ? (
             <div class="card x-result">
@@ -262,45 +344,10 @@ export default function Desafio({ q }: ScreenProps) {
                 <span class="pill x-dark">{`${G.miss} erros`}</span>
               </div>
             </div>
-          ) : (
-            <div class="x-demo" aria-hidden="true">
-              <div class="quiz-field">
-                <span class="pill x-dark x-tag">Exemplo</span>
-                {sample ? <div class="faller">{sample.en}</div> : null}
-                {/* The fall: the line drops toward the ground; answer before it lands. */}
-                <div class="x-trail">
-                  <Icon name="down" size={18} />
-                </div>
-                <div class="x-groundnote">Responda antes de a fala chegar ao chão</div>
-                <div class="ground" />
-              </div>
-              {sample
-                ? [others[0], sample, others[1]].map((l) =>
-                    l ? (
-                      <div key={l.pt} class={`x-opt${l === sample ? ' ok' : ''}`}>
-                        {l.pt}
-                        {l === sample ? <Icon name="check" size={18} /> : null}
-                      </div>
-                    ) : null,
-                  )
-                : null}
-            </div>
-          )}
+          ) : desk ? (
+            demo
+          ) : null}
         </div>
-        {/* Desktop intro: how a round goes, step by step (the catalog card's three steps). */}
-        {!over && isDesktop() ? (
-          <ol class="x-steps">
-            <li>
-              <b>1</b> Uma fala em inglês cai na tela
-            </li>
-            <li>
-              <b>2</b> Toque na tradução certa antes do chão
-            </li>
-            <li>
-              <b>3</b> Acertos seguidos valem até x5
-            </li>
-          </ol>
-        ) : null}
       </div>
     );
   } else {
@@ -339,10 +386,13 @@ export default function Desafio({ q }: ScreenProps) {
   }
 
   return (
-    <OnNavy cls={`x-des${G.state === 'idle' ? ' x-intro' : ''}`} w={960}>
-      {/* The prototype's bar; on the intro its title hides while the page's own big title shows it. */}
-      <Topbar back="extra" kicker="EXTRA" title="Desafio relâmpago" />
+    <OnNavy cls={`x-des${G.state === 'play' ? ' x-round' : ''}`} w={960}>
+      {/* The prototype's bar. Before and after a round it names where the back button goes (the page's
+          big title names the game, so the two never repeat or contradict each other); during a round,
+          with no big title on the page, it is the game's name. */}
+      <Topbar back="extra" kicker={G.state === 'play' ? 'EXTRA' : undefined} title={G.state === 'play' ? 'Desafio relâmpago' : 'EXTRA'} />
       <div class="scroll">{inner}</div>
+      {dock}
     </OnNavy>
   );
 }

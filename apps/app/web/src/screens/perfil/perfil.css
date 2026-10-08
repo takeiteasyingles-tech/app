@@ -1,0 +1,136 @@
+/* #/perfil: regras da fatia U1, escopadas em [data-u1='pf'] (a raiz .scroll da tela). */
+
+/* Números do topo (sequência, pontos, meta): o ícone num disco colorido e o número maior, para o
+   cartão não parecer vazio em volta de um ícone de 16px. */
+[data-u1="pf"] .gamebar .g .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+[data-u1="pf"] .gamebar .g.streak .ic {
+  background: var(--orangeT);
+}
+[data-u1="pf"] .gamebar .g.pts .ic {
+  background: var(--goldT);
+}
+[data-u1="pf"] .gamebar .g.goal .ic {
+  background: var(--blueT);
+}
+[data-u1="pf"] .gamebar .g .ic svg {
+  width: 18px;
+  height: 18px;
+}
+[data-u1="pf"] .gamebar .g > span:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+[data-u1="pf"] .gamebar .g b {
+  font-size: 1.3rem;
+}
+.app[data-layout="desktop"] [data-u1="pf"] .gamebar {
+  gap: 14px;
+}
+.app[data-layout="desktop"] [data-u1="pf"] .gamebar .g {
+  flex-direction: row;
+  gap: 14px;
+  padding: 16px 20px;
+}
+.app[data-layout="desktop"] [data-u1="pf"] .gamebar .g .ic {
+  width: 48px;
+  height: 48px;
+}
+.app[data-layout="desktop"] [data-u1="pf"] .gamebar .g .ic svg {
+  width: 24px;
+  height: 24px;
+}
+.app[data-layout="desktop"] [data-u1="pf"] .gamebar .g > span:last-child {
+  align-items: flex-start;
+}
+.app[data-layout="desktop"] [data-u1="pf"] .gamebar .g b {
+  font-size: 1.6rem;
+}
+.app[data-layout="desktop"] [data-u1="pf"] .gamebar .g small {
+  font-size: 0.75rem;
+}
+
+/* Celular: os cinco assistentes como uma fileira de rostos (sem moldura de cartão, que espremia os
+   nomes contra as bordas); o escolhido ganha o anel laranja na foto. */
+.app:not([data-layout="desktop"]) [data-u1="pf"] .assist-row .assist {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 2px 0 0;
+}
+.app:not([data-layout="desktop"]) [data-u1="pf"] .assist-row .assist img,
+.app:not([data-layout="desktop"]) [data-u1="pf"] .assist-row .assist .av-ini {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--line2);
+}
+.app:not([data-layout="desktop"]) [data-u1="pf"] .assist-row .assist.on img,
+.app:not([data-layout="desktop"]) [data-u1="pf"] .assist-row .assist.on .av-ini {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 5px var(--orange);
+}
+.app:not([data-layout="desktop"]) [data-u1="pf"] .assist-row .assist.on b {
+  color: var(--orange);
+}
+
+/* Desktop: a escada CEFR cresce com o cartão (as barras viram um gráfico mais alto), em vez de
+   deixar uma faixa vazia no pé quando o vizinho da linha é mais alto. */
+[data-u1="pf"] .pf-ladder {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: minmax(46px, 1fr) auto;
+  grid-auto-flow: column;
+  column-gap: 6px;
+  row-gap: 6px;
+}
+[data-u1="pf"] .pf-ladder > i {
+  display: block;
+  border-radius: 6px;
+  background: var(--line);
+}
+[data-u1="pf"] .pf-ladder > i.done {
+  background: var(--blue);
+}
+[data-u1="pf"] .pf-ladder > i.now {
+  background: linear-gradient(to top, var(--blue) 22%, var(--line) 22%);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--blue);
+}
+[data-u1="pf"] .pf-ladder > span {
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--muted);
+}
+[data-u1="pf"] .pf-ladder > span.now {
+  color: var(--blueD);
+}
+
+/* O cartão esticado de uma linha leva o bloco final (foco da semana, botão) para o pé. */
+[data-u1="pf"] .pf-foot {
+  margin-top: auto;
+}
+[data-u1="pf"] .pf-focus {
+  background: var(--cream);
+  border-radius: 14px;
+  padding: 12px 14px 14px;
+}
+
+/* Desktop: os gêneros em colunas, uma por formato, num cartão de largura inteira. */
+.app[data-layout="desktop"] [data-u1="pf"] .pf-genres {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}

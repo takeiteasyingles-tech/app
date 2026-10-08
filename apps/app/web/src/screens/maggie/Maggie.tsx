@@ -679,11 +679,11 @@ function MicStage(c: Catalog, m: Session) {
 
 /**
  * C.assistPicker com as mesmas classes (.assist-row / .assist), em grade: as cinco opções sempre à
- * vista, sem cartão cortado na borda. No celular o cartão fica compacto (rosto menor, subtítulo em
- * letra menor); a grade iguala a altura dos cinco cartões.
+ * vista, sem cartão cortado na borda: rosto e nome, todos do mesmo tamanho. O estilo (a.tag) do
+ * escolhido vira um selo na linha de apresentação logo abaixo da grade.
  */
 function AssistGrid(c: Catalog, cur: string, desk: boolean) {
-  const size = desk ? 60 : 50;
+  const size = desk ? 64 : 54;
   return (
     <div
       class="assist-row"
@@ -692,34 +692,75 @@ function AssistGrid(c: Catalog, cur: string, desk: boolean) {
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${c.assistants.length}, minmax(0, 1fr))`,
-        gap: desk ? '10px' : '5px',
+        gap: desk ? '10px' : '2px',
         overflow: 'visible',
-        padding: '2px',
+        padding: desk ? '2px' : '4px 0 2px',
       }}
     >
       {c.assistants.map((a) => {
         const vid = !!a.thumb && !!a.clips && Object.values(a.clips).some(Boolean);
+        const on = a.k === cur;
+        // Celular: cinco cartões não cabem com respiro na largura do aparelho. Cada opção vira o rosto
+        // com o nome embaixo, sem caixa; a escolhida ganha um anel laranja em volta do rosto.
+        // Desktop: o cartão .assist, sem o halo claro do .assist.on (o anel duplo branco e laranja).
+        const ring = on
+          ? { boxShadow: '0 0 0 2px var(--navy), 0 0 0 4.5px var(--orange)' }
+          : { boxShadow: '0 0 0 1.5px var(--navy3)' };
         return (
           // biome-ignore lint/a11y/useSemanticElements: o radiogroup de botões do protótipo; o tie.css estiliza .assist.
           <button
             type="button"
             key={a.k}
-            class={`assist${a.k === cur ? ' on' : ''}`}
+            class={`assist${on ? ' on' : ''}`}
             role="radio"
-            aria-checked={a.k === cur ? 'true' : 'false'}
-            style={{ maxWidth: 'none', minWidth: '0', padding: desk ? '12px 8px 10px' : '10px 4px 9px' }}
+            aria-checked={on ? 'true' : 'false'}
+            style={
+              desk
+                ? {
+                    maxWidth: 'none',
+                    minWidth: '0',
+                    justifyContent: 'flex-start',
+                    padding: '12px 8px',
+                    gap: '6px',
+                    boxShadow: 'none',
+                    ...(on ? { background: 'var(--navyD)' } : {}),
+                  }
+                : {
+                    maxWidth: 'none',
+                    minWidth: '0',
+                    justifyContent: 'flex-start',
+                    padding: '6px 0 4px',
+                    gap: '8px',
+                    background: 'transparent',
+                    borderColor: 'transparent',
+                    boxShadow: 'none',
+                  }
+            }
             onClick={activator(undefined, () => mgPick(a.k))}
           >
             {vid ? (
-              <img src={a.thumb ?? ''} alt="" style={{ width: `${size}px`, height: `${size}px` }} />
+              <img
+                src={a.thumb ?? ''}
+                alt=""
+                style={{ width: `${size}px`, height: `${size}px`, ...(desk ? {} : ring) }}
+              />
             ) : (
-              <span class="av-ini" style={{ '--s': `${size}px` }}>
+              <span class="av-ini" style={{ '--s': `${size}px`, ...(desk ? {} : ring) }}>
                 {assistInitials(a)}
               </span>
             )}
-            <b style={desk ? undefined : { fontSize: '.86rem' }}>{a.name}</b>
-            {/* No celular o estilo do escolhido aparece por extenso logo abaixo da grade (AssistInfo). */}
-            {desk ? <span style={{ display: 'block', minHeight: '2.4em' }}>{a.tag}</span> : null}
+            <b
+              style={
+                desk
+                  ? undefined
+                  : { fontSize: '.86rem', lineHeight: '1.2', color: on ? '#fff' : 'var(--onNavy)', fontWeight: '800' }
+              }
+            >
+              {a.name}
+            </b>
+            {/* O estilo (a.tag) aparece no selo sob a grade, para o escolhido; aqui só para leitores
+                de tela: os cinco cartões ficam do mesmo tamanho, sem legenda quebrando em duas linhas. */}
+            <span style={srOnly}>{` ${a.tag}`}</span>
           </button>
         );
       })}
@@ -728,67 +769,151 @@ function AssistGrid(c: Catalog, cur: string, desk: boolean) {
 }
 
 /**
- * Lista de opções (cenas, Extras): duas colunas de largura igual, texto à esquerda, sem borda
- * serrilhada e sem pílula larga quase vazia. Cada linha da grade tem a altura do seu maior cartão, e
- * o texto começa no topo: os nomes de uma mesma linha ficam na mesma altura, quebrando ou não.
+ * Lista de opções (cenas, Extras), texto à esquerda, sem borda serrilhada e sem pílula larga quase
+ * vazia. Desktop: duas colunas de largura igual, todas as linhas da mesma altura. Celular: uma coluna
+ * de linhas da largura toda, cada nome numa linha só, com o selo escrito ("seu objetivo") à direita.
  */
-const optGrid = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: '8px',
-} as const;
-const optChip = {
-  width: '100%',
-  minWidth: '0',
-  justifyContent: 'flex-start',
-  alignItems: 'flex-start',
-  textAlign: 'left',
-  borderRadius: '14px',
-  padding: '12px',
-  lineHeight: '1.25',
+const optGrid = (desk: boolean) =>
+  ({
+    display: 'grid',
+    gridTemplateColumns: desk ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)',
+    ...(desk ? { gridAutoRows: '1fr' } : {}),
+    gap: '8px',
+  }) as const;
+/**
+ * "Designer de interiores · toca a Woods & Beans": a palavra antes de cada "·" e o próprio "·" ficam
+ * juntos (nowrap), então a linha nunca começa com o ponto. O texto continua o mesmo.
+ */
+function glueDots(text: string): ComponentChildren {
+  const parts = text.split(' · ');
+  return parts.map((p, i) => {
+    if (i === parts.length - 1) return p;
+    const j = p.lastIndexOf(' ');
+    return (
+      <Fragment key={i}>
+        {p.slice(0, j + 1)}
+        <span style={{ whiteSpace: 'nowrap' }}>{`${p.slice(j + 1)} ·`}</span>{' '}
+      </Fragment>
+    );
+  });
+}
+
+/** Texto só para leitores de tela (o tie.css não tem uma classe para isso). */
+const srOnly = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
 } as const;
 
 /**
- * Chip do protótipo (.chip, aria-pressed, .ck). O sufixo ("· seu objetivo", "· visto") vira uma linha
- * própria sob o nome, com um ícone no lugar do ponto: o "·" continua no texto (leitores de tela,
- * copiar e colar) mas com tamanho zero, para nenhuma linha começar com um ponto solto.
+ * Selo redondo laranja com o ícone em branco que marca as opções com sufixo ("seu objetivo",
+ * "visto"): o mesmo na legenda e dentro de cada opção, visível sobre o navy e sobre o chip branco.
  */
-function OptChip(label: string, suffix: string, icon: string, on: boolean, pick: () => void, key: string) {
+function TagBadge(icon: string, size: number) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        flex: 'none',
+        borderRadius: '50%',
+        background: 'var(--orange)',
+        color: '#fff',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Icon name={icon} size={Math.round(size * 0.62)} />
+    </span>
+  );
+}
+
+/**
+ * Título de uma lista de opções. No desktop, quando há opções com sufixo ("seu objetivo", "visto"),
+ * uma linha logo abaixo diz o que o selo dentro delas quer dizer; no celular o selo já vem escrito.
+ */
+function OptHead(title: string, legend: string | null, icon: string, desk: boolean) {
+  if (!legend || !desk) return <div class="lbl">{title}</div>;
+  return (
+    <div class="stack" style={{ '--gap': '6px' }}>
+      <div class="lbl">{title}</div>
+      <span class="xs row" aria-hidden="true" style={{ ...READ, '--gap': '8px' }}>
+        {TagBadge(icon, 18)}
+        {legend}
+      </span>
+    </div>
+  );
+}
+
+const optChip = (desk: boolean) =>
+  ({
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    minWidth: '0',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    textAlign: 'left',
+    borderRadius: '14px',
+    padding: '10px 12px',
+    fontSize: '.9rem',
+    minHeight: desk ? '50px' : '46px',
+    lineHeight: '1.25',
+  }) as const;
+
+/**
+ * Chip do protótipo (.chip, aria-pressed, .ck). O sufixo ("· seu objetivo", "· visto") fica dentro
+ * do chip, à direita: no desktop (duas colunas estreitas) só o selo, explicado na linha sob o título
+ * da lista; no celular (linha da largura toda) o selo com o texto. O nome acessível traz o sufixo.
+ */
+function OptChip(
+  label: string,
+  suffix: string,
+  icon: string,
+  on: boolean,
+  pick: () => void,
+  key: string,
+  desk: boolean,
+) {
   const rest = suffix.replace(/^\s*·\s*/, '');
+  const short = rest.replace(/^seu\s+/, '');
+  const tag = !rest ? null : desk ? (
+    <span style={{ marginLeft: 'auto', display: 'inline-flex', flex: 'none' }}>
+      {TagBadge(icon, 20)}
+      <span style={srOnly}>{` · ${rest}`}</span>
+    </span>
+  ) : (
+    <span
+      class="pill or"
+      style={{ marginLeft: 'auto', flex: 'none', gap: '4px', padding: '3px 9px 3px 6px', fontSize: '.74rem' }}
+    >
+      <Icon name={icon} size={13} />
+      {/* Visível só o essencial ("objetivo"), para o nome da cena caber numa linha; o leitor de tela
+          ouve o sufixo inteiro ("· seu objetivo"). */}
+      <span>
+        <span style={srOnly}>{` · ${rest.slice(0, rest.length - short.length)}`}</span>
+        {short}
+      </span>
+    </span>
+  );
   return (
     <button
       type="button"
       key={key}
       class={`chip${on ? ' on' : ''}`}
       aria-pressed={on ? 'true' : 'false'}
-      style={optChip}
+      style={optChip(desk)}
       onClick={activator(undefined, pick)}
     >
-      <span class="ck" style={{ marginTop: '1px' }}>
-        {on ? <Icon name="check" size={12} /> : null}
-      </span>
-      <span style={{ minWidth: '0' }}>
-        {label}
-        {rest ? (
-          <>
-            {' '}
-            <span
-              style={{
-                display: 'inline-block',
-                width: '100%',
-                marginTop: '3px',
-                fontSize: '.78rem',
-                fontWeight: '700',
-                color: on ? 'var(--orange)' : '#FFD27A',
-              }}
-            >
-              <Icon name={icon} size={12} extra={{ style: { verticalAlign: '-1px', marginRight: '5px' } }} />
-              <span style={{ fontSize: '0' }}>· </span>
-              {rest}
-            </span>
-          </>
-        ) : null}
-      </span>
+      <span class="ck">{on ? <Icon name="check" size={12} /> : null}</span>
+      <span style={{ minWidth: '0', flex: '0 1 auto', textWrap: 'balance' }}>{label}</span>
+      {tag}
     </button>
   );
 }
@@ -805,8 +930,8 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
     const cur = mission(c, m.mission);
     pickRow = (
       <div class="stack" style={{ '--gap': '8px' }}>
-        <div class="lbl">Escolha a cena</div>
-        <div class="chips" style={optGrid}>
+        {OptHead('Escolha a cena', mine.length ? 'Marca as cenas do seu objetivo.' : null, 'target', desk)}
+        <div class="chips" style={optGrid(desk)}>
           {order.map((k) => {
             const x = mission(c, k);
             return x && x.k === k
@@ -820,16 +945,17 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
                     re();
                   },
                   k,
+                  desk,
                 )
               : null;
           })}
         </div>
         {cur ? (
           <div class="card" style={{ padding: '14px' }}>
-            <div class="xs" style={READ}>
+            <div class="xs" style={{ ...READ, textWrap: 'balance' }}>
               {The(A)} faz o papel de {cur.role}.
             </div>
-            <div class="h3 mt4" style={{ color: '#fff' }}>
+            <div class="h3 mt4" style={{ color: '#fff', textWrap: 'pretty' }}>
               {cur.goal}
             </div>
           </div>
@@ -840,8 +966,13 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
   if (m.mode === 'extra')
     pickRow = (
       <div class="stack" style={{ '--gap': '8px' }}>
-        <div class="lbl">Qual Extra você viu?</div>
-        <div class="chips" style={optGrid}>
+        {OptHead(
+          'Qual Extra você viu?',
+          usableExtras(c, s).some((x) => s.extras.seen[x.id]) ? 'Marca os Extras que você já viu.' : null,
+          'eye',
+          desk,
+        )}
+        <div class="chips" style={optGrid(desk)}>
           {usableExtras(c, s).map((x) =>
             OptChip(
               x.title,
@@ -853,6 +984,7 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
                 re();
               },
               x.id,
+              desk,
             ),
           )}
         </div>
@@ -878,22 +1010,7 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
     <>
       {pickRow}
       <Btn label="Começar a conversa · +30 pontos" icon="mic" cls="block" onClick={() => void mgCall()} />
-      {/* Os minutos numa linha só; o modo treino, quando ligado, na linha de baixo. */}
-      <div class="stack" style={{ '--gap': '2px', alignItems: 'center', textAlign: 'center' }}>
-        <span class="xs" style={{ ...READ, whiteSpace: 'nowrap' }}>
-          <Icon
-            name="clock"
-            size={16}
-            extra={{ style: { color: '#FFD27A', verticalAlign: '-3px', marginRight: '6px' } }}
-          />
-          {`${Math.round(s.maggie.secLeft / 60)} de ${limitMin} min restantes no mês`}
-        </span>
-        {training ? (
-          <span class="xs" style={READ}>
-            Modo treino, sem nota
-          </span>
-        ) : null}
-      </div>
+      {Allowance(Math.round(s.maggie.secLeft / 60), limitMin, training)}
       {!speech.canListen ? (
         <div class="fb tip">
           Este navegador não reconhece fala. Você pode conversar digitando. Para falar, use o Chrome ou o Edge.
@@ -906,38 +1023,78 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
       <div class="stack" style={{ '--gap': '8px' }}>
         <div class="lbl">Seu assistente</div>
         {AssistGrid(c, A.k, desk)}
-        {desk ? (
-          <div class="xs" style={{ ...READ, paddingRight: '12px', textWrap: 'pretty' }}>
-            <b style={{ color: '#fff' }}>{A.full}</b> · {A.role}. {A.style}
-          </div>
-        ) : (
-          // No celular o estilo (a.tag) sai do cartão apertado e vira o selo do escolhido, ao lado do nome.
-          <div class="stack" style={{ '--gap': '4px' }}>
-            <div class="row wrapx" style={{ '--gap': '8px' }}>
-              <b style={{ color: '#fff', fontSize: '.95rem' }}>{A.full}</b>
-              <span class="pill" style={{ background: 'var(--navy3)', color: '#FFD27A' }}>
-                {A.tag}
-              </span>
-            </div>
-            <div class="xs" style={{ ...READ, textWrap: 'pretty' }}>
-              {A.role}. {A.style}
-            </div>
-          </div>
-        )}
+        {/* Quem é o escolhido: nome, o estilo dele num selo (o a.tag do cartão do protótipo) e a
+            apresentação. */}
+        {/* Duas linhas: o nome com o selo do estilo e, embaixo, a apresentação corrida (o "·" do papel
+            fica preso à palavra de antes, nunca começando uma linha). */}
+        <div class="xs" style={{ ...READ, paddingRight: desk ? '12px' : '0' }}>
+          <span class="row" style={{ '--gap': '8px', flexWrap: 'wrap' }}>
+            <b style={{ color: '#fff', fontSize: '.95rem' }}>{A.full}</b>{' '}
+            <span
+              style={{
+                display: 'inline-block',
+                padding: '1px 9px',
+                borderRadius: '999px',
+                background: 'var(--navy3)',
+                color: '#FFD27A',
+                fontWeight: '700',
+                fontSize: '.8rem',
+                lineHeight: '1.5',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {A.tag}
+            </span>
+          </span>{' '}
+          <span style={{ display: 'block', marginTop: '4px', textWrap: 'pretty' }}>
+            {glueDots(A.role)}. {A.style}
+          </span>
+        </div>
       </div>
-      <div class="modes">
+      {/* Desktop: a grade 2 × 2 do protótipo. Celular: a frase de cada modo não cabe numa meia
+          largura sem quebrar em três linhas estreitas; os quatro viram linhas da largura toda, o ícone
+          num círculo à esquerda, o nome sobre a frase (numa linha só). */}
+      <div class="modes" style={desk ? undefined : { gridTemplateColumns: 'minmax(0, 1fr)', gap: '8px' }}>
         {c.mic.modes.map((x) => (
           <button
             type="button"
             key={x.k}
             class={`mode${m.mode === x.k ? ' on' : ''}`}
             aria-pressed={m.mode === x.k ? 'true' : 'false'}
+            style={
+              desk
+                ? undefined
+                : { minHeight: '0', padding: '12px 14px', gap: '12px', flexDirection: 'row', alignItems: 'center' }
+            }
             onClick={activator(undefined, () => setMode(x.k))}
           >
-            <Icon name={x.icon} size={22} extra={{ style: { color: '#FFD27A' } }} />
-            <span class="h3">{x.t}</span>
-            <span class="xs" style={READ}>
-              {x.s}
+            {desk ? (
+              <Icon name={x.icon} size={22} extra={{ style: { color: '#FFD27A', flex: 'none' } }} />
+            ) : (
+              <span
+                aria-hidden="true"
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  flex: 'none',
+                  borderRadius: '50%',
+                  background: 'var(--navy3)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFD27A',
+                }}
+              >
+                <Icon name={x.icon} size={20} />
+              </span>
+            )}
+            <span class="stack" style={{ '--gap': desk ? '4px' : '2px', minWidth: '0' }}>
+              <span class="h3" style={desk ? undefined : { fontSize: '1.02rem', lineHeight: '1.25' }}>
+                {x.t}
+              </span>
+              <span class="xs" style={{ ...READ, textWrap: 'balance', ...(desk ? {} : { lineHeight: '1.4' }) }}>
+                {x.s}
+              </span>
             </span>
           </button>
         ))}
@@ -954,7 +1111,7 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
       </div>
     ),
     start: desk ? (
-      <div class="stack" style={{ '--gap': '14px', padding: '18px 16px 4px' }}>
+      <div class="stack" style={{ '--gap': '16px', padding: '18px 16px 4px' }}>
         {start}
       </div>
     ) : null,
@@ -1246,12 +1403,66 @@ const dayFmt = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short'
 const rowBtn = {
   width: '100%',
   textAlign: 'left',
-  padding: '10px 12px',
+  padding: '12px 14px',
   borderRadius: '12px',
   background: 'var(--navyD)',
   border: '1.5px solid var(--navy3)',
   color: '#fff',
 } as const;
+
+/** Uma linha de informação: ícone, valor sobre o rótulo, com o mesmo peso de texto em toda a faixa. */
+function InfoRow(icon: string, value: string, label: string) {
+  return (
+    <div class="row" style={{ '--gap': '10px', minWidth: '0' }}>
+      <Icon name={icon} size={18} extra={{ style: { color: '#FFD27A', flex: 'none' } }} />
+      <span class="stack" style={{ '--gap': '1px', minWidth: '0' }}>
+        <b style={{ color: '#fff', fontSize: '1rem', lineHeight: '1.25', whiteSpace: 'nowrap' }}>{value}</b>
+        <span class="xs" style={{ ...READ, lineHeight: '1.3', whiteSpace: 'nowrap' }}>
+          {label}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Faixa sob o botão de começar: os minutos do mês, com uma barra do que ainda resta, e, quando
+ * ligado, o modo treino à direita, separado por um fio. Uma faixa só, em vez de dois cartões.
+ */
+function Allowance(left: number, limit: number, training: boolean) {
+  const pct = limit > 0 ? Math.max(0, Math.min(100, (left / limit) * 100)) : 0;
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: training ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)',
+        alignItems: 'center',
+        gap: '14px',
+        padding: '12px 14px',
+        borderRadius: '14px',
+        border: '1.5px solid var(--navy3)',
+        background: 'var(--navyD)',
+      }}
+    >
+      <div class="stack" style={{ '--gap': '8px', minWidth: '0' }}>
+        {InfoRow('clock', `${left} de ${limit} min`, 'restantes no mês')}
+        <div
+          aria-hidden="true"
+          style={{ height: '6px', borderRadius: '999px', background: 'var(--navy3)', overflow: 'hidden' }}
+        >
+          <div style={{ width: `${pct}%`, height: '100%', borderRadius: '999px', background: '#FFD27A' }} />
+        </div>
+      </div>
+      {training ? (
+        <div
+          style={{ paddingLeft: '14px', borderLeft: '1.5px solid var(--navy3)', alignSelf: 'stretch', display: 'flex' }}
+        >
+          {InfoRow('heart', 'Modo treino', 'sem nota')}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * As frases de socorro da conversa (desktop, sob os modos): toque para ouvir. É o último cartão da
@@ -1260,8 +1471,8 @@ const rowBtn = {
 function HelpCard(c: Catalog) {
   return (
     <div class="card stack" style={{ '--gap': '12px', flex: '1 0 auto' }}>
-      {/* Título e instrução na mesma linha: o cartão fica baixo e as colunas terminam juntas. */}
-      <div class="row base wrapx" style={{ '--gap': '6px 12px', justifyContent: 'space-between' }}>
+      {/* Título e, logo abaixo, a instrução: como os outros cartões da tela. */}
+      <div class="stack" style={{ '--gap': '4px' }}>
         <div class="h3" style={{ color: '#fff' }}>
           Se travar, é só pedir
         </div>
@@ -1287,7 +1498,7 @@ function HelpCard(c: Catalog) {
             <Icon name="speaker" size={18} extra={{ style: { color: '#FFD27A', flex: 'none', marginTop: '2px' } }} />
             <span class="stack" style={{ '--gap': '2px', minWidth: '0' }}>
               <b style={{ fontSize: '.95rem' }}>{h.en}</b>
-              <span class="xs" style={READ}>
+              <span class="xs" style={{ ...READ, color: '#EEF2F9', fontWeight: '600' }}>
                 {h.pt}
               </span>
             </span>
@@ -1306,11 +1517,8 @@ function LobbyAside(c: Catalog, start: ComponentChildren) {
   const sessions = kept.slice(0, 4);
   const totalMin = Math.round(kept.reduce((n, x) => n + x.secs, 0) / 60);
   const totalMine = kept.reduce((n, x) => n + x.turns.filter((t) => t.who === 'me').length, 0);
-  const totals: [number, string, string][] = [
-    [kept.length, 'conversa guardada', 'conversas guardadas'],
-    [totalMin, 'minuto de conversa', 'minutos de conversa'],
-    [totalMine, 'fala sua', 'falas suas'],
-  ];
+  // O total do que ficou guardado, numa linha sob o título do cartão.
+  const totals = `${kept.length} ${kept.length === 1 ? 'conversa' : 'conversas'} · ${totalMin} min no total · ${totalMine} ${totalMine === 1 ? 'fala sua' : 'falas suas'}`;
   return (
     <div style={{ flex: '1', minHeight: '0', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
       {start}
@@ -1351,10 +1559,17 @@ function LobbyAside(c: Catalog, start: ComponentChildren) {
         </div>
       </div>
       <div class="stack" style={{ '--gap': '12px', padding: '12px 16px 18px', flex: '1 0 auto' }}>
-        {/* Último cartão da coluna: termina junto com a coluna da esquerda, os totais no pé. */}
-        <div class="card stack" style={{ '--gap': '10px', flex: '1 0 auto' }}>
-          <div class="h3" style={{ color: '#fff' }}>
-            Suas últimas conversas
+        {/* Último cartão da coluna: termina junto com a coluna da esquerda. */}
+        <div class="card stack" style={{ '--gap': '14px', flex: '1 0 auto' }}>
+          <div class="stack" style={{ '--gap': '6px' }}>
+            <div class="h3" style={{ color: '#fff' }}>
+              Suas últimas conversas
+            </div>
+            {sessions.length ? (
+              <span class="xs" style={READ}>
+                {totals}
+              </span>
+            ) : null}
           </div>
           {sessions.length ? (
             sessions.map((x) => {
@@ -1374,10 +1589,25 @@ function LobbyAside(c: Catalog, start: ComponentChildren) {
                       {`${dayFmt.format(x.at).replace('.', '')} · ${assistant(c, x.assistant).name} · ${fmt(x.secs)} · ${mineN} ${mineN === 1 ? 'fala sua' : 'falas suas'}`}
                     </span>
                   </span>
-                  <span class="xs" style={{ ...READ, color: '#FFD27A', fontWeight: '800', flex: 'none' }}>
+                  {/* Um selo branco contornado, sem disputar cor com o botão laranja de começar. */}
+                  <span
+                    class="xs"
+                    style={{
+                      ...READ,
+                      color: '#fff',
+                      fontWeight: '800',
+                      flex: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px 4px 12px',
+                      borderRadius: '999px',
+                      border: '1.5px solid rgba(255, 255, 255, .4)',
+                    }}
+                  >
                     Relatório
+                    <Icon name="next" size={14} />
                   </span>
-                  <Icon name="next" size={16} extra={{ style: { color: '#FFD27A', flex: 'none' } }} />
                 </button>
               );
             })
@@ -1386,33 +1616,6 @@ function LobbyAside(c: Catalog, start: ComponentChildren) {
               {`Quando você terminar a primeira conversa com ${the(A)}, o relatório fica guardado aqui.`}
             </div>
           )}
-          {sessions.length ? (
-            // O total do que ficou guardado, no pé do cartão.
-            <div
-              style={{
-                marginTop: 'auto',
-                paddingTop: '2px',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                gap: '8px',
-              }}
-            >
-              {totals.map(([n, one, many]) => (
-                <div
-                  key={many}
-                  class="stack"
-                  style={{ ...rowBtn, '--gap': '2px', padding: '10px 12px', background: 'transparent' }}
-                >
-                  <span class="num" style={{ color: '#fff', fontSize: '1.5rem' }}>
-                    {n}
-                  </span>
-                  <span class="xs" style={READ}>
-                    {n === 1 ? one : many}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
         </div>
       </div>
     </div>
@@ -1531,7 +1734,8 @@ export default function Maggie({ q }: ScreenProps) {
     </div>
   ) : (
     <>
-      <div style={{ padding: '0 16px 12px' }}>{MicStage(c, m)}</div>
+      {/* No lobby a foto ganha um respiro sob o topo (o selo "Modo demo" não encosta nela). */}
+      <div style={{ padding: inCall ? '0 16px 12px' : '10px 16px 14px' }}>{MicStage(c, m)}</div>
       {inCall ? talk : <div class="wrap">{lobby?.setup}</div>}
     </>
   );

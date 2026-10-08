@@ -12,7 +12,7 @@
 // one-line rows, and on desktop the scene and the help phrases move to a sticky side column.
 import type { Ebook } from '@tie/shared/content/schema';
 import { assistantThe, getAssistant } from '@tie/shared/domain/assist';
-import { activator, Btn, uiConfig } from '@tie/ui';
+import { activator, Btn, Icon, uiConfig } from '@tie/ui';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { say } from '../../core/speech';
 import { catalog, gameEvent, state } from '../../store';
@@ -34,6 +34,8 @@ interface LeadState {
 
 /** The scene's speaker (her voice profile is Maggie's: aka Margaret). */
 const HER = 'Margaret';
+const SCENE = 'Você toca a campainha da casa dos Woods, em Beacon. Margaret Woods abre a porta. Ela não conhece você.';
+const MISSION = 'cumprimentar, dizer o seu nome, responder quando ela perguntar como você está, e se despedir.';
 /** quiz_hit scope of the right answers: `lead-eb{n}:{turn}`, once per turn a day. */
 const scopeOf = (ebook: number) => `lead-eb${ebook}`;
 
@@ -42,22 +44,25 @@ function fresh(eb: Ebook): LeadState {
   return { msgs: [{ who: 'her', en: first.en, pt: first.pt }], turn: 0, fix: [], typing: false, done: false };
 }
 
-/** Margaret's bubbles: a real speech card (wide enough to read as the scene's lead), not a tag. */
-const HER_BUB = { border: '1.5px solid var(--line)', minWidth: 'min(100%, 300px)', width: 'fit-content' };
+/**
+ * Margaret's bubbles on a phone: as wide as the answer rows under them (a bubble of arbitrary width
+ * did not line up with anything), with the speech-bubble corner kept.
+ */
+const HER_BUB = { border: '1.5px solid var(--line)', width: '100%', maxWidth: '100%' };
 /** In the desktop chat panel (a white card) her bubbles sit on cream instead. */
 const HER_BUB_PANEL = {
   ...HER_BUB,
-  background: 'var(--cream)',
-  border: '0',
-  minWidth: 'min(100%, 380px)',
+  background: '#fff',
   padding: '14px 18px',
 };
+/** Desktop: the talk sits on a soft surface that fills the panel down to the answers (a chat window). */
+const TALK_AREA = { flex: '1', background: '#FBF7EE', borderRadius: '16px', padding: '14px' };
 const ME_BUB_PANEL = { padding: '14px 18px' };
 /**
- * Desktop chat panel height: the screen under the page head (wrap padding 22 + 44, head ~56, gap 14),
- * capped so a tall screen does not get an empty panel, and never below what a turn needs.
+ * The option letters on a soft blue square in dark blue: visible on the white rows (tie.css's cream
+ * barely showed) without the weight of solid navy squares beside the answer text.
  */
-const PANEL_MIN_H = 'clamp(520px, calc(100dvh - 136px), 800px)';
+const OPT_KEY = { background: 'var(--blueT)', color: 'var(--blueD)' };
 
 function Bubble({ m, panel = false }: { m: Msg; panel?: boolean }) {
   const me = m.who === 'me';
@@ -165,20 +170,49 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
   const open = !L.done && !L.typing && !!turn;
 
   const scene = (
-    <div class="card navy stack" style={{ '--gap': '8px', padding: '16px' }}>
+    <div class="card navy stack" style={{ '--gap': '10px', padding: desk ? '20px' : '16px' }}>
+      {/* Desktop: the scene opens the chat panel; this card keeps the mission and the progress. */}
       <div class="lbl" style={{ color: 'var(--onNavy)' }}>
-        A cena
+        {desk ? 'Sua missão' : 'A cena'}
       </div>
-      <p class="p">
-        Você toca a campainha da casa dos Woods, em Beacon. Margaret Woods abre a porta. Ela não conhece você.
-      </p>
-      <p class="sm" style={{ margin: '0' }}>
-        Sua missão: cumprimentar, dizer o seu nome, responder quando ela perguntar como você está, e se despedir.
+      {desk ? null : (
+        <p class="p" style={{ lineHeight: '1.55', margin: '0' }}>
+          {SCENE}
+        </p>
+      )}
+      <p class={desk ? 'p' : 'sm'} style={{ margin: '0', lineHeight: '1.55' }}>
+        {desk ? MISSION.charAt(0).toUpperCase() + MISSION.slice(1) : `Sua missão: ${MISSION}`}
       </p>
       <div class="row mt4" style={{ '--gap': '10px' }}>
-        {/* An orange fill on a lighter track: tie.css's blue on navy3 barely showed on the navy card. */}
-        <div class="bar or grow" style={{ background: 'rgba(255,255,255,.3)' }}>
-          <i style={{ width: `${turns ? Math.round((answered / turns) * 100) : 0}%` }} />
+        {/* One segment per line of hers (a plain track read as a dull grey bar on the navy card):
+            answered ones filled orange, the one being answered an empty segment with a bright ring
+            (a filled one read as already answered beside "0 de 5"), the rest a faint outline. */}
+        <div
+          class="row grow"
+          role="progressbar"
+          aria-label="Falas respondidas"
+          aria-valuemin={0}
+          aria-valuemax={turns}
+          aria-valuenow={answered}
+          style={{ '--gap': '5px' }}
+        >
+          {eb.lead.map((_, i) => (
+            <span
+              key={i}
+              style={{
+                flex: '1 1 0',
+                height: '8px',
+                borderRadius: '999px',
+                background: i < answered ? 'var(--orange)' : 'transparent',
+                boxShadow:
+                  i < answered
+                    ? 'none'
+                    : i === answered && !L.done
+                      ? 'inset 0 0 0 2px #fff'
+                      : 'inset 0 0 0 1.5px rgba(255,255,255,.4)',
+              }}
+            />
+          ))}
         </div>
         <span class="xs" style={{ fontWeight: '800', color: '#fff', whiteSpace: 'nowrap' }}>
           {`${answered} de ${turns} falas`}
@@ -199,20 +233,37 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
             type="button"
             class="chip"
             style={{
-              justifyContent: 'space-between',
               gap: '12px',
               width: '100%',
-              padding: '0 16px',
-              borderRadius: '14px',
+              padding: '0 16px 0 8px',
               textAlign: 'left',
-              // A tint, not the white of the answers above: these ask for help, they do not answer.
-              background: 'var(--blueT)',
-              borderColor: 'transparent',
+              // Round pills with a "repeat" mark, not the lettered square rows of the answers: these
+              // ask her to say her line again (she does, slower).
+              background: '#fff',
+              borderColor: 'var(--line2)',
             }}
             onClick={activator(undefined, () => askHelp(h.en))}
           >
-            <b style={{ whiteSpace: 'nowrap' }}>{h.en}</b>
-            <span class="xs" style={{ textAlign: 'right' }}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: '30px',
+                height: '30px',
+                flex: 'none',
+                borderRadius: '50%',
+                background: 'var(--blueT)',
+                color: 'var(--blueD)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="repeat" size={17} />
+            </span>
+            <b class="grow" style={{ whiteSpace: 'nowrap' }}>
+              {h.en}
+            </b>
+            <span class="sm" style={{ textAlign: 'right', fontWeight: '600', lineHeight: '1.3' }}>
               {h.pt}
             </span>
           </button>
@@ -221,13 +272,32 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
     </div>
   ) : null;
 
+  // Desktop: the stage direction opens the panel as a left-aligned note (an orange rule on its edge),
+  // and the talk follows right under it, then the answers: no gap anywhere in the panel.
   const chat = (
     <div class="stack" style={{ '--gap': '10px' }}>
+      {desk ? (
+        <div
+          class="stack"
+          style={{
+            '--gap': '4px',
+            padding: '12px 16px',
+            borderRadius: '0 14px 14px 0',
+            borderLeft: '4px solid var(--orange)',
+            background: 'var(--orangeT)',
+          }}
+        >
+          <span class="lbl or">A cena</span>
+          <span class="p" style={{ lineHeight: '1.55', color: 'var(--navy)', fontWeight: '500' }}>
+            {SCENE}
+          </span>
+        </div>
+      ) : null}
       {L.msgs.map((m, i) => (
         <Bubble key={i} m={m} panel={desk} />
       ))}
       {L.typing ? (
-        <div class="thinking" style={desk ? { background: 'var(--cream)' } : { border: '1.5px solid var(--line)' }}>
+        <div class="thinking" style={desk ? { background: '#fff' } : { border: '1.5px solid var(--line)' }}>
           <i />
           <i />
           <i />
@@ -242,7 +312,9 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
         <div class="lbl">Responda em voz alta ou toque</div>
         {turn.opts.map((o, i) => (
           <button key={`${L.turn}-${i}`} type="button" class="opt" onClick={activator(undefined, () => send(i))}>
-            <span class="key">{String.fromCharCode(65 + i)}</span>
+            <span class="key" style={OPT_KEY}>
+              {String.fromCharCode(65 + i)}
+            </span>
             <span class="grow">
               <span class="en" style={{ display: 'block', fontSize: '1.02rem' }}>
                 {sub(o.en, name)}
@@ -276,13 +348,30 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
     </div>
   ) : null;
 
+  // The same scene, spoken for real: the Mic mission it prepares for (both layouts; on a phone it
+  // closes the page, under the help phrases).
+  const micCard = L.done ? null : (
+    <div class="card stack" style={{ '--gap': '8px', padding: '16px' }}>
+      <div class="lbl">Falando de verdade</div>
+      <p class="sm" style={{ margin: '0' }}>
+        {`Depois do roteiro, faça a mesma cena por voz com ${the}, no Mic.`}
+      </p>
+      <div>
+        <Btn label="Treinar no Mic" kind="ghost compact" go="maggie?modo=missao&m=gente" icon="mic" />
+      </div>
+    </div>
+  );
   if (desk) {
-    // Desktop: the conversation is a chat panel as tall as the screen allows (a chat window, not a
-    // short card over an empty main), the answers at its foot, the scene and the help phrases in a
-    // side column beside it.
+    // Desktop: the conversation is a chat panel (scene note and talk at the top, the answers at its
+    // foot), the mission, the help phrases and the Mic card in a sticky side column.
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: '24px', alignItems: 'start' }}>
-        <div class="card stack" style={{ '--gap': '16px', padding: '20px', minHeight: PANEL_MIN_H }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: '24px', alignItems: 'start' }}>
+        {/* At least as tall as the screen under the head, the answers kept at its foot like a chat
+            window (a short panel left a large empty band below both columns). */}
+        <div
+          class="card stack"
+          style={{ '--gap': '16px', padding: '20px', minHeight: 'max(520px, calc(100dvh - 150px))' }}
+        >
           <div class="row" style={{ '--gap': '10px' }}>
             <span class="av-ini" aria-hidden="true" style={{ '--s': '36px', background: 'var(--orange)' }}>
               {HER.charAt(0)}
@@ -293,8 +382,8 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
             </span>
           </div>
           <div style={{ height: '1.5px', background: 'var(--line)' }} />
-          {chat}
-          <div class="stack" style={{ '--gap': '14px', marginTop: 'auto', paddingTop: '4px' }}>
+          <div style={TALK_AREA}>{chat}</div>
+          <div class="stack" style={{ '--gap': '14px' }}>
             {options}
             {end}
           </div>
@@ -302,6 +391,7 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
         <div class="stack" style={{ '--gap': '14px', position: 'sticky', top: '16px' }}>
           {scene}
           {helpBox}
+          {micCard}
         </div>
       </div>
     );
@@ -313,6 +403,7 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
       {options}
       {helpBox}
       {end}
+      {micCard}
     </>
   );
 }

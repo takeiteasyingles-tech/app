@@ -47,85 +47,81 @@ function K({ children, color }: { children: string; color: string }) {
 }
 
 /**
- * Book vs street, with "Não está no livro" instead of a bare dash. Phone: the prototype's .cmp label
- * column ("No livro" / "Na rua") and the why as a quieter line under a divider. Desktop: one row per
- * tip, three columns.
+ * Book vs street. Each card leads with what people say ("Na rua", the phrase to learn), then the
+ * textbook form on one compact line ("No livro", or "não aparece no livro" in muted italics instead
+ * of a bare dash), then the why as plain reading text under a hairline. Desktop: a two-column grid,
+ * so no line runs across the whole main and the rows (and the last row) end level.
  */
 function Real({ eb, desk }: { eb: Ebook; desk: boolean }) {
   return (
     <>
-      <div class="stack" style={{ '--gap': '10px' }}>
+      <div
+        style={
+          desk
+            ? { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px 14px' }
+            : { display: 'grid', gap: '10px' }
+        }
+      >
         {eb.real.map((r, i) => {
           const none = NOT_IN_BOOK.test(r.book);
-          const book = none ? (
-            <span class="p" style={{ fontStyle: 'italic', color: 'var(--muted)' }}>
-              Não está no livro
-            </span>
-          ) : (
-            <span class="p">{r.book}</span>
-          );
-          if (desk) {
-            // Desktop: one row per tip, book | street | why side by side, so every card is only as
-            // tall as its longest column (no 2-column grid stretching short cards to a neighbour's
-            // height).
-            return (
-              <div
-                key={i}
-                class="card stack"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1.35fr)',
-                  gap: '6px 24px',
-                  padding: '16px 20px',
-                  alignItems: 'start',
-                }}
-              >
-                <div class="stack" style={{ '--gap': '4px' }}>
-                  <K color="var(--muted)">No livro</K>
-                  {book}
-                </div>
-                <div class="stack" style={{ '--gap': '4px' }}>
-                  <K color="var(--orange)">Na rua</K>
-                  <span class="en" style={{ fontSize: '1.12rem', textWrap: 'pretty' }}>
-                    {r.street}
-                  </span>
-                </div>
-                <div
-                  class="sm"
-                  style={{
-                    alignSelf: 'stretch',
-                    paddingLeft: '20px',
-                    borderLeft: '1.5px solid var(--line2)',
-                    color: 'var(--navy2)',
-                  }}
-                >
-                  {r.why}
-                </div>
-              </div>
-            );
-          }
+          // Alternatives ("Bye · See you · Take care") on one line, split by an orange "·" (each kept
+          // whole), so they read as options of one phrase and not as an unstructured list.
+          const street = r.street.split(' · ');
           return (
-            <div key={i} class="card stack" style={{ '--gap': '10px', padding: '14px 16px' }}>
-              <div class="cmp" style={{ gridTemplateColumns: 'max-content 1fr', gap: '6px 12px' }}>
-                <K color="var(--muted)">No livro</K>
-                {book}
+            <div
+              key={i}
+              class="card stack"
+              style={{
+                '--gap': '8px',
+                padding: desk ? '18px 20px' : '14px 16px',
+              }}
+            >
+              <div class="stack" style={{ '--gap': '3px' }}>
                 <K color="var(--orange)">Na rua</K>
-                <span class="en" style={{ fontSize: '1.12rem' }}>
-                  {r.street}
+                <span class="en" style={{ fontSize: '1.14rem', lineHeight: '1.4', textWrap: 'pretty' }}>
+                  {street.map((x, j) => (
+                    <span key={x}>
+                      {j ? (
+                        <span
+                          aria-hidden="true"
+                          style={{ color: 'var(--orange)', fontWeight: '900', margin: '0 .4em' }}
+                        >
+                          ·
+                        </span>
+                      ) : null}
+                      {j ? <span class="sr">{' ou '}</span> : null}
+                      <span style={{ whiteSpace: x.length <= 28 ? 'nowrap' : undefined }}>{x}</span>
+                    </span>
+                  ))}
                 </span>
               </div>
-              {/* The why: a step below the phrases (smaller, in the muted navy of notes, after a
-                  divider), and right under them in every card, so short cards keep the same rhythm. */}
-              <div
-                class="sm"
+              <div class="row wrapx" style={{ '--gap': '4px 10px' }}>
+                <K color="var(--muted)">No livro</K>
+                {none ? (
+                  // Plain muted words (a pill on three cards read as noise).
+                  <span class="sm" style={{ fontStyle: 'italic', fontWeight: '600' }}>
+                    não aparece no livro
+                  </span>
+                ) : (
+                  <span class="p" style={{ color: 'var(--navy2)', fontSize: '.98rem', fontWeight: '600' }}>
+                    {r.book}
+                  </span>
+                )}
+              </div>
+              <p
+                class="p"
                 style={{
-                  paddingTop: '10px',
-                  borderTop: '1.5px solid var(--line2)',
-                  color: 'var(--navy2)',
+                  fontSize: '.98rem',
+                  lineHeight: '1.55',
+                  color: 'var(--ink)',
+                  margin: '0',
+                  paddingTop: '8px',
+                  borderTop: '1px solid var(--line)',
+                  textWrap: 'pretty',
                 }}
               >
                 {r.why}
-              </div>
+              </p>
             </div>
           );
         })}

@@ -1,4 +1,4 @@
-﻿// U4-hoje functional verification: Hoje (#/inicio), Conquistas (#/conquistas) and Revisão (#/revisao)
+// U4-hoje functional verification: Hoje (#/inicio), Conquistas (#/conquistas) and Revisão (#/revisao)
 // driven against the real Worker (slot E2E_SLOT), on mobile and desktop, and compared with the
 // prototype (prototipo/js/screens/inicio.js + conta.js) fed the very same fixture state.
 //   npm run e2e -- --slot 34 specs/U4-hoje.spec.ts
@@ -733,7 +733,7 @@ test.describe('Conquistas (#/conquistas)', () => {
 
   test.describe('desktop', () => {
     test.use(DESKTOP);
-    test('h1, sidebar entry active, no topbar', async ({ page }) => {
+    test('h1, sidebar entry active, no topbar', async ({ page, browser }) => {
       await login(page, 'ana.s10@parity.test');
       await page.locator('aside.side a[href="#/conquistas"]').click();
       await expect(page).toHaveURL(/#\/conquistas$/);
@@ -742,6 +742,18 @@ test.describe('Conquistas (#/conquistas)', () => {
       await expect(page.locator('aside.side a.nav.on')).toHaveText(/Conquistas/);
       await expect(page.locator('.badges .medal')).toHaveCount(14);
       await assertNamedControls(page);
+      // Round 7: desktop medals and points table = the prototype on desktop (same fixture state; one
+      // review since then cannot unlock a medal).
+      const d = await conquistasDigest(page);
+      const pctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      const pp = await protoPage(pctx, userState('ep1-s10'), 'conquistas');
+      const pd = await conquistasDigest(pp);
+      const ph1 = norm(await pp.locator('h1.h1').first().textContent());
+      await pctx.close();
+      expect(d.medals).toEqual(pd.medals);
+      expect(d.medalLbl).toBe(pd.medalLbl);
+      expect(d.earn).toBe(pd.earn);
+      expect(ph1).toBe('Conquistas');
     });
   });
 });
@@ -886,7 +898,16 @@ async function assertNoHorizontalOverflow(page: Page, what: string) {
     const de = document.documentElement;
     if (de.scrollWidth > window.innerWidth + 1) out.push(`document ${de.scrollWidth} > ${window.innerWidth}`);
     for (const el of Array.from(document.querySelectorAll<HTMLElement>('.scroll'))) {
-      if (el.scrollWidth > el.clientWidth + 1) out.push(`.scroll ${el.scrollWidth} > ${el.clientWidth}`);
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push(`.scroll ${el.scrollWidth} > ${el.clientWidth}`);
+        // Name the innermost elements that stick out (round 7: which part of the screen overflows).
+        const right = el.getBoundingClientRect().right;
+        const wide = Array.from(el.querySelectorAll<HTMLElement>('*')).filter(
+          (x) => x.getBoundingClientRect().right > right + 1 && !x.querySelector('*'),
+        );
+        for (const x of wide.slice(0, 4))
+          out.push(`  ${x.tagName.toLowerCase()}.${String(x.className).split(' ').join('.')} → ${Math.round(x.getBoundingClientRect().right)}px`);
+      }
     }
     return out;
   });
@@ -1476,6 +1497,264 @@ test.describe('round 6', () => {
     await page.reload();
     await expect(plan).toContainText(/Batida\./);
     await expect(page.locator('.ring')).toContainText('100%');
+  });
+});
+
+// =====================================================================================
+// Round 7: route guards on the three routes, long unbroken card text, session lost mid-review
+// =====================================================================================
+
+test.describe('round 7', () => {
+  test('guards: signed out → entrar, no profile → cadastro, for inicio/revisao/conquistas', async ({
+    page,
+    browser,
+  }) => {
+    for (const r of ['inicio', 'revisao', 'conquistas']) {
+      await page.goto(`/#/${r}`);
+      await expect(page).toHaveURL(/#\/entrar$/, { timeout: 15_000 });
+      await expect(page.locator('.now-card, button.flash, .badges')).toHaveCount(0);
+    }
+    // The APIs the screens read refuse an anonymous caller.
+    const anon = await browser.newContext();
+    const origin = new URL(page.url()).origin;
+    for (const p of ['/api/me/state', '/api/srs/queue']) {
+      expect((await anon.request.get(`${origin}${p}`)).status(), p).toBe(401);
+    }
+    await anon.close();
+    // The fixture's "fresh" user has an account and no profile yet (onboarding step 1).
+    await page.goto('/#/entrar');
+    await page.locator('#login-email').fill('bruno@parity.test');
+    await page.locator('#login-pass').fill(FIXTURE_PASSWORD);
+    await page
+      .getByRole('button', { name: /^Entrar$/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/#\/cadastro\/\d+$/, { timeout: 20_000 });
+    for (const r of ['inicio', 'revisao', 'conquistas']) {
+      await page.goto(`/#/${r}`);
+      await expect(page).toHaveURL(/#\/cadastro\/\d+$/, { timeout: 15_000 });
+      await expect(page.locator('.now-card, button.flash, .badges')).toHaveCount(0);
+    }
+    const w = watches.get(page);
+    if (w) w.errors = w.errors.filter((e) => !/status of 401/.test(e));
+  });
+
+  test('mobile: long unbroken card text never overflows; Hoje counts the new cards; session lost mid-review → entrar', async ({
+    page,
+    context,
+  }) => {
+    await signupFresh(page, 'Lia');
+    const long = `Supercalifragilistic${'x'.repeat(140)}`;
+    const add = await pageFetch(page, '/api/srs/cards', {
+      method: 'POST',
+      body: {
+        cards: [
+          { en: long, pt: `tradução ${'y'.repeat(150)}`, scene: `Extra · ${'z'.repeat(100)}`, source: 'extra' },
+          { en: 'short card', pt: 'cartão curto', scene: 'Mic · teste', source: 'mic' },
+        ],
+      },
+    });
+    expect(add.status, add.text).toBe(200);
+    // Hoje: the plan gains "Rebobinar 2 cartões" → revisao (same wording as prototipo guide.plan).
+    await page.reload();
+    await expect(page.locator('.plan .task[href="#/revisao"]')).toContainText('Rebobinar 2 cartões');
+    await expect(page.locator('nav.tabbar a[href="#/revisao"] .badge')).toHaveText('2');
+    await page.goto('/#/revisao');
+    const flash = page.locator('button.flash');
+    await expect(flash).toBeVisible();
+    // Equal due times: either card may come first. Grade the short one away ("Bom") if it leads.
+    if (norm(await flash.locator('.h1').textContent()) === 'short card') {
+      await flash.click();
+      const g = page.waitForResponse((r) => /\/api\/srs\/cards\/[^/]+\/grade$/.test(r.url()));
+      await page.locator('button.card.stack.tc').nth(2).click();
+      expect((await g).status()).toBe(200);
+    }
+    await expect(flash.locator('.h1')).toHaveText(long);
+    const overflow = async (what: string) => {
+      try {
+        await assertNoHorizontalOverflow(page, what);
+      } catch (e) {
+        expect.soft(String((e as Error).message), what).toBe('');
+      }
+    };
+    await overflow('revisao long front');
+    await flash.click();
+    await expect(flash.locator('.p-read')).toBeVisible();
+    await overflow('revisao long back');
+    // The flash card stays inside the viewport.
+    const box = await flash.boundingBox();
+    expect.soft((box?.x ?? 0) + (box?.width ?? 0), 'flash card right edge').toBeLessThanOrEqual(375 + 1);
+
+    // Session gone (cookie cleared / expired): grading sends the learner to entrar, no crash.
+    await context.clearCookies();
+    const resp = page.waitForResponse((r) => /\/api\/srs\/cards\/[^/]+\/grade$/.test(r.url()));
+    await page.locator('button.card.stack.tc').nth(2).click();
+    expect((await resp).status()).toBe(401);
+    await expect(page).toHaveURL(/#\/entrar$/, { timeout: 15_000 });
+    await expect(page.locator('#fxroot .pts-toast')).toHaveCount(0);
+    const w = watches.get(page);
+    if (w) w.errors = w.errors.filter((e) => !/status of 401/.test(e));
+  });
+});
+
+// =====================================================================================
+// Round 8: catalog failure on Revisão and Conquistas (retry card, then the screen), desktop level
+// ladder named for assistive tech
+// =====================================================================================
+
+test.describe('round 8', () => {
+  test.describe('desktop', () => {
+    test.use(DESKTOP);
+    test('catalog failure on Revisão/Conquistas: retry card recovers; level ladder nodes are named', async ({
+      page,
+    }) => {
+      await signupFresh(page, 'Rita');
+      for (const [route, ready] of [
+        ['revisao', 'Seus cartões começam no episódio.'],
+        ['conquistas', 'Como ganhar pontos'],
+      ] as const) {
+        await page.route('**/catalog.json', (r) =>
+          r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'unavailable' }) }),
+        );
+        await page.goto(`/#/${route}`);
+        await page.reload();
+        await expect(page.getByText('Não deu para carregar o conteúdo.')).toBeVisible();
+        await page.unroute('**/catalog.json');
+        await page.getByRole('button', { name: 'Tentar de novo' }).click();
+        await expect(page.getByText(ready).first()).toBeVisible();
+      }
+      // Desktop level ladder: every node has a spoken label, the current one says so.
+      const nodes = page.locator('.card.navy [role="img"][aria-label^="Nível "]');
+      expect(await nodes.count()).toBeGreaterThanOrEqual(2);
+      await expect(page.locator('.card.navy [role="img"][aria-label$="· seu nível"]')).toHaveCount(1);
+      await assertNamedControls(page);
+      const w = watches.get(page);
+      if (w) w.errors = w.errors.filter((e) => !/status of 503/.test(e));
+    });
+  });
+});
+
+// =====================================================================================
+// Round 9: Hoje greeting row = prototype, medal state for assistive tech, double-click grade sends
+// one request, card capture limits, document security headers
+// =====================================================================================
+
+test.describe('round 9', () => {
+  test('mobile: Hoje greeting row (level pill, Temporada · CEFR, avatar) = prototype; medals expose their state', async ({
+    page,
+    browser,
+  }) => {
+    // ana.s8: third sign-in in a full run (RL_AUTH 5/60s per ip+email).
+    await login(page, 'ana.s8@parity.test');
+    const greet = async (p: Page) =>
+      p.evaluate(() => {
+        const n = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
+        const h = document.querySelector('h1.h1');
+        const row = h?.parentElement?.querySelector('.row.mt8');
+        return { h1: n(h?.textContent), row: n(row?.textContent), pill: !!row?.querySelector('.levelpill') };
+      });
+    const d = await greet(page);
+    expect(d.pill).toBe(true);
+    expect(d.row).toMatch(/Temporada \d+ · [ABC][12]/);
+    const avatar = page
+      .getByRole('button', { name: 'Perfil' })
+      .or(page.getByRole('link', { name: 'Perfil' }))
+      .first();
+    await expect(avatar).toBeVisible();
+    const pctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+    const pp = await protoPage(pctx, userState('ep1-s8'), 'inicio');
+    const pd = await greet(pp);
+    await pctx.close();
+    expect(d).toEqual(pd);
+
+    // Conquistas: each medal's spoken label says earned/locked, in agreement with .locked.
+    await page.goto('/#/conquistas');
+    await expect(page.locator('.badges .medal')).toHaveCount(14);
+    const ms = await page
+      .locator('.badges .medal')
+      .evaluateAll((els) => els.map((e) => [e.classList.contains('locked'), e.getAttribute('aria-label') ?? ''] as const));
+    for (const [locked, label] of ms) {
+      expect(label).toMatch(locked ? /\. Bloqueada\.$/ : /\. Conquistada\.$/);
+    }
+  });
+
+  test('mobile: a double-click on a grade sends one request and awards once', async ({ page }) => {
+    await signupFresh(page, 'Nina');
+    const add = await pageFetch(page, '/api/srs/cards', {
+      method: 'POST',
+      body: {
+        cards: [
+          { en: 'double one', pt: 'um', scene: 'Extra · teste', source: 'extra' },
+          { en: 'double two', pt: 'dois', scene: 'Extra · teste', source: 'extra' },
+          { en: 'double three', pt: 'três', scene: 'Extra · teste', source: 'extra' },
+        ],
+      },
+    });
+    expect(add.status, add.text).toBe(200);
+    const pts0 = (await apiState(page)).game.points;
+    await page.goto('/#/revisao');
+    await page.reload();
+    const flash = page.locator('button.flash');
+    await expect(flash).toBeVisible();
+    const posts: string[] = [];
+    page.on('request', (r) => {
+      if (/\/api\/srs\/cards\/[^/]+\/grade$/.test(r.url()) && r.method() === 'POST') posts.push(r.url());
+    });
+    await flash.click();
+    const bom = page.locator('button.card.stack.tc').nth(2);
+    await expect(bom).toBeVisible();
+    await bom.dblclick();
+    await page.waitForTimeout(800);
+    // The second click lands on the next card's face (grades gone), so it flips at most: one grade.
+    expect(posts.length, posts.join(',')).toBe(1);
+    await expect(page.locator('header.topbar')).toContainText('2 cartões hoje');
+    expect((await apiState(page)).game.points).toBe(pts0 + 2);
+  });
+
+  test('card capture limits: oversize text and oversize batches are refused; grade needs POST', async ({ page }) => {
+    await signupFresh(page, 'Olga');
+    const big = await pageFetch(page, '/api/srs/cards', {
+      method: 'POST',
+      body: { cards: [{ en: 'a'.repeat(20_000), pt: 'b', scene: 'Extra · x', source: 'extra' }] },
+    });
+    expect(big.status, 'one 20k-char card').toBeGreaterThanOrEqual(400);
+    expect(big.status).toBeLessThan(500);
+    const many = await pageFetch(page, '/api/srs/cards', {
+      method: 'POST',
+      body: {
+        cards: Array.from({ length: 2000 }, (_, i) => ({ en: `bulk ${i}`, pt: `lote ${i}`, scene: 'Extra · x', source: 'extra' })),
+      },
+    });
+    expect(many.status, 'a 2000-card batch').toBeGreaterThanOrEqual(400);
+    expect(many.status).toBeLessThan(500);
+    const badSource = await pageFetch(page, '/api/srs/cards', {
+      method: 'POST',
+      body: { cards: [{ en: 'x', pt: 'y', scene: 'Extra · x', source: 'admin' }] },
+    });
+    expect(badSource.status, 'unknown source').toBe(400);
+    const st = await apiState(page);
+    expect(st.deck.length, 'nothing stored by refused captures').toBe(0);
+    const get = await pageFetch(page, '/api/srs/cards/whatever/grade');
+    expect(get.status).not.toBe(200);
+    const w = watches.get(page);
+    if (w) w.errors = w.errors.filter((e) => !/status of (400|404|405|413)/.test(e));
+  });
+
+  test('document security headers: strict CSP (no inline/eval scripts), nosniff, no framing', async ({ page }) => {
+    const r = await page.request.get('/');
+    expect(r.status()).toBe(200);
+    const h = r.headers();
+    const csp = h['content-security-policy'] ?? '';
+    expect(csp, 'CSP header').not.toBe('');
+    const scriptSrc = (csp.split(';').find((d) => /^\s*script-src\s/.test(d)) ?? csp.match(/default-src[^;]*/)?.[0]) || '';
+    expect(scriptSrc, 'script-src').not.toMatch(/'unsafe-inline'|'unsafe-eval'|\*/);
+    expect(csp).toMatch(/frame-ancestors 'none'|frame-ancestors 'self'/);
+    expect(csp).toMatch(/object-src 'none'/);
+    expect(h['x-content-type-options']).toBe('nosniff');
+    // The screens' API responses are not cacheable by shared caches.
+    await login(page, 'ana.s8@parity.test');
+    const st = await page.request.get('/api/me/state');
+    expect(st.headers()['cache-control'] ?? '', '/api/me/state cache-control').toMatch(/no-store|private/);
   });
 });
 

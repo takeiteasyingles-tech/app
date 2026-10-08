@@ -17,31 +17,65 @@ import { state } from '../../store';
 import { isLegalDoc, LegalLink, LegalSheet } from './legal';
 import { afterAuth, emailOk } from './session';
 import { TURNSTILE_ERROR, useTurnstile } from './turnstile';
+import './entrada.css';
 
 const HERO_IMG = 'url(/img/login.webp)';
-/** Desktop: the photo fills the left side and the copy sits on the dark bottom of the tie.css gradient. */
-const HERO_DESKTOP = { backgroundImage: HERO_IMG, backgroundPosition: '62% 42%' };
 /**
- * Mobile: the logo tagline lands on the café's sign, so a navy veil keeps the top legible, and the
- * extra bottom padding keeps the subtitle clear of the card that overlaps the hero by 20px.
+ * Desktop: the photo fills the left side, framed on the café (its "Good Coffee" window lettering whole,
+ * the neighbour's "River & Oak" sign out of frame rather than cut) and the copy sits on the soft veil
+ * at its foot (entrada.css).
+ */
+const HERO_DESKTOP = { backgroundImage: HERO_IMG, backgroundPosition: '48% 42%' };
+/**
+ * Mobile: the whole photo across the top of the hero (the café's corner and its "Woods & Beans" sign in
+ * view), the logo on a light veil over its sky, and the headline starting where the photo melts into
+ * the navy below it (entrada.css), so no sign sits behind the copy and the place still reads. The
+ * bottom padding keeps the subtitle clear of the card that overlaps the hero by 20px.
  */
 const HERO_MOBILE = {
-  backgroundImage: `linear-gradient(rgba(10,30,63,.62), rgba(10,30,63,.18) 55%, rgba(10,30,63,0)), ${HERO_IMG}`,
-  backgroundPosition: 'center, 62% 42%',
-  backgroundSize: 'cover, cover',
+  backgroundImage: HERO_IMG,
+  backgroundPosition: 'center top',
+  backgroundSize: '100% auto',
+  backgroundRepeat: 'no-repeat',
+  justifyContent: 'flex-start',
+  paddingTop: '22px',
   paddingBottom: '46px',
 };
-/** Desktop: a roomier form column, so the card does not look undersized next to the photo. */
-const WRAP_DESKTOP = { width: '520px', padding: '40px' };
-const CARD_DESKTOP = { '--gap': '14px', padding: '32px 30px 26px' };
-/** The terms line at the size of .sm (not 13px .xs), so its two links read clearly, balanced on two lines. */
-const LEGAL_STYLE = { textWrap: 'balance', fontSize: '.875rem' };
-/** On a phone the subtitle breaks after its first sentence (balanced, with "de novo" and "A história" kept together). */
-const SUB_STYLE = { textWrap: 'balance' };
+/**
+ * Phone: the headline begins a little above the photo's foot (the picture is 2:3 of the width; the
+ * logo block above is about 72px tall).
+ */
+const H1_MOBILE = { color: '#fff', marginTop: 'max(20px, calc(66.6cqw - 104px))' };
+const H1_DESKTOP = { color: '#fff', marginTop: '16px' };
+/**
+ * Desktop: the form column is a full-height panel beside the photo (the split-screen login) in the app's
+ * cream, so it continues the rest of the app; the form, the way to sign up and the terms form one group
+ * centred in it, instead of a small card floating on cream or terms stranded at the panel's foot.
+ */
+const WRAP_DESKTOP = {
+  width: '540px',
+  padding: '40px 64px 32px',
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  background: 'var(--cream)',
+};
+const CARD_DESKTOP = {
+  '--gap': '16px',
+  margin: 'auto 0',
+  padding: '0',
+  border: '0',
+  borderRadius: '0',
+  background: 'transparent',
+};
+/** The terms line at the size of .sm (not 13px .xs) in a dark slate, so its two links read clearly. */
+const LEGAL_STYLE = { textWrap: 'pretty', fontSize: '.875rem', color: '#3C4357', marginTop: '2px' };
+const LEGAL_DESK = { ...LEGAL_STYLE, marginTop: '6px' };
+/** The way to sign up, under a hairline: a question and the button (no "ou" divider with one option). */
+const SIGNUP_ROW = { borderTop: '1.5px solid rgba(15,42,85,.11)', paddingTop: '16px', marginTop: '4px' };
+/** The welcome line under the heading. */
+const SUB_STYLE = { textWrap: 'pretty' };
 /** "Esqueci a senha" lines up with the field labels (tie.css gives .btn.link 4px side padding). */
 const LINK_FLUSH = { paddingLeft: '0', paddingRight: '0' };
-/** The "ou" rules as hairlines: --line (beige) at 1.5px read heavier than the rest of the card. */
-const DIVIDER = { '--line': 'rgba(15,42,85,.11)' };
 
 type Errs = { email?: string; pass?: string };
 
@@ -146,10 +180,13 @@ function LoginForm({ desk }: { desk: boolean }) {
 
   return (
     <div class="card formcard stack" style={desk ? CARD_DESKTOP : { '--gap': '12px' }} onFocusIn={ts.warm}>
-      <div>
-        <div class="h2">Entrar</div>
-        <p class="sm mt4" style={SUB_STYLE}>
-          Que bom ver você de{'\u00a0'}novo. A{'\u00a0'}história continua.
+      <div style={desk ? { marginBottom: '6px' } : undefined}>
+        <div class="h2" style={desk ? { fontSize: '1.9rem' } : undefined}>
+          Entrar
+        </div>
+        {/* Phone: the short form fits one line of the card (the full one broke after "de novo."). */}
+        <p class="sm mt4" style={desk ? { ...SUB_STYLE, fontSize: '1rem' } : SUB_STYLE}>
+          {desk ? 'Que bom ver você de novo. A história continua.' : 'Que bom ver você de novo.'}
         </p>
       </div>
       <label class="field">
@@ -187,23 +224,32 @@ function LoginForm({ desk }: { desk: boolean }) {
         </button>
       </div>
       <Btn label={busy ? 'Entrando…' : 'Entrar'} cls="block" dis={busy} onClick={() => void login()} />
-      <div class="divider" style={DIVIDER}>
-        ou
-      </div>
-      <Btn label="Criar conta grátis" kind="ghost" go="cadastro/1" cls="block" />
       <div ref={ts.ref} style={{ display: 'contents' }} />
-      <p class="xs tc" style={LEGAL_STYLE}>
-        Ao entrar você concorda com os{' '}
-        <LegalLink path="entrar" doc="termos">
-          Termos de Uso
-        </LegalLink>{' '}
-        e a{' '}
-        <LegalLink path="entrar" doc="privacidade">
-          Política de Privacidade
-        </LegalLink>
-        .
-      </p>
+      <div class="stack" style={{ ...SIGNUP_ROW, '--gap': '10px' }}>
+        <p class="sm" style={{ fontWeight: '700', color: 'var(--navy)' }}>
+          Ainda não tem conta? O 1º episódio é grátis.
+        </p>
+        <Btn label="Criar conta grátis" kind="ghost" go="cadastro/1" cls="block" />
+      </div>
+      <Legal desk={desk} />
     </div>
+  );
+}
+
+/** "Ao entrar você concorda…" with the two documents, left-aligned like the form. */
+function Legal({ desk = false }: { desk?: boolean }) {
+  return (
+    <p class="xs" style={desk ? LEGAL_DESK : LEGAL_STYLE}>
+      Ao entrar você concorda com os{' '}
+      <LegalLink path="entrar" doc="termos">
+        Termos de Uso
+      </LegalLink>{' '}
+      e a{' '}
+      <LegalLink path="entrar" doc="privacidade">
+        Política de Privacidade
+      </LegalLink>
+      .
+    </p>
   );
 }
 
@@ -238,7 +284,9 @@ function ResetForm({ token, desk }: { token: string; desk: boolean }) {
 
   return (
     <div class="card formcard stack" style={desk ? CARD_DESKTOP : { '--gap': '12px' }} onFocusIn={ts.warm}>
-      <div class="h2">Criar uma senha nova</div>
+      <div class="h2" style={desk ? { fontSize: '1.9rem' } : undefined}>
+        Criar uma senha nova
+      </div>
       <p class="sm">Escolha a senha que você vai usar daqui para a frente. O link vale uma vez só.</p>
       {/* biome-ignore lint/a11y/noLabelWithoutControl: the input is inside, rendered by a child component */}
       <label class="field">
@@ -266,14 +314,14 @@ export default function Entrar({ q }: ScreenProps) {
   const reset = q.reset && /^[\w-]{16,200}$/.test(q.reset) ? q.reset : '';
   const desk = layoutOf(state.value) === 'desktop';
   return (
-    <div class="scroll">
+    <div class="scroll" data-u1="entrar">
       <div class="auth">
         <div class="hero" style={desk ? HERO_DESKTOP : HERO_MOBILE}>
           <Logo size={30} desc white />
-          <h1 class="h1 mt16" style={{ color: '#fff' }}>
+          <h1 class="h1" style={desk ? H1_DESKTOP : H1_MOBILE}>
             Você não faz lições. Você acompanha uma história.
           </h1>
-          <p class="p mt8" style={{ color: 'var(--onNavy)' }}>
+          <p class="p" style={{ color: 'var(--onNavy)', marginTop: desk ? '8px' : '8px', textWrap: 'pretty' }}>
             Uma série do zero ao B2, com a Maggie para conversar quando você quiser.
           </p>
         </div>

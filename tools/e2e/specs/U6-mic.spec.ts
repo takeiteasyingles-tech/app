@@ -63,8 +63,10 @@ const INIT = `(() => {
       setTimeout(() => { speaking = false; try { u.onend && u.onend(new Event('end')); } catch (e) {} }, W.__speakMs || 200); };
     ss.cancel = () => { speaking = false; };
   }
-  // No microphone.
-  try { if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('denied', 'NotAllowedError')); } catch (e) {}
+  // No microphone (unless the test asked for Chromium's fake device: sessionStorage __realMic = 1).
+  if (sessionStorage.getItem('__realMic') !== '1') {
+    try { if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('denied', 'NotAllowedError')); } catch (e) {}
+  }
   // SpeechRecognition stub: interim, then final, then end. __srMode: 'say' | 'hang' | 'none'.
   if (W.__noSR || sessionStorage.getItem('__noSR') === '1') { try { delete W.SpeechRecognition; delete W.webkitSpeechRecognition; } catch (e) {} W.SpeechRecognition = undefined; W.webkitSpeechRecognition = undefined; return; }
   class FakeSR {
@@ -233,6 +235,13 @@ async function unnamedControls(page: Page): Promise<string[]> {
   });
 }
 
+// Lobby tiles under the CTA (05 "Accepted deviations"): "N de 60 min / restantes no mês" and, in
+// training mode, "Modo treino / sem nota". The prototype ran them together in one .xs line.
+const minutesTile = (page: Page) =>
+  page.locator('.wrap .row', { has: page.locator('.xs', { hasText: /^restantes no mês$/ }) }).first();
+const trainingTile = (page: Page) =>
+  page.locator('.wrap .row', { has: page.locator('.xs', { hasText: /^sem nota$/ }) });
+
 async function openLobby(page: Page, hash = '/#/maggie') {
   await page.goto(hash);
   await expect(page.locator('.live.on-navy .topbar .lbl').first()).toBeVisible({ timeout: 20_000 });
@@ -283,10 +292,14 @@ test.describe('mobile', () => {
     expect(await radios.count()).toBeGreaterThanOrEqual(5);
     await expect(picker.locator('.assist.on')).toHaveCount(1);
     await expect(picker.locator('.assist.on b')).toHaveText('Maggie');
+    // Every assistant card carries its style (a.tag) as screen-reader text; under the grid, the
+    // prototype's ".xs" line becomes "<b>full</b> [tag pill] role. style" (05 "Accepted deviations").
+    await expect(picker.locator('.assist.on span').last()).toHaveText('Acolhedora');
+    await expect(page.locator('.wrap .xs b', { hasText: /^Margaret Woods$/ }).first()).toBeVisible();
     await expect(
       page
         .locator('.wrap .xs')
-        .filter({ hasText: /Margaret Woods · / })
+        .filter({ hasText: /^Margaret Woods Acolhedora Designer de interiores · toca a Woods & Beans\./ })
         .first(),
     ).toBeVisible();
 
@@ -303,7 +316,8 @@ test.describe('mobile', () => {
     expect(await chips.count()).toBe(Object.keys(MAG.MISSIONS).length);
     await expect(chips.first()).toContainText('· seu objetivo');
     await expect(chips.first()).toHaveClass(/\bon\b/);
-    const firstTitle = (await chips.first().innerText()).replace(' · seu objetivo', '').trim();
+    // On mobile the suffix is an icon plus screen-reader text (its own line in innerText).
+    const firstTitle = (await chips.first().innerText()).replace(/\s*·\s*seu objetivo/, '').trim();
     const firstKey = Object.keys(MAG.MISSIONS).find((k) => MAG.MISSIONS[k]?.t === firstTitle) as string;
     expect(firstKey, 'first chip is a prototype mission').toBeTruthy();
     const card = page.locator('.wrap .card').filter({ hasText: 'faz o papel de' });
@@ -311,7 +325,7 @@ test.describe('mobile', () => {
     await expect(card.locator('.h3')).toHaveText(MAG.MISSIONS[firstKey]?.goal as string);
     // Pick another mission.
     const other = chips.nth(2);
-    const otherTitle = (await other.innerText()).replace(' · seu objetivo', '').trim();
+    const otherTitle = (await other.innerText()).replace(/\s*·\s*seu objetivo/, '').trim();
     const otherKey = Object.keys(MAG.MISSIONS).find((k) => MAG.MISSIONS[k]?.t === otherTitle) as string;
     await other.click();
     await expect(other).toHaveClass(/\bon\b/);
@@ -319,10 +333,8 @@ test.describe('mobile', () => {
 
     // Start button + minutes line + no SR warning (SR stub present).
     await expect(btn(page, 'Começar a conversa · +30 pontos')).toBeVisible();
-    await expect(page.locator('.wrap .xs').filter({ hasText: /min restantes/ })).toHaveText(
-      /^\d+ de \d+ min restantes no mês$/,
-    );
-    await expect(page.getByText('Modo treino, sem nota')).toHaveCount(0);
+    await expect(minutesTile(page).locator('b')).toHaveText(/^\d+ de \d+ min$/);
+    await expect(trainingTile(page)).toHaveCount(0);
     await expect(page.getByText('Este navegador não reconhece fala.')).toHaveCount(0);
 
     // Livre
@@ -771,10 +783,9 @@ test.describe('mobile', () => {
     await expect(page.locator('.grid2 .stat')).toHaveCount(0);
     expect(page.url()).toContain(rid);
     await page.goto('/#/maggie?modo=pronuncia');
-    await expect(page.locator('.wrap .xs').filter({ hasText: /min restantes/ })).toHaveText(
-      /^\d+ de \d+ min restantes no mês$/,
-    );
-    await expect(page.locator('.wrap .xs', { hasText: 'Modo treino, sem nota' })).toBeVisible();
+    await expect(minutesTile(page).locator('b')).toHaveText(/^\d+ de \d+ min$/);
+    await expect(trainingTile(page)).toBeVisible();
+    await expect(trainingTile(page).locator('b')).toHaveText('Modo treino');
     await startCall(page);
     await page.locator('.card.paper.stack.tc').getByRole('button', { name: 'Gravar' }).click();
     await expect(page.locator('.card.paper.stack.tc .fb.ok, .card.paper.stack.tc .fb.fix')).toBeVisible({
@@ -1169,7 +1180,7 @@ test.describe('round 3 · desktop', () => {
     ).toBeVisible();
     // Start button + minutes in the right column on desktop.
     await expect(right.getByRole('button', { name: 'Começar a conversa · +30 pontos' })).toBeVisible();
-    await expect(right.locator('.xs').filter({ hasText: /de \d+ min restantes no mês/ })).toBeVisible();
+    await expect(right.locator('.row', { has: page.locator('.xs', { hasText: /^restantes no mês$/ }) })).toBeVisible();
     const n0 = (await said(page)).length;
     await left.getByRole('button', { name: /Slowly, please\./ }).click();
     await expect.poll(async () => (await said(page)).slice(n0)).toContain('Slowly, please.');
@@ -1182,20 +1193,40 @@ test.describe('round 3 · desktop', () => {
     await expect(page).toHaveURL(/#\/maggie\/relatorio\/[\w-]+$/, { timeout: 15_000 });
     const sid = page.url().split('/').pop() as string;
     await expect(page.locator('.now-card p.p')).not.toBeEmpty({ timeout: 15_000 });
-    // Two columns on desktop: "O que foi bem" left, "O que ajustar"/"Palavras novas" right.
+    // Two columns on desktop: stats, "O que foi bem" and "Palavras novas" left; "O que ajustar",
+    // pronúncia and "Próxima meta" right.
     const good = await page
       .locator('.card', { has: page.locator('.lbl.gr') })
       .first()
       .boundingBox();
     const goal = await page.locator('.card.or').first().boundingBox();
-    const right2 = page
-      .locator('.card', { has: page.locator('.lbl.bl, .lbl.or', { hasText: /O que ajustar|Palavras novas/ }) })
-      .first();
-    if (await right2.count()) {
-      const rb = await right2.boundingBox();
-      expect(rb && good && rb.x > good.x + 100, 'second column to the right').toBe(true);
+    const fixCard = page.locator('.card', { has: page.locator('.lbl.bl', { hasText: 'O que ajustar' }) }).first();
+    await expect(fixCard).toBeVisible();
+    const fb = await fixCard.boundingBox();
+    expect(fb && good && fb.x > good.x + 100, '"O que ajustar" in the right column').toBe(true);
+    // "Próxima meta" is the full-width peach footer under both columns, with the buttons at its right
+    // (05 "Accepted deviations", Relatório desktop).
+    expect(
+      goal && fb && good && Math.abs(goal.x - good.x) < 2 && goal.x + goal.width >= fb.x + fb.width - 2,
+      '"Próxima meta" spans both columns',
+    ).toBe(true);
+    expect(goal && fb && goal.y >= fb.y + fb.height, '"Próxima meta" below the cards').toBe(true);
+    const goalCard = page.locator('.card.or').first();
+    await expect(
+      goalCard
+        .getByRole('button', { name: /Conversar de novo/ })
+        .or(goalCard.getByRole('link', { name: /Conversar de novo/ })),
+    ).toHaveCount(1);
+    await expect(
+      goalCard
+        .getByRole('button', { name: 'Voltar para Hoje' })
+        .or(goalCard.getByRole('link', { name: 'Voltar para Hoje' })),
+    ).toHaveCount(1);
+    const wordsCard = page.locator('.card', { has: page.locator('.lbl.or', { hasText: 'Palavras novas' }) }).first();
+    if (await wordsCard.count()) {
+      const wb = await wordsCard.boundingBox();
+      expect(wb && good && Math.abs(wb.x - good.x) < 2, '"Palavras novas" in the left column').toBe(true);
     }
-    expect(good && goal && Math.abs(good.x - goal.x) < 2).toBe(true);
     const noHScroll = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     expect(noHScroll).toBe(true);
     expect(await unnamedControls(page)).toEqual([]);
@@ -1458,13 +1489,14 @@ test.describe('round 5 · mobile', () => {
     await page.locator('.live .topbar .btn', { hasText: 'Encerrar' }).click();
     await expect(page).toHaveURL(/#\/maggie\/relatorio\/[\w-]+$/, { timeout: 15_000 });
     await expect(page.locator('.now-card p.p')).not.toBeEmpty({ timeout: 15_000 });
-    const wordBtns = page.locator('.card', { has: page.locator('.lbl.or', { hasText: 'Palavras novas' }) }).locator(
-      'button.en',
-    );
+    // Each new word is a tile button: the English term (.en) over its translation.
+    const wordBtns = page
+      .locator('.card', { has: page.locator('.lbl.or', { hasText: 'Palavras novas' }) })
+      .locator('button:has(.en)');
     const nW = await wordBtns.count();
     console.log('[U6] r5 report words:', nW, 'pron pills:', await page.locator('button.pill.navy').count());
     if (nW) {
-      const w = (await wordBtns.first().innerText()).trim();
+      const w = (await wordBtns.first().locator('.en').innerText()).trim();
       const n0 = (await said(page)).length;
       await wordBtns.first().click();
       await expect.poll(async () => (await said(page)).slice(n0)).toContain(w);
@@ -1558,6 +1590,84 @@ test.describe('round 5 · narrow desktop', () => {
 });
 
 // =====================================================================================
+// Round 6: API abuse around the Mic endpoints (closed sessions, replays, CSRF, anonymous, bad input).
+test.describe('round 6 · api', () => {
+  test('closed-session, replay, CSRF, anonymous and malformed requests are refused', async ({ page, browser }) => {
+    test.setTimeout(120_000);
+    await signup(page);
+    const origin = new URL(page.url()).origin;
+    const J = { 'Content-Type': 'application/json', Accept: 'application/json', Origin: origin };
+    const post = (path: string, data: unknown, headers: Record<string, string> = J) =>
+      page.request.post(path, { headers, data: JSON.stringify(data), failOnStatusCode: false });
+
+    // Malformed start bodies.
+    expect((await post('/api/mic/sessions', { assistant: 'margaret', mode: 'karaoke' })).status()).toBe(400);
+    expect((await post('/api/mic/sessions', { assistant: '../etc', mode: 'livre' })).status()).toBeGreaterThanOrEqual(
+      400,
+    );
+    expect((await post('/api/mic/sessions', { assistant: 'margaret', mode: 'missao', mission: 'nope' })).status()).toBe(
+      400,
+    );
+
+    // CSRF: a foreign Origin and a form content type are refused.
+    const evil = await post(
+      '/api/mic/sessions',
+      { assistant: 'margaret', mode: 'livre' },
+      { ...J, Origin: 'https://evil.example' },
+    );
+    expect(evil.status()).toBe(403);
+    const form = await page.request.post('/api/mic/sessions', {
+      headers: { Origin: origin, 'Content-Type': 'text/plain' },
+      data: JSON.stringify({ assistant: 'margaret', mode: 'livre' }),
+      failOnStatusCode: false,
+    });
+    expect(form.status()).toBeGreaterThanOrEqual(400);
+
+    // Anonymous.
+    const anon = await browser.newContext({ baseURL: origin });
+    const ar = await anon.request.post('/api/mic/sessions', {
+      headers: J,
+      data: JSON.stringify({ assistant: 'margaret', mode: 'livre' }),
+      failOnStatusCode: false,
+    });
+    expect(ar.status()).toBe(401);
+    await anon.close();
+
+    // A real session: report before end → 409; tutor works; end; tutor after end → 409; replay → no award.
+    const st = await post('/api/mic/sessions', { assistant: 'margaret', mode: 'livre' });
+    expect(st.status()).toBe(200);
+    const sid = (await st.json()).id as string;
+    expect((await post('/api/report', { session_id: sid })).status()).toBe(409);
+    const long = 'I like coffee very much. '.repeat(400);
+    const t1 = await post('/api/tutor', { session_id: sid, text: long, turn: 0 });
+    console.log('[U6] r6 long tutor status', t1.status());
+    expect([200, 413]).toContain(t1.status());
+    const e1 = await post(`/api/mic/sessions/${sid}/end`, { turns: [] });
+    expect(e1.status()).toBe(200);
+    const e2 = await post(`/api/mic/sessions/${sid}/end`, { turns: [{ who: 'me', en: 'forged', fb: null, pron: [] }] });
+    expect(e2.status()).toBe(200);
+    const e2b = await e2.json();
+    expect(e2b.award).toBeNull();
+    expect(
+      (e2b.session.turns as { en: string }[]).some((t) => t.en === 'forged'),
+      'replay appends nothing',
+    ).toBe(false);
+    expect((await post('/api/tutor', { session_id: sid, text: 'hello again', turn: 1 })).status()).toBe(409);
+    // Pronúncia sessions refuse tutor turns.
+    const ps = await post('/api/mic/sessions', { assistant: 'margaret', mode: 'pronuncia' });
+    const pid = (await ps.json()).id as string;
+    expect((await post('/api/tutor', { session_id: pid, text: 'hello', turn: 0 })).status()).toBe(400);
+    // Session ids are validated.
+    expect(
+      (await page.request.get('/api/mic/sessions/..%2F..%2Fx', { failOnStatusCode: false })).status(),
+    ).toBeGreaterThanOrEqual(400);
+    // These deliberate 4xx are not page errors.
+    const w = watches.get(page);
+    if (w) w.api = [];
+  });
+});
+
+// =====================================================================================
 test('static: no innerHTML in the slice, no persona/secrets in the client bundle or catalog', async ({ page }) => {
   const slice = fileURLToPath(new URL('../../../apps/app/web/src/screens/maggie/', import.meta.url));
   for (const f of readdirSync(slice)) {
@@ -1602,4 +1712,95 @@ test('static: no innerHTML in the slice, no persona/secrets in the client bundle
     for (const p of personas) expect(body.includes(p), `content persona ${p} in ${u}`).toBe(false);
     expect(body, u).not.toMatch(/"persona"/);
   }
+});
+
+// =====================================================================================
+// Round 7: /api/health says ai:true (AI path wired) on a Worker whose AI binding is absent; a fake
+// microphone (Chromium's fake capture device) so Pronúncia records real audio → POST /api/pronounce.
+// Whatever the server answers, the call must degrade to the demo scorer without breaking the screen.
+test.describe('round 7 · ai on + fake mic', () => {
+  test('pronúncia records audio and posts /api/pronounce; tutor/report/tts degrade cleanly', async ({
+    playwright,
+    baseURL,
+  }, testInfo) => {
+    test.setTimeout(150_000);
+    // launchOptions cannot change inside a describe: a browser of its own with the fake capture device.
+    const browser2 = await playwright.chromium.launch({
+      channel: testInfo.project.use.channel,
+      headless: process.env.PARITY_HEADED !== '1',
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+    });
+    const context = await browser2.newContext({
+      baseURL,
+      viewport: { width: 375, height: 812 },
+      isMobile: true,
+      hasTouch: true,
+      locale: 'pt-BR',
+      timezoneId: 'America/Sao_Paulo',
+      reducedMotion: 'reduce',
+      serviceWorkers: 'block',
+      permissions: ['microphone'],
+    });
+    await stubTurnstile(context);
+    await context.route('**/api/health', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ai: false }) }),
+    );
+    const page = await context.newPage();
+    await instrument(context, page);
+    await signup(page);
+    await page.evaluate(() => sessionStorage.setItem('__realMic', '1'));
+    await context.unroute('**/api/health');
+    await context.route('**/api/health', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ai: true }) }),
+    );
+    await openLobby(page, '/#/maggie?modo=pronuncia');
+    await page.reload();
+    await expect(page.locator('.modes .mode.on .h3')).toHaveText('Pronúncia', { timeout: 20_000 });
+    expect(await page.evaluate(() => typeof navigator.mediaDevices?.getUserMedia)).toBe('function');
+    await startCall(page);
+    const panel = page.locator('.card.paper.stack.tc');
+    await expect(panel.locator('.lbl')).toHaveText(`Frase 1 de ${MAG.PRON.length}`);
+    await clearToasts(page);
+    await panel.getByRole('button', { name: 'Gravar' }).click();
+    await expect(panel.locator('.sm').first()).toHaveText('Ouvindo… toque para parar');
+    await page.waitForTimeout(1500);
+    await panel.getByRole('button', { name: 'Gravar' }).click();
+    await expect(panel.locator('.fb.ok, .fb.fix')).toBeVisible({ timeout: 20_000 });
+    const pr = apiHits(page, 'POST', /^\/api\/pronounce$/);
+    console.log('[U6] r7 /api/pronounce:', JSON.stringify(pr.map((a) => [a.status, a.body?.slice(0, 200)])));
+    console.log('[U6] r7 toasts:', JSON.stringify(await toasts(page)));
+    expect(pr.length, 'audio take posted to /api/pronounce').toBe(1);
+    expect(await toasts(page)).not.toContain('toast|Sem microfone: a nota fica estimada.');
+    await page.locator('.live .topbar .btn', { hasText: 'Encerrar' }).click();
+    await expect(page).toHaveURL(/#\/maggie\/relatorio\/[\w-]+$/, { timeout: 15_000 });
+    await expect(page.locator('.now-card p.p')).not.toBeEmpty({ timeout: 15_000 });
+
+    // A spoken-mode call with ai:true: tutor + report + (maybe) /api/tts.
+    await page.goto('/#/maggie?modo=livre&r=7');
+    await expect(page.locator('.modes .mode.on .h3')).toHaveText('Conversa livre');
+    await startCall(page);
+    await expect(page.locator('#mg-tr .bub.her')).toHaveCount(1, { timeout: 15_000 });
+    await typeLine(page, 'I love watching series on weekends.');
+    await expect(page.locator('#mg-tr .bub.her')).toHaveCount(2);
+    await page.locator('.live .topbar .btn', { hasText: 'Encerrar' }).click();
+    await expect(page).toHaveURL(/#\/maggie\/relatorio\/[\w-]+$/, { timeout: 15_000 });
+    await expect(page.locator('.now-card p.p')).not.toBeEmpty({ timeout: 15_000 });
+    const w = watches.get(page);
+    const ai = (w?.api ?? []).filter((a) => /^\/api\/(tutor|report|tts|pronounce)$/.test(a.path));
+    console.log('[U6] r7 ai calls:', JSON.stringify(ai.map((a) => [a.method, a.path, a.status])));
+    console.log('[U6] r7 errors:', JSON.stringify(w?.errors ?? []));
+    // A 5xx from an AI endpoint without the binding is the server's business; the screen must not
+    // break (no pageerror) and must not show the error boundary. Browser "Failed to load" lines for
+    // those endpoints are expected.
+    if (w) {
+      expect(
+        w.errors.filter((e) => e.startsWith('pageerror')),
+        'page errors',
+      ).toEqual([]);
+      w.errors = w.errors.filter((e) => !/Failed to load resource/.test(e));
+      w.api = w.api.filter((a) => !(/^\/api\/(tts|pronounce)$/.test(a.path) && a.status >= 500));
+    }
+    await assertClean(page);
+    await browser2.close();
+  });
 });

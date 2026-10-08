@@ -51,6 +51,16 @@ export function testIntro(eb: Ebook): string {
   return `${total} questões sobre as ${lessonsLabel(eb)}. Nota de corte: ${pct}%, ou ${eb.passScore} acertos. Recomenda, não bloqueia.`;
 }
 
+/**
+ * testIntro em duas partes: o escopo e a nota de corte; depois "Recomenda, não bloqueia." (no desktop a
+ * segunda vira uma linha própria, em vez de uma palavra solta quebrando sob o botão).
+ */
+export function testIntroParts(eb: Ebook): [string, string] {
+  const full = testIntro(eb);
+  const tail = 'Recomenda, não bloqueia.';
+  return full.endsWith(tail) ? [full.slice(0, -tail.length).trim(), tail] : [full, ''];
+}
+
 /** The prototype's isRight(q) (the server grades the same way; this only drives the review list). */
 export function isRight(q: TestQuestion, v: TestAnswer | undefined): boolean {
   if (q.opts) return v === q.a;
@@ -110,11 +120,7 @@ export function DeskHead({
       <div style={{ minWidth: '0', alignSelf: intro ? 'flex-start' : 'center' }}>
         <div class="lbl">{kicker}</div>
         <h1 class="h1 mt4">{title}</h1>
-        {intro ? (
-          <p class="p-read mt8" style={{ maxWidth: '62ch' }}>
-            {intro}
-          </p>
-        ) : null}
+        {intro ? <p class="p-read mt8">{intro}</p> : null}
       </div>
     </div>
   );

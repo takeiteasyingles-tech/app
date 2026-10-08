@@ -1,0 +1,28 @@
+/* #/entrar: regras da fatia U1, escopadas em [data-u1='entrar'] (a raiz .scroll da tela). */
+
+/* Celular: a foto inteira (a esquina do café com a placa "Woods & Beans") ocupa o topo do hero na
+   largura da tela; o logo fica sobre um véu leve no alto e a chamada começa onde a foto se funde no
+   azul, em vez de a foto aparecer cortada atrás do texto. As medidas usam a largura do .auth (cqw). */
+.app:not([data-layout="desktop"]) [data-u1="entrar"] .auth {
+  container-type: inline-size;
+}
+.app:not([data-layout="desktop"]) [data-u1="entrar"] .auth .hero::before {
+  background: linear-gradient(
+    rgba(10, 30, 63, 0.55) 0,
+    rgba(10, 30, 63, 0.12) 92px,
+    rgba(15, 42, 85, 0) calc(66.6cqw - 96px),
+    rgba(15, 42, 85, 0.88) calc(66.6cqw - 18px),
+    var(--navy) calc(66.6cqw + 6px)
+  );
+}
+
+/* Desktop: um véu suave e contínuo sobre a foto (sem a faixa escura pesada embaixo), só o bastante
+   para o texto ler bem no pé. */
+.app[data-layout="desktop"] [data-u1="entrar"] .auth .hero::before {
+  background: linear-gradient(
+    rgba(10, 30, 63, 0.18) 0%,
+    rgba(10, 30, 63, 0.06) 40%,
+    rgba(10, 30, 63, 0.5) 72%,
+    rgba(10, 30, 63, 0.9) 100%
+  );
+}

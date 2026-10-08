@@ -45,6 +45,10 @@ for (const vp of VPS) {
   for (const t of ['done', 'cmp-done']) USERS.push({ key: `u3-${t}-${vp}`, kind: 'done' });
 }
 USERS.push({ key: 'u3-race-mobile', kind: 'main' });
+USERS.push({ key: 'u3-pts-mobile', kind: 'main' });
+USERS.push({ key: 'u3-extra-mobile', kind: 'main' });
+USERS.push({ key: 'u3-err-mobile', kind: 'main' });
+USERS.push({ key: 'u3-order-mobile', kind: 'main' });
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 function stateOf(kind: Kind): Any {
@@ -224,10 +228,16 @@ for (const vp of VPS) {
       }
       await expect(v).toContainText('0 de 20');
       await expect(v).toContainText('A família, a viagem de Robert ao Brasil');
-      // production extra: the bar counts steps (episode 1 at step 6 → 5/200 steps) and a "now" link
-      await expect(v.locator('.card .bar i').first()).toHaveAttribute('style', /width:\s*3%/);
+      // production extra: one bar segment per episode; the current one fills with its steps (step 6 → 50%)
+      const sbar = v.locator('.seasonbar[role="progressbar"]');
+      await expect(sbar).toHaveAttribute('aria-valuenow', '0');
+      await expect(sbar).toHaveAttribute('aria-valuemax', '20');
+      await expect(sbar.locator(':scope > span')).toHaveCount(20);
+      await expect(sbar.locator(':scope > span.now i')).toHaveAttribute('style', /width:\s*50%/);
+      // phone: a "now" strip under the bar (desktop: the current card right below says it)
       const nowLink = v.locator('a.sm', { hasText: 'Agora: 01 Good Morning · etapa 6 de 10' });
-      await expect(nowLink).toHaveAttribute('href', '#/episodio/1');
+      if (vp === 'mobile') await expect(nowLink).toHaveAttribute('href', '#/episodio/1');
+      else await expect(nowLink).toHaveCount(0);
       // <details> with the 8 seasons
       const det = v.locator('details');
       await expect(det.locator('summary')).toHaveText('Ver as 8 temporadas');
@@ -336,12 +346,14 @@ for (const vp of VPS) {
       await expect(v).toContainText('Take some extras · opcionais');
       const grid = v.locator('a[href="#/ebook/1/five"]').locator('xpath=..');
       const cols = await grid.evaluate((e) => getComputedStyle(e).gridTemplateColumns.split(' ').length);
-      // prototype layout: the 4 extras as cards of one shape, 2 columns on desktop (Take It Out dashed)
+      // prototype layout: the 4 extras as cards of one shape, 2 columns on desktop (Take It Out not a link)
       expect(cols).toBe(vp === 'desktop' ? 2 : 1);
       await expect(v.locator('a[href="#/ebook/1/five"]')).toContainText('5 páginas');
       await expect(v.locator('a[href="#/ebook/1/lead"]')).toContainText('~4 min');
       await expect(v.locator('a[href="#/ebook/1/real"]')).toContainText('8 dicas');
-      await expect(v.locator('.card.dash').filter({ hasText: 'Take It Out' })).toContainText('Em produção');
+      const out = v.locator('div.card').filter({ hasText: 'Take It Out' });
+      await expect(out).toContainText('Em produção');
+      await expect(v.locator('a.card').filter({ hasText: 'Take It Out' })).toHaveCount(0);
       const test1 = v.locator('.card.navy').filter({ hasText: 'Take the episode test' });
       await expect(test1).toContainText(
         '20 questões sobre as Lições 1 e 2. Nota de corte: 70%, ou 14 acertos. Recomenda, não bloqueia.',
@@ -810,6 +822,65 @@ test('trilha: unscripted episodes before the current one are "Em produção"', a
   await expectClean(page, w);
 });
 
+// ---------------------------------------------------------------- points persist; keyboard on the season list
+
+test('lead: the +5 lands in the server total, once per turn a day; seasons open from the keyboard', async ({
+  page,
+  context,
+}) => {
+  await prepApp(context, 'u3-pts-mobile');
+  const w = watch(page);
+  const pointsOf = async (): Promise<number> => {
+    const r = await page.request.get('/api/me/state');
+    expect(r.status()).toBe(200);
+    const b = (await r.json()) as Any;
+    return Number((b.state ?? b).game?.points ?? Number.NaN);
+  };
+  await page.goto('/#/ebook/1/lead');
+  const v = view(page);
+  await expect(v.locator('button.opt').first()).toBeVisible({ timeout: 20_000 });
+  const p0 = await pointsOf();
+  expect(Number.isFinite(p0)).toBe(true);
+  const ev = page.waitForResponse((r) => r.url().includes('/api/game/event'));
+  await v.locator('button.opt').nth(0).click();
+  expect((await (await ev).json()).awarded).toBe(true);
+  await expect(page.locator('#fxroot .pts-toast').first()).toHaveText('+5 pontos');
+  await page.reload();
+  await expect(view(page).locator('button.opt').first()).toBeVisible({ timeout: 20_000 });
+  expect(await pointsOf()).toBe(p0 + 5);
+  // the same turn again the same day: no second award, no toast
+  await page.waitForTimeout(1800);
+  const ev2 = page.waitForResponse((r) => r.url().includes('/api/game/event'));
+  await view(page).locator('button.opt').nth(0).click();
+  expect((await (await ev2).json()).awarded ?? false).toBe(false);
+  await page.waitForTimeout(500);
+  await expect(page.locator('#fxroot .pts-toast')).toHaveCount(0);
+  expect(await pointsOf()).toBe(p0 + 5);
+  // Trilha: the season list opens with the keyboard and shows a focus ring
+  await page.goto('/#/trilha');
+  await expect(view(page).locator('details summary')).toBeVisible({ timeout: 20_000 });
+  await page
+    .locator('body')
+    .click({ position: { x: 1, y: 1 } })
+    .catch(() => {});
+  expect(await tabTo(page, 'details summary')).toBe(true);
+  expect.soft(visibleRing(await focusRing(page)), 'focus ring on the season summary').toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(view(page).locator('details')).toHaveAttribute('open', '');
+  // the back buttons of the e-book screens get a ring too
+  await page.goto('/#/ebook/1/real');
+  await expect(view(page).locator('.card').first()).toBeVisible({ timeout: 20_000 });
+  await page
+    .locator('body')
+    .click({ position: { x: 1, y: 1 } })
+    .catch(() => {});
+  expect(await tabTo(page, '[aria-label="Voltar"]')).toBe(true);
+  expect.soft(visibleRing(await focusRing(page)), 'focus ring on Voltar').toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#\/ebook\/1$/);
+  await expectClean(page, w);
+});
+
 // ---------------------------------------------------------------- submit right after the last pick
 
 test('teste: a pick still being saved is graded by the submit (slow network)', async ({ page, context }) => {
@@ -850,6 +921,161 @@ test('teste: a pick still being saved is graded by the submit (slow network)', a
     .toEqual({ shown: '20', reviewCards: 0 });
   await page.unroute('**/api/ebooks/1/test/answers');
   await expectClean(page, w);
+});
+
+// ---------------------------------------------------------------- folds, double taps, failures, bad routes
+
+test('trilha (phone): folded e-books unfold and fold back; nodes stay in the DOM', async ({ page, context }) => {
+  await prepApp(context, 'u3-extra-mobile');
+  const w = watch(page);
+  await page.goto('/#/trilha');
+  const v = view(page);
+  await expect(v.locator('.trail')).toBeVisible({ timeout: 20_000 });
+  const toggles = v.locator('.trail .chapter button[aria-expanded]');
+  // Ana is in e-book 1: e-books 3..10 start folded.
+  await expect(toggles).toHaveCount(8);
+  await expect(v.locator('.trail .node:not(.aside)')).toHaveCount(20);
+  const t = toggles.first();
+  await expect(t).toHaveAttribute('aria-expanded', 'false');
+  const region = page.locator(`#${await t.getAttribute('aria-controls')}`);
+  await expect(region).toBeHidden();
+  await expect(t).toContainText('05');
+  await t.click();
+  await expect(t).toHaveAttribute('aria-expanded', 'true');
+  await expect(region).toBeVisible();
+  await expect(region.locator('.node')).toHaveCount(3);
+  // keyboard folds it back
+  await t.focus();
+  await page.keyboard.press('Enter');
+  await expect(t).toHaveAttribute('aria-expanded', 'false');
+  await expect(region).toBeHidden();
+  await expectClean(page, w);
+});
+
+test('lead: a fast double tap on an option sends one line and one award request', async ({ page, context }) => {
+  await prepApp(context, 'u3-extra-mobile');
+  const w = watch(page);
+  let events = 0;
+  page.on('request', (r) => {
+    if (r.url().includes('/api/game/event')) events++;
+  });
+  await page.goto('/#/ebook/1/lead');
+  const v = view(page);
+  await expect(v.locator('button.opt').first()).toBeVisible({ timeout: 20_000 });
+  await v.locator('button.opt').first().dblclick();
+  await expect(v.locator('.bub.her')).toHaveCount(2);
+  await page.waitForTimeout(500);
+  await expect(v.locator('.bub.me')).toHaveCount(1);
+  expect.soft(events, 'award requests for one double tap').toBeLessThanOrEqual(1);
+  await expectClean(page, w);
+});
+
+test('teste: a failed submit shows an error, keeps the sheet and can be retried', async ({ page, context }) => {
+  await prepApp(context, 'u3-err-mobile');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/#/ebook/1/teste');
+  const v = view(page);
+  await expect(v.locator('button.pillopt').first()).toBeVisible({ timeout: 20_000 });
+  await card(page, 1).locator('button.pillopt').nth(1).click();
+  await page.waitForTimeout(800);
+  let fail = true;
+  await page.route('**/api/ebooks/1/test/submit', (route) =>
+    fail
+      ? route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'internal', message: 'Falha simulada no servidor.' } }),
+        })
+      : route.continue(),
+  );
+  await v.getByRole('button', { name: 'Entregar o teste' }).click();
+  // the error surfaces as a toast in #fxroot
+  await expect(page.locator('#fxroot')).not.toBeEmpty({ timeout: 5000 });
+  console.log(`[u3] submit 500 → toast: ${(await page.locator('#fxroot').innerText()).replace(/\s+/g, ' ')}`);
+  await page.waitForTimeout(800);
+  await expect(v.locator('.card.navy').filter({ hasText: 'Resultado' })).toHaveCount(0);
+  await expect(card(page, 1).locator('button.pillopt').nth(1)).toHaveClass(/pick/);
+  await expect(v.getByRole('button', { name: 'Entregar o teste' })).toBeEnabled();
+  fail = false;
+  const sub = page.waitForResponse((r) => r.url().includes('/api/ebooks/1/test/submit'));
+  await v.getByRole('button', { name: 'Entregar o teste' }).click();
+  expect((await sub).status()).toBe(200);
+  await expect(v.locator('.card.navy').filter({ hasText: 'Resultado' })).toBeVisible();
+  await expect(v.locator('.card.navy .num').first()).toHaveText('1');
+  expect(errors).toEqual([]);
+  await expect(page.getByText('Algo deu errado nesta tela.')).toHaveCount(0);
+});
+
+test('teste: answer saves go out one at a time, in order; a reset lands after them', async ({ page, context }) => {
+  await prepApp(context, 'u3-order-mobile');
+  const w = watch(page);
+  await page.goto('/#/ebook/1/teste');
+  const v = view(page);
+  await expect(v.locator('button.pillopt').first()).toBeVisible({ timeout: 20_000 });
+  // every answers PUT is slow; count how many are on the wire at once
+  let open = 0;
+  let maxOpen = 0;
+  const bodies: string[] = [];
+  await page.route('**/api/ebooks/1/test/answers', async (route) => {
+    open++;
+    maxOpen = Math.max(maxOpen, open);
+    bodies.push(route.request().postData() ?? '');
+    await new Promise((r) => setTimeout(r, 700));
+    await route.continue();
+    open--;
+  });
+  const q1 = card(page, 1).locator('button.pillopt');
+  await q1.nth(0).click();
+  await q1.nth(2).click();
+  await q1.nth(1).click();
+  // the last pick shows at once, even with saves queued
+  await expect(q1.nth(1)).toHaveClass(/pick/);
+  await expect.poll(() => open, { timeout: 10_000 }).toBe(0);
+  await page.waitForTimeout(300);
+  await expect.poll(() => open).toBe(0);
+  expect(maxOpen, 'answer saves on the wire at once').toBe(1);
+  // the first pick went alone, the next two were merged into one save with the latest value
+  expect(bodies.length).toBeLessThanOrEqual(2);
+  await page.unroute('**/api/ebooks/1/test/answers');
+  await page.reload();
+  await expect(card(page, 1).locator('button.pillopt').nth(1)).toHaveClass(/pick/, { timeout: 20_000 });
+  await expect(card(page, 1).locator('button.pillopt.pick')).toHaveCount(1);
+
+  // typed answer on a slow wire, then submit and "Refazer": the reset goes after it, so it stays gone
+  await page.route('**/api/ebooks/1/test/answers', async (route) => {
+    await new Promise((r) => setTimeout(r, 900));
+    await route.continue();
+  });
+  await page.locator('#tq9').fill('name');
+  await page.locator('#tq9').blur();
+  const sub = page.waitForResponse((r) => r.url().includes('/api/ebooks/1/test/submit'));
+  await v.getByRole('button', { name: 'Entregar o teste' }).click();
+  expect((await sub).status()).toBe(200);
+  await v.getByRole('button', { name: 'Refazer o teste' }).click();
+  await page.locator('#tq10').fill('nice');
+  await page.locator('#tq10').blur();
+  await page.waitForTimeout(2500);
+  await page.unroute('**/api/ebooks/1/test/answers');
+  await page.reload();
+  await expect(page.locator('#tq10')).toHaveValue('nice', { timeout: 20_000 });
+  await expect(page.locator('#tq9')).toHaveValue('');
+  await expect(card(page, 1).locator('button.pillopt.pick')).toHaveCount(0);
+  await expectClean(page, w);
+});
+
+test('routes: unknown e-book parts and other e-books do not break the app', async ({ page, context }) => {
+  await prepApp(context, 'u3-extra-mobile');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  for (const r of ['ebook/1/xyz', 'ebook/2', 'ebook/2/teste', 'ebook/1/teste/../five']) {
+    await page.goto(`/#/${r}`);
+    await page.waitForTimeout(800);
+    await expect(page.getByText('Algo deu errado nesta tela.')).toHaveCount(0);
+    const txt = (await page.locator('.view').last().innerText()).slice(0, 80).replace(/\s+/g, ' ');
+    console.log(`[u3] #/${r} → ${page.url().split('#')[1]} :: ${txt}`);
+  }
+  expect(errors).toEqual([]);
 });
 
 // ---------------------------------------------------------------- API security (test endpoints)

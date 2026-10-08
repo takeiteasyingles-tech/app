@@ -1,16 +1,29 @@
-﻿/* Episode player: slice-local polish on top of tie.css. Every rule is scoped under .pl-scr (the
+/* Episode player: slice-local polish on top of tie.css. Every rule is scoped under .pl-scr (the
    player root) or a pl-* class this slice owns, so nothing leaks into other screens. The markup and
    tie.css classes stay the prototype's; these rules only fix what the prototype left rough. */
 
-/* ---------- head / foot ---------- */
+/* ---------- head / dock / foot ---------- */
 
-/* The 10-step bar: the gaps between the three groups (Abertura Â· O episÃ³dio Â· Fechamento) read as
-   deliberate instead of as uneven spacing. */
+/* The 10-step bar: the three groups (Abertura · O episódio · Fechamento) keep a small extra gap, a
+   hint of grouping (a wide one left the last bar floating apart, like a glitch). */
 .pl-scr .player-head .segs {
   gap: 4px;
 }
 .pl-scr .player-head .segs i.sep {
-  margin-left: 12px;
+  margin-left: 4px;
+}
+
+/* Desktop: the dock's content is as wide as the step body under it (760px wrap minus its 32px desktop
+   padding), so the song player and the lyrics line up instead of the bar running past the text. */
+.app[data-layout="desktop"] .pl-dockin {
+  max-width: 696px;
+  margin: 0 auto;
+}
+
+/* The fixed dock (song player, dialogue controls, Mic card) reads as a layer above the scrolling
+   content: a clear bottom shadow instead of the faint one. */
+.pl-scr .player-dock {
+  box-shadow: 0 10px 18px -10px rgba(15, 42, 85, 0.42);
 }
 
 /* A locked Next keeps legible contrast (white on #C9C2AE was ~1.7:1): navy on a soft cream. */
@@ -27,35 +40,39 @@
 
 /* ---------- episode map (desktop aside and mobile sheet) ---------- */
 
-/* Step name and its status ("Feito" / "+10") on one line; the subtitle gets the row's full width. */
-.pl-sth {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
+/* A done step is the green check disc ("Feito" is read out, not shown); a step ahead shows "+10"
+   centred on the row's right edge. */
+.pl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
-.pl-sth .h3 {
-  min-width: 0;
+.pl-stpts {
+  flex: none;
+  align-self: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--muted);
 }
 .pl-side .steprow {
   min-height: 54px;
   padding: 9px 12px;
 }
-.pl-side .steprow .sm {
+.pl-side .pl-stsub {
   font-size: 0.86rem;
   line-height: 1.35;
 }
 
 /* ---------- shared bits ---------- */
 
-.pl-scr p,
-.pl-scr .pl-nextx {
+.pl-scr p {
   text-wrap: pretty;
-}
-/* Mic feedback: balanced lines, never a stray word or two alone on the last one. */
-.pl-scr .pl-fbt {
-  text-wrap: balance;
 }
 .pl-scr .pl-note {
   display: flex;
@@ -76,19 +93,19 @@
 .pl-cast {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 .pl-castm {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   text-align: center;
   min-width: 0;
 }
 .pl-ava {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   flex: none;
   border-radius: 50%;
   background: var(--navy);
@@ -96,12 +113,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.02em;
+  /* The ring is the character's colour softened a little, so five hues side by side stay calm. */
   box-shadow:
-    0 0 0 2.5px #fff,
-    0 0 0 4.5px var(--c, var(--line2));
+    0 0 0 2px #fff,
+    0 0 0 4px color-mix(in srgb, var(--c, var(--line2)) 72%, #fff);
 }
 .pl-castn {
   font-size: 0.78rem;
@@ -110,30 +128,61 @@
   white-space: nowrap;
   letter-spacing: -0.01em;
 }
-/* Desktop: one row of equal avatar + name pills (an even strip spread thin across the 760px column). */
+/* Phone: slightly smaller avatars; the strip reaches into the card's padding so each name gets a
+   wider column (five names side by side were cramped). */
+.app:not([data-layout="desktop"]) .pl-cast {
+  gap: 2px;
+  padding: 2px 0 0;
+  margin: 0 -10px;
+}
+.app:not([data-layout="desktop"]) .pl-cast.pl-bare {
+  margin: 0 -4px;
+}
+.app:not([data-layout="desktop"]) .pl-ava {
+  width: 36px;
+  height: 36px;
+  font-size: 0.72rem;
+}
+.app:not([data-layout="desktop"]) .pl-castn {
+  font-size: 0.74rem;
+  letter-spacing: -0.015em;
+}
+/* Desktop: a row of avatar + name pills, each as wide as its name (same padding on every pill),
+   spread evenly across the full width; a cast of more than six wraps. */
 .app[data-layout="desktop"] .pl-cast {
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+.app[data-layout="desktop"] .pl-cast.pl-even {
+  display: grid;
+  justify-content: space-between;
+}
+/* Take a Look: the cast straight on the cream page (white pills; no card around them). */
+.app[data-layout="desktop"] .pl-cast.pl-bare .pl-castm {
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+.app:not([data-layout="desktop"]) .pl-cast.pl-bare {
+  padding: 4px 0 0;
 }
 .app[data-layout="desktop"] .pl-castm {
   flex-direction: row;
-  gap: 8px;
-  padding: 5px 10px 5px 5px;
+  gap: 10px;
+  padding: 5px 13px 5px 5px;
   border-radius: 999px;
   background: var(--cream);
 }
 .app[data-layout="desktop"] .pl-ava {
-  width: 36px;
-  height: 36px;
-  font-size: 0.74rem;
+  width: 34px;
+  height: 34px;
+  font-size: 0.72rem;
 }
 .app[data-layout="desktop"] .pl-castn {
   font-size: 0.92rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
 }
 
-/* The dashed "PrÃ³ximo: â€¦" card at the end of a finished step. */
+/* The dashed "Próximo: …" card at the end of a finished step. */
 .pl-cico {
   width: 44px;
   height: 44px;
@@ -149,8 +198,13 @@
   text-align: left;
   width: 100%;
   color: var(--navy);
+  border: 1.5px dashed #8590a8;
+}
+.pl-next:hover {
+  border-color: var(--navy);
 }
 .pl-nextx {
+  text-wrap: pretty;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -166,8 +220,14 @@
   line-height: 1.35;
 }
 
-/* ---------- 1 Â· Abertura ---------- */
+/* ---------- 1 · Abertura ---------- */
 
+/* "Ep. 01" on the navy card: a soft light pill without an outline (navy2 on navy was barely visible). */
+.now-card .pill.pl-eppill {
+  background: #fff;
+  color: var(--navy);
+  letter-spacing: 0.02em;
+}
 .pl-topics {
   list-style: none;
   margin: 0;
@@ -195,42 +255,155 @@
   column-gap: 24px;
 }
 
-/* ---------- 2 e 10 Â· MÃºsica ---------- */
+/* ---------- 2 e 10 · Música ---------- */
 
-/* "Ã—2": a line the song sings twice, as a solid badge that reads at a glance. */
+/* The dock's title block: label right over the song title. */
+.pl-songh {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* "×2": a line the song sings twice, as a light tag (a solid navy pill outweighed the line). */
 .pl-rep {
   margin-left: 10px;
   vertical-align: 2px;
-  font-size: 0.85rem;
-  padding: 3px 10px;
-  background: var(--navy);
-  color: #fff;
+  font-size: 0.86rem;
+  padding: 2px 10px;
+  background: #fff;
+  color: var(--blueD);
+  box-shadow: inset 0 0 0 1.5px var(--blue);
   font-style: normal;
+  font-variant-numeric: tabular-nums;
 }
+/* The dock's "Tradução" label and its toggle share one centre line. */
+.pl-trans {
+  align-items: center;
+  line-height: 1;
+}
+.pl-trans .pl-transl {
+  line-height: 1;
+}
+/* Step 2's "Próximo" card follows the last lyric closely (it read as a detached band). */
+.pl-s2 > .pl-next {
+  margin-top: -4px;
+}
+/* Step 10's instruction: a quiet callout at the top of the lyrics (it was a small grey line). */
 .pl-sing {
-  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 10px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  color: var(--navy);
+  font-size: 1rem;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+.pl-sing b {
+  font-weight: 800;
+}
+.pl-singi {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--orangeT, #fde8dd);
+  color: var(--orange);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The reward sits at the callout's right edge, centred, apart from the sentence. */
+.pl-sing .pill.pl-singp {
+  flex: none;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  background: var(--goldT);
+  color: #8a5f00;
+}
+.app:not([data-layout="desktop"]) .pl-sing {
+  font-size: 0.95rem;
 }
 
-/* ---------- 3 Â· E-book ---------- */
+/* ---------- 3 · E-book ---------- */
 
 .pl-inside .pill {
-  font-size: 0.8rem;
-  padding: 5px 10px;
+  font-size: 0.9rem;
+  padding: 6px 12px;
   background: var(--cream);
 }
 .pl-inside .pill svg {
   color: var(--green);
 }
+/* The success line: what happened, then what it unlocked, each on its own line. */
+.pl-ebok {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.pl-ebok b {
+  font-weight: 800;
+  color: var(--green);
+  font-size: 1.02rem;
+}
+/* The buttons sit under a hairline, apart from the success line (they were packed against it). Both
+   layouts: two equal buttons side by side. */
 .pl-ebtns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-.app[data-layout="desktop"] .pl-ebtns {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1.5px solid rgba(31, 122, 76, 0.18);
+}
+/* "Baixar de novo": a green outline on the mint card (a white button with a beige border faded out). */
+.pl-ebtns .btn.light.pl-again {
+  --fg: var(--green);
+  border: 2px solid var(--green);
+}
+.app:not([data-layout="desktop"]) .pl-ebtns .btn {
+  padding: 0 8px;
+  gap: 6px;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+/* "PDF": the file type as a clear blue tag (beige on white was barely visible). */
+.pill.pl-pdf {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+/* Phone: what is inside as a two-column checklist (green check discs, no pill backgrounds, so the
+   different label lengths do not read as uneven chips), under a hairline. */
+.app:not([data-layout="desktop"]) .chips.pl-inside {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  padding-top: 12px;
+  border-top: 1.5px solid var(--line);
+}
+.app:not([data-layout="desktop"]) .pl-inside > span {
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 0.92rem;
+  padding: 0;
+  background: none;
+}
+.app:not([data-layout="desktop"]) .pl-inside > span svg {
+  width: 20px;
+  height: 20px;
+  padding: 4px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--greenT);
+  color: var(--green);
 }
 
-/* ---------- 4 Â· Take a Look ---------- */
+/* ---------- 4 · Take a Look ---------- */
 
 .pl-video {
   position: relative;
@@ -248,27 +421,38 @@
   display: block;
   background: var(--navyD);
 }
-/* The poster's play button sits in the lower-left corner, over a bottom gradient, so the
-   characters' faces stay visible. */
+/* The poster: one round play button in the lower-left corner and nothing else over the picture (a
+   caption pill covered part of the scene; a centred button covered Zach's face). The whole poster is
+   the button; the duration sits beside the "Cena" label above the video. */
 .pl-vplay {
   position: absolute;
   inset: 0;
   z-index: 2;
   display: flex;
-  flex-direction: row;
   align-items: flex-end;
   justify-content: flex-start;
-  gap: 12px;
   width: 100%;
-  padding: 14px;
-  background: linear-gradient(180deg, rgba(10, 26, 54, 0) 50%, rgba(10, 26, 54, 0.72));
+  padding: 0;
+  background: none;
   color: #fff;
   cursor: pointer;
-  text-align: left;
+}
+/* A play bar along the bottom of the poster: a soft dark fade, the play disc and "Assistir à cena",
+   so the button sits on its own band instead of over the picture's corner. */
+.pl-vbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 36px 14px 12px;
+  background: linear-gradient(to top, rgba(8, 20, 45, 0.78), rgba(8, 20, 45, 0.45) 55%, rgba(8, 20, 45, 0));
+}
+.app[data-layout="desktop"] .pl-vbar {
+  padding: 48px 18px 16px;
 }
 .pl-vbtn {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border-radius: 50%;
   background: var(--orange);
@@ -276,45 +460,50 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.6);
   transition: transform 0.12s;
 }
 .app[data-layout="desktop"] .pl-vbtn {
-  width: 60px;
-  height: 60px;
-}
-.app[data-layout="desktop"] .pl-vplay {
-  padding: 18px;
+  width: 50px;
+  height: 50px;
 }
 .pl-vplay .pl-vbtn svg {
-  margin-left: 3px;
+  margin-left: 2px;
+}
+.pl-vlbl {
+  font-weight: 800;
+  font-size: 1rem;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
 }
 .pl-vplay:hover .pl-vbtn {
   transform: scale(1.06);
 }
-.pl-vcap {
+.pl-vdur {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 52px;
+  gap: 5px;
+  font-size: 0.85rem;
   font-weight: 800;
-  font-size: 1rem;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-}
-.pl-vcap .pill {
-  background: rgba(255, 255, 255, 0.92);
   color: var(--navy);
-  text-shadow: none;
 }
-/* Desktop: four vocabulary cards per row, each with its speaker above the word. */
+.pl-vdur svg {
+  color: var(--muted);
+}
+/* Vocabulary: a blue speaker disc beside each word (cream on white was easy to miss). Desktop: four
+   compact cards per row, speaker beside the word as on the phone. */
+.pl-vocab .sayico {
+  width: 34px;
+  height: 34px;
+  background: var(--blueT);
+  color: var(--blue);
+}
 .app[data-layout="desktop"] .pl-vocab {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-.app[data-layout="desktop"] .pl-vocab .card {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 12px 14px;
+.app[data-layout="desktop"] .pl-vcard {
+  padding: 12px;
+  gap: 10px;
 }
 .pl-vocab .en {
   font-size: 1.02rem;
@@ -325,48 +514,210 @@
   opacity: 0.8;
 }
 
-/* ---------- 5 Â· Take It In ---------- */
+/* ---------- 5 · Take It In ---------- */
 
 .pl-who {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 .pl-who i {
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   flex: none;
+}
+/* The dialogue's progress: a firm navy-tinted track with a count beside it ("3 de 15 falas"); on a
+   phone it runs under the controls. */
+.bar.pl-dprog {
+  height: 10px;
+  background: rgba(15, 42, 85, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(15, 42, 85, 0.12);
+}
+.bar.pl-dprog i {
+  background: var(--blue);
+}
+.pl-dtrack {
+  align-items: center;
+  min-width: 0;
+}
+.app[data-layout="desktop"] .pl-dtrack {
+  margin: 0 8px;
+}
+.pl-dcount {
+  flex: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+}
+.pl-dcount b {
+  font-weight: 800;
+  color: var(--blueD);
+}
+/* Every spoken line is its own light card (the active one keeps the blue ring), so the long
+   dialogue reads as a list of turns; slightly tighter padding keeps the page shorter. */
+.pl-s5 .dialog-line:not(.stage) {
+  padding: 10px 14px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+.app[data-layout="desktop"] .pl-s5 .dialog-line:not(.stage) {
+  padding: 12px 18px;
+}
+/* The dock's speed pills at a readable size ("1×" was tiny). */
+.pl-scr .player-dock .seg button {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.9rem;
+}
+.pl-scr .player-dock .seg button:not(.on) {
+  color: var(--navy);
+}
+.pl-s5 .dialog-line.on:not(.stage) {
+  box-shadow: 0 0 0 2px var(--blue);
+}
+.pl-s5 .dialog-line .who {
+  margin-bottom: 2px;
+}
+/* A stage direction: one centred, dashed band (English · Portuguese), clearly apart from the lines. */
+.pl-s5 .dialog-line.stage {
+  margin: 4px 0;
+  padding: 9px 14px;
+  border: 1.5px dashed #a59c84;
+  background: #fff;
+}
+.pl-s5 .dialog-line.stage .en {
+  color: var(--navy);
+}
+.pl-stagex {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 2px 14px;
+  text-align: center;
+}
+.pl-stagex .en {
+  font-size: 1rem;
+}
+.pl-stagex .pt {
+  font-size: 0.95rem;
 }
 /* Translations: a dark grey that still reads as secondary (the muted grey was low-contrast). */
 .pl-s5 .dialog-line .pt {
   color: #3f4759;
 }
-.pl-s5 .dialog-line .grid .pt {
-  border-left: 2px solid var(--line2);
-  padding-left: 14px;
+/* Desktop: the translation column's rule only as tall as the translation itself. */
+.pl-s5 .grid > .pt {
+  align-self: start;
+  border-left: 1.5px solid var(--line);
+  padding-left: 16px;
+}
+.pl-s5 .dialog-line .grid {
+  gap: 18px;
 }
 .pl-s5 .dialog-line.on .pt {
   color: var(--ink);
 }
 .pl-s5 .dialog-line.stage .pt {
-  color: var(--muted);
+  color: #3f4759;
 }
 
-/* ---------- 6 Â· Take the Mic ---------- */
+/* ---------- 6 · Take the Mic ---------- */
 
-/* Phone: the status takes its own line under Ouvir + waveform. */
+/* The status beside Ouvir: secondary text, not a second heading. */
+.pl-scr .pl-mics {
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: #3f4759;
+  text-wrap: pretty;
+}
+.pl-microw.rec .pl-mics {
+  color: var(--orangeD);
+  font-weight: 700;
+}
+/* The take's waveform: a real track beside Ouvir (taller bars on a soft pill), grey until there is
+   a take, orange and moving while recording, blue once recorded. */
+.pl-microw .waves.pl-waves {
+  height: 36px;
+  gap: 3px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--cream);
+}
+.pl-microw .waves.pl-waves i {
+  width: 4px;
+}
+.pl-microw .waves.pl-waves.done i {
+  background: var(--blue);
+  opacity: 0.7;
+}
+/* Phone: Ouvir and the waveform share the first line; the status runs under them, full width. */
 .app:not([data-layout="desktop"]) .pl-microw {
   flex-wrap: wrap;
   row-gap: 6px;
 }
-.app:not([data-layout="desktop"]) .pl-mics {
-  flex-basis: 100%;
+/* Phone: the waveform fills the rest of Ouvir's line (a short pill left dead space beside it). */
+.app:not([data-layout="desktop"]) .pl-microw .waves.pl-waves {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: space-evenly;
+  overflow: hidden;
 }
-/* Phone: the score (or "Ver nota") over the feedback, which keeps the card's full width. */
-.app:not([data-layout="desktop"]) .pl-fb {
+.app:not([data-layout="desktop"]) .pl-microw .pl-mics {
+  flex: 1 1 100%;
+  font-size: 0.86rem;
+}
+/* The feedback text takes all the room beside the score. */
+.pl-scr .pl-fbt {
+  flex: 1;
+  min-width: 0;
+  text-wrap: pretty;
+}
+.app:not([data-layout="desktop"]) .pl-fb:not(.pl-fbh) {
   flex-direction: column;
   gap: 8px;
+}
+.app:not([data-layout="desktop"]) .pl-fb .pl-fbt {
+  align-self: stretch;
+}
+/* Score hidden. Desktop: the text in its own column (an even right edge), "Ver nota" centred on the
+   right. Phone: a head row (label + "Ver nota"), then the text at full width. */
+.pl-fb.pl-fbh {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 16px;
+}
+.pl-fb.pl-fbh .pl-fbt {
+  display: block;
+}
+.pl-fbhd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: none;
+}
+.pl-fbk {
+  display: none;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.app:not([data-layout="desktop"]) .pl-fb.pl-fbh {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.app:not([data-layout="desktop"]) .pl-fbk {
+  display: inline;
 }
 .pl-reveal {
   flex: none;
@@ -393,37 +744,112 @@
   color: var(--green);
 }
 
-/* ---------- 7 Â· Take a Lesson ---------- */
+/* ---------- 7 · Take a Lesson ---------- */
 
-/* Outline of the lesson: chips that jump to each block. */
-.pl-tocl {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 2px;
+/* Outline of the lesson: entries that jump to each block. Phone: a folded summary that opens a
+   compact numbered list; desktop: an even two-column index. */
+.pl-tocd {
+  padding: 0;
 }
-.pl-tocb {
+.pl-tocd > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+/* The folded outline reads as a control: a navy list disc, the label over the count, a chevron in
+   a soft disc. */
+.pl-tocico {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex: none;
-  min-height: 40px;
-  padding: 4px 14px 4px 5px;
-  border-radius: 999px;
+  justify-content: center;
+}
+.pl-tocst {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pl-tocsub {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--navy);
+}
+.pl-tocd .pl-tocchev {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   background: var(--cream);
+  align-items: center;
+  justify-content: center;
+}
+/* Desktop head: "Pronúncia" as a pill that jumps to the pronunciation card. */
+.pl-tocpr {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+.pl-tocpr:hover {
+  background: var(--navy2);
+}
+.pl-tocd > summary::-webkit-details-marker {
+  display: none;
+}
+.pl-tocd .pl-tocchev {
+  display: inline-flex;
+  color: var(--navy);
+  transition: transform 0.15s;
+}
+.pl-tocd[open] .pl-tocchev {
+  transform: rotate(180deg);
+}
+.pl-tocd > nav {
+  padding: 0 16px 8px;
+  border-top: 1.5px solid var(--line);
+}
+.pl-tocl {
+  display: flex;
+  flex-direction: column;
+}
+.pl-tocb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 2px;
+  border-top: 1.5px solid var(--line);
   color: var(--navy);
   font-weight: 700;
-  font-size: 0.9rem;
-  white-space: nowrap;
+  font-size: 0.95rem;
+  line-height: 1.3;
   text-align: left;
+}
+.pl-tocb:first-child {
+  border-top: 0;
 }
 .pl-tocb .num {
   width: 28px;
   height: 28px;
   flex: none;
   border-radius: 50%;
-  background: #fff;
+  background: var(--cream);
   color: var(--orange);
   display: inline-flex;
   align-items: center;
@@ -433,29 +859,58 @@
 .app[data-layout="desktop"] .pl-tocl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  overflow: visible;
+  gap: 8px;
 }
 .app[data-layout="desktop"] .pl-tocb {
-  white-space: normal;
-  border-radius: 14px;
-  line-height: 1.3;
+  gap: 10px;
+  min-height: 42px;
+  padding: 5px 12px 5px 6px;
+  border-top: 0;
+  border-radius: 12px;
+  background: var(--cream);
+  font-size: 0.98rem;
 }
-/* An odd last entry spans the row instead of sitting alone in the left column. */
-.app[data-layout="desktop"] .pl-tocb:last-child:nth-child(odd) {
+.app[data-layout="desktop"] .pl-tocb:hover {
+  background: #f0ead8;
+}
+/* An odd last entry (Pronúncia) spans the row instead of leaving a hole beside it. */
+.app[data-layout="desktop"] .pl-tocl > .pl-tocb:last-child:nth-child(odd) {
   grid-column: 1 / -1;
 }
-/* Each block reads as its own section: an orange top rule, a larger label, more air between them. */
+.app[data-layout="desktop"] .pl-tocn {
+  width: 30px;
+  height: 30px;
+  background: #fff;
+}
+/* Each block reads as its own section: its orange label and more air between the cards. */
 .pl-s7 > .card {
   scroll-margin-top: 12px;
 }
-.pl-s7 > .card:not(.pl-toc):not(.navy) {
-  box-shadow: inset 0 3px 0 var(--orange);
+.pl-s7 > .card + .card {
+  margin-top: 6px;
 }
-.pl-s7 > .card:not(.pl-toc) > .lbl.or:first-child {
-  font-size: 0.84rem;
+/* Phone: a block's numbered label stays on one line ("5 · GOOD MORNING E O RESTO DA GRADE"). */
+.app:not([data-layout="desktop"]) .pl-s7 > .card:not(.pl-toc) > .lbl.or:first-child {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
-.pl-s7 > .card:not(.pl-toc) + .card {
-  margin-top: 10px;
+/* The example boxes: their notes and translations at reading size, in a dark grey (the small muted
+   type was dense and faint). */
+/* The example boxes: a pale blue tint with a fine ring, so they never read as holes to the cream
+   page (they shared its tint). The inline cream background is the shared Blocks markup's. */
+.pl-s7 > .card:not(.pl-toc) .stack > .stack {
+  background: #f3f6fc !important;
+  box-shadow: inset 0 0 0 1.5px rgba(42, 111, 245, 0.14);
+}
+.pl-s7 > .card:not(.pl-toc) .stack > .stack .sm {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #3f4759;
+}
+.pl-s7 > .card:not(.pl-toc) .stack > .stack .pt {
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #3f4759;
 }
 .pl-pairs {
   display: grid;
@@ -479,9 +934,22 @@
   font-weight: 800;
   color: #fff;
 }
-/* Both words hug the â‰  in the middle, so each pair reads as one unit. */
-.pl-pair b:first-of-type {
+/* Both words hug the ≠ in the middle, so each pair reads as one unit. */
+.pl-pa {
   text-align: right;
+}
+.pl-pb {
+  text-align: left;
+}
+/* The transcription in a regular-weight font that has the IPA glyphs (Figtree has none, so a bold
+   fallback drew ɪ and ʊ heavier than the letters around them). */
+.pl-ipa {
+  margin-left: 6px;
+  font-family: "Segoe UI", "Noto Sans", "DejaVu Sans", "Lucida Sans Unicode", Arial, sans-serif;
+  font-weight: 400;
+  font-size: 0.92em;
+  color: var(--onNavy);
+  white-space: nowrap;
 }
 .pl-vs {
   color: var(--orange);
@@ -501,7 +969,7 @@
   min-width: 92px;
 }
 
-/* ---------- 8 Â· Take Away ---------- */
+/* ---------- 8 · Take Away ---------- */
 
 .pl-s8 .sayico {
   background: var(--blueT);
@@ -514,38 +982,93 @@
 .pl-exp {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
-.pl-s8 .pl-exp .pt {
+.pl-s8 .listrow .pl-exp .pt {
   color: #3f4759;
 }
+/* Phone: English and its translation on one line when they fit (wrapping as a pair otherwise). */
+.pl-expl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+  min-width: 0;
+}
+/* The usage note: italic, a third voice that does not read as a second translation (a dark grey
+   at reading size, AA on white). */
+.pl-expn {
+  margin-top: 2px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  font-style: italic;
+  color: #3f4759;
+}
+/* Phone: the translation always under the English (one structure for every row, instead of sharing
+   the line only when it fits). */
+.app:not([data-layout="desktop"]) .pl-expl {
+  flex-direction: column;
+  gap: 1px;
+}
 .pl-s8 .listrow {
-  padding: 11px 0;
+  padding: 10px 0;
 }
-/* Desktop: two columns of expressions (English over its translation in each). */
-.app[data-layout="desktop"] .pl-explist {
+/* Desktop: one row per expression, English · translation · note in three aligned columns under a
+   small header, so every row is one line tall and nothing stacks three deep. */
+.pl-exphead {
+  display: none;
+}
+.app[data-layout="desktop"] .pl-exphead {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr);
+  column-gap: 20px;
+  padding: 2px 0 8px 44px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
-.app[data-layout="desktop"] .pl-explist > .listrow:nth-child(2) {
-  border-top: 0;
+.app[data-layout="desktop"] .pl-exptab .sayrow {
+  align-items: center;
 }
-.app[data-layout="desktop"] .pl-explist > .listrow:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
+.app[data-layout="desktop"] .pl-exptab .pl-exp {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr);
+  column-gap: 20px;
+  align-items: baseline;
 }
-/* Desktop keywords: an even grid whose column count leaves no chip alone on a row. */
-.app[data-layout="desktop"] .chips.pl-words8 {
-  display: grid;
+.app[data-layout="desktop"] .pl-exptab .pl-expl {
+  display: contents;
+}
+.app[data-layout="desktop"] .pl-exptab .pl-expn {
+  margin-top: 0;
+}
+/* Keywords: equal chips (--cols per row) with their word centred; a short last row is centred. */
+.chips.pl-words8 {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
 }
 .pl-words8 .pill {
-  justify-content: flex-start;
+  flex: 0 0 calc((100% - (var(--cols, 3) - 1) * 8px) / var(--cols, 3));
+  justify-content: center;
   min-width: 0;
 }
+.app:not([data-layout="desktop"]) .pl-words8 .pill {
+  gap: 4px;
+  padding: 8px 4px;
+  font-size: 0.88rem;
+  letter-spacing: -0.01em;
+}
+.app:not([data-layout="desktop"]) .pl-words8 .pill svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
 
-/* ---------- 9 Â· Take Action ---------- */
+/* ---------- 9 · Take Action ---------- */
 
 .pl-opts.pl-optrow {
   display: grid;
@@ -555,19 +1078,50 @@
   min-height: 60px;
   font-size: 1.02rem;
 }
-.app[data-layout="desktop"] .pl-s9 .h2 {
-  font-size: 1.5rem;
+/* The question: a touch larger than body text, in the same scale as the exercise title. */
+.pl-s9 .h2.pl-q {
+  font-size: 1.2rem;
+  line-height: 1.35;
 }
+/* Exercise progress pills: untouched = white with a visible outline, started = blue, done = green
+   (beige on white was low-contrast). */
+.pl-exlist .pill.pl-expill:not(.bl) {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: inset 0 0 0 1.5px var(--line2);
+}
+/* Anterior and the next button as two equal halves (on the first question the next one keeps the
+   right half). */
 .pl-exnav {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: 10px;
 }
 .pl-exnav .btn {
   width: 100%;
+  white-space: nowrap;
 }
-.app[data-layout="desktop"] .pl-exnav {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* "Anterior": a quiet cream button with a fine outline, secondary to the forward action. */
+.pl-exnav .btn.pl-exprev {
+  --bg: var(--cream);
+  --fg: var(--navy);
+  border: 0;
+  box-shadow: inset 0 0 0 1.5px var(--line2);
+}
+/* Phone: "Anterior" at its own width, the next button fills the rest. */
+.app:not([data-layout="desktop"]) .pl-exnav {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.app:not([data-layout="desktop"]) .pl-exnav .btn.pl-exprev {
+  padding: 0 14px;
+  gap: 4px;
+}
+/* First question (no back button): the next button takes the whole row. */
+.pl-exnav > span:empty {
+  display: none;
+}
+.pl-exnav > span:empty + * {
+  grid-column: 1 / -1;
 }
 .pl-count {
   font-size: 0.9rem;
@@ -577,7 +1131,7 @@
 }
 .pl-count b {
   font-weight: 800;
-  color: var(--blueD);
+  color: var(--navy);
   font-size: 1.05rem;
 }
 
@@ -590,7 +1144,7 @@
 .app[data-layout="desktop"] .pl-exlist {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.pl-exlist .card {
+.pl-s9 .pl-exlist .card {
   display: flex;
   align-items: center;
   gap: 12px;

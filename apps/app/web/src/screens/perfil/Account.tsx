@@ -221,40 +221,127 @@ function ActionRow({
   );
 }
 
-/** The closing block: the data actions in their own card (the destructive one in red), then Sair. */
-export function AccountActions({ onLogout, desk = false }: { onLogout: () => void; desk?: boolean }) {
+/** Desktop: one action as a tile of the "Conta e dados" row; the destructive one tinted red. */
+function ActionTile({
+  icon,
+  t,
+  sub,
+  danger = false,
+  onClick,
+}: {
+  icon: string;
+  t: string;
+  sub: string;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      class="card row"
+      aria-label={t}
+      style={{
+        '--gap': '12px',
+        alignItems: 'flex-start',
+        padding: '14px',
+        textAlign: 'left',
+        background: danger ? DANGER_BG : '#fff',
+        borderColor: danger ? DANGER_LINE : undefined,
+      }}
+      onClick={activator(undefined, onClick)}
+    >
+      <span
+        class="iconbtn"
+        aria-hidden="true"
+        style={{ border: '0', background: danger ? '#fff' : 'var(--cream)', color: danger ? DANGER : undefined }}
+      >
+        <Icon name={icon} size={18} />
+      </span>
+      <span class="grow">
+        <span class="h3" style={{ display: 'block', color: danger ? DANGER : undefined }}>
+          {t}
+        </span>
+        <span class="sm" style={{ display: 'block' }}>
+          {sub}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** The danger zone: a faint red fill and edge, set apart from the harmless actions. */
+const DANGER_BG = '#FFF7F6';
+const DANGER_LINE = '#F2C4BE';
+
+const EXPORT = { icon: 'download', t: 'Baixar meus dados', sub: 'Uma cópia de tudo o que o app guarda sobre você.' };
+const RESET = { icon: 'repeat', t: 'Zerar progresso', sub: 'Recomeça o curso. A conta e o perfil continuam.' };
+const DELETE = { icon: 'close', t: 'Excluir minha conta', sub: 'Apaga a conta e todos os dados, para sempre.' };
+const LOGOUT = { icon: 'logout', t: 'Sair', sub: 'Encerra a sessão neste aparelho. Seus dados ficam salvos.' };
+
+/**
+ * The closing block. Phone: "Seus dados" (export, reset), then the deletion in its own red-edged card,
+ * then Sair. Desktop: one full-width card with the e-mail in use and four tiles: Sair, the export, the
+ * reset and the deletion (tinted red).
+ */
+export function AccountActions({
+  onLogout,
+  desk = false,
+  email = '',
+}: {
+  onLogout: () => void;
+  desk?: boolean;
+  email?: string;
+}) {
   const [sheet, setSheet] = useState<'' | 'reset' | 'delete'>('');
   const close = () => setSheet('');
+  const sheets = (
+    <>
+      {sheet === 'reset' && state.value.user ? <ResetSheet onClose={close} /> : null}
+      {sheet === 'delete' && state.value.user ? <DeleteSheet onClose={close} /> : null}
+    </>
+  );
+  if (desk)
+    return (
+      <>
+        <div class="card stack" id="pf-conta" style={{ '--gap': '14px' }}>
+          <div style={{ minWidth: '0' }}>
+            <div class="lbl">Conta e dados</div>
+            {email ? (
+              <div class="sm mt4" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Conectado como <b style={{ color: 'var(--navy)' }}>{email}</b>
+              </div>
+            ) : null}
+          </div>
+          {/* Sair is one of the row's tiles (first: the everyday action), the deletion last and red. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px' }}>
+            <ActionTile {...LOGOUT} onClick={onLogout} />
+            <ActionTile {...EXPORT} onClick={() => void exportData()} />
+            <ActionTile {...RESET} onClick={() => setSheet('reset')} />
+            <ActionTile {...DELETE} danger onClick={() => setSheet('delete')} />
+          </div>
+        </div>
+        {sheets}
+      </>
+    );
   return (
     <>
       <div class="card stack" style={{ '--gap': '4px' }}>
         <div class="lbl">Seus dados</div>
         <div>
-          <ActionRow
-            icon="download"
-            t="Baixar meus dados"
-            sub="Uma cópia de tudo o que o app guarda sobre você."
-            onClick={() => void exportData()}
-          />
-          <ActionRow
-            icon="repeat"
-            t="Zerar progresso"
-            sub="Recomeça o curso. A conta e o perfil continuam."
-            onClick={() => setSheet('reset')}
-          />
-          <ActionRow
-            icon="close"
-            t="Excluir minha conta"
-            sub="Apaga a conta e todos os dados, para sempre."
-            danger
-            onClick={() => setSheet('delete')}
-          />
+          <ActionRow {...EXPORT} onClick={() => void exportData()} />
+          <ActionRow {...RESET} onClick={() => setSheet('reset')} />
         </div>
       </div>
-      {/* Desktop: Perfil places Sair under both columns, so this card can end its column. */}
-      {desk ? null : <Btn label="Sair" kind="ghost" icon="logout" cls="block" onClick={onLogout} />}
-      {sheet === 'reset' && state.value.user ? <ResetSheet onClose={close} /> : null}
-      {sheet === 'delete' && state.value.user ? <DeleteSheet onClose={close} /> : null}
+      <div class="card stack" style={{ '--gap': '4px', background: DANGER_BG, borderColor: DANGER_LINE }}>
+        <div class="lbl" style={{ color: DANGER }}>
+          Zona de risco
+        </div>
+        <div>
+          <ActionRow {...DELETE} danger onClick={() => setSheet('delete')} />
+        </div>
+      </div>
+      <Btn label="Sair" kind="ghost" icon="logout" cls="block" onClick={onLogout} />
+      {sheets}
     </>
   );
 }

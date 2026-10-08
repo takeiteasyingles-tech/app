@@ -158,11 +158,28 @@ export default function Player({ params }: ScreenProps) {
   const s = view(state.value);
   const prog = s.prog[num] || 1;
   const step = Number(params.step) || (prog >= 10 ? 1 : prog);
+  // The trilha lock (the server's assertOpen): an unfinished episode opens only once every earlier
+  // published one is done. A deep link to a locked episode goes back to the trilha, saying why,
+  // instead of showing a player whose every step the server would refuse.
+  const lockedBy =
+    cat && Number.isInteger(num) && !s.epsDone[num]
+      ? (cat.episodes
+          .filter((x) => x.status === 'published' && x.num < num)
+          .map((x) => x.num)
+          .sort((x, y) => x - y)
+          .find((n) => !s.epsDone[n]) ?? null)
+      : null;
   // Unknown episode → trilha. No shortcut: a link to a step ahead lands on the last reached step.
   const redirect =
-    !Number.isInteger(num) || (error && !Ep) ? 'trilha' : Ep && step > prog ? `episodio/${num}/${prog}` : '';
+    !Number.isInteger(num) || (error && !Ep) || lockedBy != null
+      ? 'trilha'
+      : Ep && step > prog
+        ? `episodio/${num}/${prog}`
+        : '';
   useLayoutEffect(() => {
-    if (redirect) replace(redirect);
+    if (!redirect) return;
+    if (lockedBy != null) toast(`Termine o episódio ${lockedBy} para abrir este.`);
+    replace(redirect);
   }, [redirect]);
 
   if (redirect || !Ep || !cat) return null;
@@ -672,9 +689,10 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
   };
 
   /**
-   * The episode map. The status ("Feito" / "+10") sits on the step name's line and "Você está aqui"
-   * under the subtitle, so the subtitle keeps the row's full width: beside it (the prototype) they
-   * squeezed the subtitles onto 2-3 lines in the 300px aside.
+   * The episode map. A done step says so with its green check disc ("Feito" stays for screen
+   * readers), so the subtitle keeps the row's full width; a step still ahead shows "+10" centred on
+   * the row's right edge. "Você está aqui" sits under the subtitle. Beside the text (the prototype)
+   * the statuses squeezed the subtitles onto 2-3 lines in the 300px aside.
    */
   const stepList = () => {
     const max = s.prog[Ep.num] || 1;
@@ -682,7 +700,6 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       const now = x.n === step;
       const reached = x.n <= max;
       const done = reached && !now;
-      const side = now ? '' : done ? 'Feito' : '+10';
       return (
         <Fragment key={x.n}>
           {x.group ? (
@@ -699,20 +716,11 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
           >
             <span class="n">{done ? <Icon name="check" size={14} /> : x.n}</span>
             <span class="grow" style={{ minWidth: '0' }}>
-              <span class="pl-sth">
-                <span class="h3" style={{ fontSize: '1rem' }}>
-                  {x.name}
-                </span>
-                {side ? (
-                  <span
-                    class="xs"
-                    style={{ fontWeight: '800', flex: 'none', color: done ? 'var(--green)' : 'var(--muted)' }}
-                  >
-                    {side}
-                  </span>
-                ) : null}
+              <span class="h3" style={{ display: 'block', fontSize: '1rem' }}>
+                {x.name}
+                {done ? <span class="pl-sr"> · Feito</span> : null}
               </span>
-              <span class="sm" style={{ display: 'block' }}>
+              <span class="sm pl-stsub" style={{ display: 'block' }}>
                 {x.pt}
               </span>
               {now ? (
@@ -721,6 +729,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
                 </span>
               ) : null}
             </span>
+            {!reached ? <span class="pl-stpts">+10</span> : null}
           </button>
         </Fragment>
       );
@@ -805,7 +814,12 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
   const main = (
     <>
       {head}
-      {part.dock ? <div class="player-dock">{part.dock}</div> : null}
+      {part.dock ? (
+        <div class="player-dock">
+          {/* Desktop: the dock's content lines up with the 760px column the step body scrolls in. */}
+          <div class="pl-dockin">{part.dock}</div>
+        </div>
+      ) : null}
       <div class="scroll" id="pl-scroll" ref={scrollRef}>
         <div class="wrap" style={{ '--wrap': '760px', paddingTop: '16px' }}>
           <div class={`stack enter pl-body pl-s${step}`} style={{ '--gap': '16px' }}>

@@ -119,6 +119,16 @@ async function signup(page: Page, w?: Watch): Promise<string> {
   const email = `u5x-${id}@e2e.test`;
   await page.goto('/#/entrar');
   await page.getByText('Criar conta grátis').first().click();
+  // Known (U1-auth, not this slice): right after "Sair" in the same tab the first click on
+  // "Criar conta grátis" is swallowed; a second click works. Recorded, then retried once.
+  const moved = await expect(page)
+    .toHaveURL(/#\/cadastro\/1$/, { timeout: 3000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!moved) {
+    test.info().annotations.push({ type: 'u1-first-click-lost', description: 'Criar conta grátis needed 2 clicks' });
+    await page.getByText('Criar conta grátis').first().click();
+  }
   await expect(page).toHaveURL(/#\/cadastro\/1$/);
   await page.locator('#onb-fullname').fill('Bia Extra');
   await page.locator('#onb-name').fill('Bia');
@@ -1091,7 +1101,11 @@ test('security: slice source, client bundle, API guards for the EXTRA endpoints'
   for (const f of files) {
     const t = readFileSync(f, 'utf8');
     for (const p of personas) if (t.includes(p)) leaks.push(`${f}: persona "${p}"`);
-    if (/sk-[A-Za-z0-9]{20,}|CLOUDFLARE_API_TOKEN|TURNSTILE_SECRET|SESSION_SECRET|MEDIA_TOKEN_KEY|-----BEGIN [A-Z ]*PRIVATE KEY/.test(t))
+    if (
+      /sk-[A-Za-z0-9]{20,}|CLOUDFLARE_API_TOKEN|TURNSTILE_SECRET|SESSION_SECRET|MEDIA_TOKEN_KEY|-----BEGIN [A-Z ]*PRIVATE KEY/.test(
+        t,
+      )
+    )
       leaks.push(`${f}: secret-like string`);
   }
   expect(leaks).toEqual([]);
@@ -1111,9 +1125,9 @@ test('security: slice source, client bundle, API guards for the EXTRA endpoints'
   expect(
     (await apiPost(page, '/api/extras/woods-and-beans/dub', { line: maggieLine, score: 9, source: 'demo' })).status,
   ).toBe(400);
-  expect(
-    (await apiPost(page, '/api/extras/woods-and-beans/dub', { line: 999, score: 9, source: 'demo' })).status,
-  ).toBe(400);
+  expect((await apiPost(page, '/api/extras/woods-and-beans/dub', { line: 999, score: 9, source: 'demo' })).status).toBe(
+    400,
+  );
   const forged = await apiPost(page, '/api/extras/woods-and-beans/dub', {
     line: lucasLine,
     score: 10,
@@ -1278,4 +1292,362 @@ test.describe('desktop (round 4)', () => {
     await expect(sheet).toHaveCount(0);
     await noProblems(page, w);
   });
+});
+
+// =====================================================================================
+// Verifier round 5 (functional + security): edge routes, desktop flows, session switch.
+
+test('desafio ?x= with an unknown or a locked title: no crash, no blank title copy', async ({ page }) => {
+  test.setTimeout(60_000);
+  const w = await watch(page);
+  await signup(page, w);
+  const seen: Record<string, unknown> = {};
+  for (const x of ['nao-existe', 'level-up-zach']) {
+    await page.goto(`/#/extra/desafio?x=${x}`);
+    await expect(button(page, /^Começar$/)).toBeVisible();
+    const only = await page
+      .locator('.x-des-copy .xs')
+      .allInnerTexts()
+      .catch(() => []);
+    await button(page, /^Começar$/).click();
+    await page.waitForTimeout(800);
+    const playing = await page.locator('#g-fall').count();
+    const toast = await page
+      .locator('.toast')
+      .allInnerTexts()
+      .catch(() => []);
+    seen[x] = { only, playing, toast };
+    expect
+      .soft(
+        only.filter((t) => /Só com as falas de\s*$/.test(t.trim())),
+        `${x}: blank "Só com as falas de"`,
+      )
+      .toEqual([]);
+    await page.goto('/#/extra');
+    await expect(page.locator('#flow-home')).toBeVisible();
+  }
+  test.info().annotations.push({ type: 'desafio-x', description: JSON.stringify(seen) });
+  console.log(`[U5 r5] desafio-x ${JSON.stringify(seen)}`);
+  await noProblems(page, w);
+});
+
+test('sign out → another learner in the same tab: EXTRA content is fetched again (no stale per-plan cache)', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const w = await watch(page);
+  let extraFetches: string[] = [];
+  page.on('request', (r) => {
+    if (/extra(\/|%2F)[\w-]+\.json/i.test(r.url())) extraFetches.push(new URL(r.url()).pathname);
+  });
+  await signup(page, w);
+  await page.goto('/#/extra/desafio');
+  await expect(button(page, /^Começar$/)).toBeVisible();
+  // The intro's sample line comes from loadAllExtras().
+  await expect(page.locator('.x-demo .faller')).toBeVisible();
+  const firstSession = extraFetches.length;
+  expect(firstSession, 'first learner fetched the extras').toBeGreaterThan(0);
+  // Sign out from Você.
+  await page.goto('/#/perfil');
+  await button(page, /^Sair$/).click();
+  await expect(page).toHaveURL(/#\/entrar/, { timeout: 20_000 });
+  extraFetches = [];
+  await signup(page, w);
+  await page.goto('/#/extra/desafio');
+  await expect(button(page, /^Começar$/)).toBeVisible();
+  await page.waitForTimeout(1500);
+  test.info().annotations.push({ type: 'extra-refetch', description: String(extraFetches.length) });
+  console.log(`[U5 r5] extra fetches: first session ${firstSession}, after switch ${extraFetches.length}`);
+  // resetContent() drops every content file on sign out (it is per plan); the slice's own
+  // loadAllExtras cache should follow it, so the second learner's Desafio refetches the lines.
+  expect.soft(extraFetches.length, 'extra/*.json refetched after a session switch').toBeGreaterThan(0);
+  await noProblems(page, w);
+});
+
+test.describe('desktop (round 5)', () => {
+  test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
+
+  test('desktop flows: word → Revisão, scene end award, dub w/o mic, karaoke gap, persistence', async ({ page }) => {
+    test.setTimeout(150_000);
+    const w = await watch(page);
+    await signup(page, w);
+    // Catalog → detail via a rail cover; side nav stays on EXTRA.
+    await page.goto('/#/extra');
+    await expect(page.locator('aside.side a.nav.on')).toHaveText('EXTRA');
+    await page.goto('/#/extra/woods-and-beans');
+    await button(page, /Assistir com legendas/).click();
+    await expect(page).toHaveURL(/#\/extra\/woods-and-beans\/assistir$/);
+    // Word → Revisão.
+    await page.locator('.scene .sub .w').first().click();
+    const sheet = page.locator('.overlay .sheet');
+    await expect(sheet).toBeVisible();
+    const cardP = page.waitForResponse((r) => /\/api\/srs\/cards$/.test(r.url()) && r.request().method() === 'POST');
+    await sheet.getByRole('button', { name: /Levar para a Revisão/ }).click();
+    const cardRes = await cardP;
+    expect(cardRes.status()).toBeLessThan(300);
+    await expect(page.locator('.toast', { hasText: 'Levei para a Revisão' })).toBeVisible();
+    // Jump to the last line and step past it: scene end, `extra` award once.
+    const last = WOODS.lines.length - 1;
+    await page.locator(`#vl${last}`).click();
+    const seenP = page.waitForResponse((r) => /\/api\/extras\/woods-and-beans\/seen$/.test(r.url()));
+    await page.getByRole('button', { name: 'Próxima' }).click();
+    const seenRes = await seenP;
+    expect(seenRes.status()).toBe(200);
+    const end = page.locator('.card.paper', { hasText: 'Fim da cena' });
+    await expect(end).toBeVisible();
+    await expect(end).toContainText('e levou 1 palavra para a Revisão');
+    // Dub mode without a microphone (desktop).
+    await page.locator('.chip', { hasText: /Dublar o Lucas/ }).click();
+    const lucas = WOODS.lines.findIndex((l) => l.who === WOODS.dub);
+    await page.locator(`#vl${lucas}`).click();
+    const panel = page.locator('.card.paper', { hasText: 'Sua vez' });
+    await expect(panel).toBeVisible();
+    const dubP = page.waitForResponse((r) => /\/api\/extras\/woods-and-beans\/dub$/.test(r.url()), {
+      timeout: 20_000,
+    });
+    await panel.getByRole('button', { name: /Gravar a fala/ }).click();
+    const dubRes = await dubP;
+    expect(dubRes.status(), await dubRes.text()).toBe(200);
+    await expect(panel.getByRole('button', { name: 'Seguir a cena' })).toBeVisible();
+
+    // Karaoke gap on desktop: a right pick posts and counts.
+    await page.goto('/#/extra/musica/synth-nights');
+    await page.locator('.x-gapbtn').click();
+    await page.getByRole('button', { name: 'Tocar' }).click();
+    await expect(page.locator('#ly0')).toHaveClass(/on/);
+    const chips = page.locator('#ly0 .chips .chip');
+    await expect(chips).toHaveCount(3);
+    const gapP = page.waitForResponse((r) => /\/api\/karaoke\/gap$/.test(r.url()));
+    await chips.first().click();
+    const gapRes = await gapP;
+    expect(gapRes.status()).toBe(200);
+    await expect(page.locator('#ly0 .gap.filled')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Tocar' }).click(); // stop
+
+    // Persistence after reload: seen, dub average, deck.
+    await page.reload();
+    const st = await meState(page);
+    expect(st.extras.seen['woods-and-beans']).toBe(true);
+    expect(st.extras.dubs['woods-and-beans']).toBeGreaterThan(0);
+    expect(st.deck.length).toBeGreaterThan(0);
+    await noProblems(page, w);
+  });
+
+  test('desktop desafio: intro steps, a short round by keyboard, leaving stops the clock', async ({ page }) => {
+    test.setTimeout(60_000);
+    const w = await watch(page);
+    await signup(page, w);
+    await page.goto('/#/extra/desafio');
+    await expect(page.locator('.x-steps li')).toHaveCount(3);
+    await expect(page.locator('aside.side')).toHaveCount(0);
+    await button(page, /^Começar$/).click();
+    const en = (await page.locator('#g-fall').innerText()).trim();
+    const pt = PT_OF.get(en) as string;
+    const right = page.locator('.quiz-field + .stack button').filter({ hasText: pt }).first();
+    await right.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.row.between .h2').first()).toHaveText('10 pts');
+    await expect(page.locator('.pill.or')).toHaveText('x2');
+    await page.locator('.topbar').getByRole('button', { name: 'Voltar' }).click();
+    await expect(page).toHaveURL(/#\/extra$/);
+    await page.waitForTimeout(1500);
+    expect(apiHit(w, /\/api\/extras\/challenge$/)).toEqual([]);
+    await noProblems(page, w);
+  });
+});
+
+// =====================================================================================
+// Verifier round 6: a keyboard sweep of every EXTRA route (each Tab stop shows a focus ring and
+// has an accessible name) and cold deep-link loads, on both layouts.
+
+/** Tabs through up to `max` stops; returns the stops without a visible ring or without a name. */
+async function focusSweep(page: Page, max = 40): Promise<string[]> {
+  await page
+    .locator('body')
+    .click({ position: { x: 1, y: 1 } })
+    .catch(() => {});
+  const bad: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < max; i++) {
+    await page.keyboard.press('Tab');
+    const r = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || el === document.body) return null;
+      const cs = getComputedStyle(el);
+      const ring =
+        (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || (cs.boxShadow && cs.boxShadow !== 'none');
+      const name = (
+        el.getAttribute('aria-label') ||
+        el.getAttribute('aria-labelledby') ||
+        el.getAttribute('title') ||
+        el.innerText ||
+        ''
+      ).trim();
+      const id = `${el.tagName}.${el.className}|${name.slice(0, 40)}`;
+      return { id, fv: el.matches(':focus-visible'), ring: !!ring, name: !!name };
+    });
+    if (!r) continue;
+    if (seen.has(r.id)) break; // wrapped around
+    seen.add(r.id);
+    if (!r.fv || !r.ring) bad.push(`no ring: ${r.id}`);
+    if (!r.name) bad.push(`no name: ${r.id}`);
+  }
+  // A sweep that reached no control at all is itself a failure (nothing keyboard-reachable).
+  test.info().annotations.push({ type: 'sweep-stops', description: String(seen.size) });
+  if (!seen.size) bad.push('no tab stops reached');
+  return bad;
+}
+
+const SWEEP_ROUTES: [string, string, string][] = [
+  ['catalog', '/#/extra', '#flow-home'],
+  ['detail', '/#/extra/woods-and-beans', '.hero-extra'],
+  ['locked', '/#/extra/level-up-zach', '.hero-extra'],
+  ['play', '/#/extra/woods-and-beans/assistir?dub=1', '.scene'],
+  ['musica', '/#/extra/musica/synth-nights', '.lyrics'],
+  ['desafio', '/#/extra/desafio', '.x-des-grid'],
+];
+
+for (const vp of ['mobile', 'desktop'] as const) {
+  test.describe(`round 6 (${vp})`, () => {
+    if (vp === 'desktop')
+      test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
+    test(`keyboard sweep + cold deep links (${vp})`, async ({ page }) => {
+      test.setTimeout(150_000);
+      const w = await watch(page);
+      await signup(page, w);
+      const report: Record<string, string[]> = {};
+      for (const [name, url, sel] of SWEEP_ROUTES) {
+        await page.goto(url);
+        await page.reload(); // cold load straight into the route
+        await expect(page.locator(sel).first()).toBeVisible();
+        await page.waitForTimeout(300);
+        report[name] = await focusSweep(page);
+        report[`${name}:unnamed`] = await unnamedControls(page);
+      }
+      // Desafio while playing and música with the gap chips open.
+      await page.goto('/#/extra/desafio');
+      await button(page, /^Começar$/).click();
+      await expect(page.locator('#g-fall')).toBeVisible();
+      report['desafio-play:unnamed'] = await unnamedControls(page);
+      await page.locator('.topbar').getByRole('button', { name: 'Voltar' }).click();
+      await page.goto('/#/extra/musica/synth-nights');
+      await page.locator('.x-gapbtn').click();
+      await page.getByRole('button', { name: 'Tocar' }).click();
+      await expect(page.locator('#ly0 .chips .chip')).toHaveCount(3);
+      report['musica-gap:unnamed'] = await unnamedControls(page);
+      await page.getByRole('button', { name: 'Tocar' }).click();
+      const stops = test
+        .info()
+        .annotations.filter((a) => a.type === 'sweep-stops')
+        .map((a) => a.description);
+      console.log(`[U5 r6 ${vp}] stops ${stops.join(',')} ${JSON.stringify(report)}`);
+      const problems = Object.entries(report).filter(([, v]) => v.length);
+      expect.soft(problems, 'focus ring / accessible name problems').toEqual([]);
+      await noProblems(page, w);
+    });
+  });
+}
+
+// =====================================================================================
+// Verifier round 7: server/client agreement on episode-track gaps (EP_GAPS folded by the seed) and
+// recovery when an EXTRA write fails.
+
+test('música: episode-track gaps agree between the chips and /api/karaoke/gap (EP_GAPS)', async ({ page }) => {
+  test.setTimeout(60_000);
+  const w = await watch(page);
+  // The recording does not advance (play resolves without playing), so line 0 stays the sung one.
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = () => Promise.resolve();
+  });
+  await signup(page, w);
+  await page.goto('/#/extra/musica/season-one');
+  await expect(page.locator('.card .h2')).toHaveText('Say Hello');
+  await page.locator('.x-gapbtn').click();
+  await page.getByRole('button', { name: 'Tocar' }).click();
+  await expect(page.locator('#ly0')).toHaveClass(/on/);
+  const chips = page.locator('#ly0 .chips .chip');
+  await expect(chips).toHaveCount(3);
+  // EP_GAPS[1][0] = 'morning' (not the first word, 'Hi!').
+  await expect(chips.filter({ hasText: /^morning$/ })).toHaveCount(1);
+  const [gapRes] = await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/api/karaoke/gap')),
+    chips.filter({ hasText: /^morning$/ }).click(),
+  ]);
+  expect(gapRes.status()).toBe(200);
+  const body = (await gapRes.json()) as { correct: boolean; award: { awarded: boolean; points: number } | null };
+  expect(body.correct).toBe(true);
+  expect(body.award?.awarded).toBe(true);
+  await expect(page.locator('.pts-toast', { hasText: `+${body.award?.points} pontos` })).toBeVisible();
+  await expect(page.locator('#ly0 .gap.filled')).toHaveText('morning');
+  await page.getByRole('button', { name: 'Tocar' }).click();
+  // Every line: the server's answer is the gap the client blanks.
+  const { trackId, line } = gapRes.request().postDataJSON() as { trackId: string; line: number };
+  expect(line).toBe(0);
+  const expected = ['morning', 'How', 'thank', 'you', 'Zach', 'meet', 'See', 'soon'];
+  const answers: string[] = [];
+  for (let i = 0; i < expected.length; i++) {
+    const r = await apiPost(page, '/api/karaoke/gap', { trackId, line: i, choice: '-' });
+    answers.push(r.status === 200 ? (JSON.parse(r.text) as { answer: string }).answer : `#${r.status}`);
+  }
+  expect(answers).toEqual(expected);
+  await noProblems(page, w);
+});
+
+test('a failed EXTRA write: error toast, no crash, nothing counted; the learner can redo it', async ({ page }) => {
+  test.setTimeout(90_000);
+  const w = await watch(page);
+  await signup(page, w);
+  let failSeen = true;
+  let failCards = true;
+  await page.route('**/api/extras/woods-and-beans/seen', (route) =>
+    failSeen
+      ? route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'internal', message: 'Falhou aqui.' } }),
+        })
+      : route.continue(),
+  );
+  await page.route('**/api/srs/cards', (route) =>
+    failCards && route.request().method() === 'POST'
+      ? route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'internal', message: 'Falhou aqui.' } }),
+        })
+      : route.continue(),
+  );
+  await page.goto('/#/extra/woods-and-beans/assistir');
+  // Word → Revisão fails: no "Levei" toast, nothing counted.
+  await page.locator('.scene .sub .w').first().click();
+  await page
+    .locator('.overlay .sheet')
+    .getByRole('button', { name: /Levar para a Revisão/ })
+    .click();
+  await expect(page.locator('.toast').first()).toBeVisible();
+  await expect(page.locator('.toast', { hasText: 'Levei para a Revisão' })).toHaveCount(0);
+  // Scene end fails: the end card still shows, no word counted.
+  const last = WOODS.lines.length - 1;
+  await page.locator(`#vl${last}`).click();
+  await page.getByRole('button', { name: 'Próxima' }).click();
+  const end = page.locator('.card.paper', { hasText: 'Fim da cena' });
+  await expect(end.locator('.h2')).toHaveText(`Você viu ${WOODS.lines.length} falas.`);
+  await expect(page.getByText('Algo deu errado nesta tela.')).toHaveCount(0);
+  // Back online: watching again and finishing records it.
+  failSeen = false;
+  failCards = false;
+  await end.getByRole('button', { name: 'Assistir de novo' }).click();
+  await page.locator(`#vl${last}`).click();
+  const [seen] = await Promise.all([
+    page.waitForResponse((r) => /\/api\/extras\/woods-and-beans\/seen$/.test(r.url()) && r.status() === 200),
+    page.getByRole('button', { name: 'Próxima' }).click(),
+  ]);
+  expect(((await seen.json()) as { award: { awarded: boolean } | null }).award?.awarded).toBe(true);
+  await page.reload();
+  const st = await meState(page);
+  expect(st.extras.seen['woods-and-beans']).toBe(true);
+  // Only the forced failures' resource errors (500) are expected in the console.
+  w.errors = w.errors.filter((e) => !/status of 500/.test(e));
+  w.api = w.api.filter((a) => a.status !== 500);
+  await noProblems(page, w);
 });

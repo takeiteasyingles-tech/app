@@ -1,4 +1,4 @@
-﻿/* Episode done: slice-local polish on top of tie.css (scoped to cc-* classes this screen owns).
+/* Episode done: slice-local polish on top of tie.css (scoped to cc-* classes this screen owns).
    The prototype's card had no celebratory visual once the confetti burst was over, and on desktop the
    narrow column hugged the top of an empty canvas. */
 
@@ -14,6 +14,9 @@
 .now-card.cc-card {
   padding: 20px 22px 22px;
 }
+
+/* A gold medal: gold disc, navy trophy, a thin navy gap and a crisp gold rim (no translucent ring,
+   which read as a muddy grey on the navy card). */
 .cc-medal {
   width: 50px;
   height: 50px;
@@ -22,15 +25,137 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--goldT);
-  color: #b27a00;
+  background: linear-gradient(160deg, #ffd666, var(--gold) 70%);
+  color: var(--navy);
   box-shadow:
-    0 0 0 4px rgba(233, 162, 0, 0.28),
-    0 10px 22px -10px rgba(0, 0, 0, 0.6);
+    0 0 0 3px var(--navy),
+    0 0 0 5px #ffc93d,
+    0 12px 24px -10px rgba(0, 0, 0, 0.65);
 }
 
-/* A few static confetti pieces in a narrow band at the card's right edge: clear of the badge and the
-   title, and well inside the rounded corner. */
+/* The medal and the badge share one centre line. */
+.cc-top {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.cc-top .kick {
+  line-height: 1.2;
+  padding: 6px 12px;
+}
+/* "+40 pontos": a pill that reads as the reward, not a footnote. */
+.now-card.cc-card .pill.gold {
+  font-size: 0.95rem;
+  font-weight: 800;
+  padding: 6px 14px;
+  gap: 6px;
+}
+
+/* Not finished yet (a deep link): a progress card, without the celebration. */
+/* The flag medal: a solid gold rim around a soft gold disc (a thin faint outline read as unfinished). */
+.cc-todo .cc-medal {
+  background: rgba(255, 201, 61, 0.16);
+  color: #ffc93d;
+  box-shadow:
+    inset 0 0 0 3px #ffc93d,
+    0 10px 22px -10px rgba(0, 0, 0, 0.6);
+}
+.now-card .cc-why {
+  margin: 6px 0 0;
+  color: var(--onNavy);
+}
+.cc-nw {
+  white-space: nowrap;
+}
+/* The status and the episode's title, stacked beside the medal: plain text, no pill. */
+.cc-hd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cc-kt {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffc93d;
+}
+.cc-ept {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+}
+.now-card .cc-h {
+  line-height: 1.15;
+}
+.cc-prog {
+  align-items: center;
+}
+.cc-prog .stepcount {
+  margin-left: 0;
+}
+/* The bar: ten even segments (the group gaps left the last one floating apart), a touch taller. */
+.cc-prog .segs {
+  gap: 4px;
+}
+.cc-prog .segs i.sep {
+  margin-left: 0;
+}
+.now-card .cc-prog .segs i {
+  height: 10px;
+}
+/* What finishing gives: label and reward on one line, the goal under them, on a lighter band. */
+.cc-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.cc-goalh {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-goalx {
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  color: #fff;
+  text-wrap: pretty;
+}
+.now-card.cc-card .pill.gold.cc-pts {
+  flex: none;
+  white-space: nowrap;
+}
+.cc-of {
+  font-size: 1.1rem;
+  margin-left: 2px;
+  color: var(--muted);
+}
+/* Phone: a compact hero, so the CTA stays on the first screen. */
+.app:not([data-layout="desktop"]) .now-card.cc-todo {
+  padding: 18px 18px 18px;
+}
+.app:not([data-layout="desktop"]) .cc-todo .cc-medal {
+  width: 42px;
+  height: 42px;
+}
+.app:not([data-layout="desktop"]) .now-card .cc-h {
+  font-size: 1.6rem;
+}
+.app:not([data-layout="desktop"]) .cc-todo .cc-goalx {
+  font-size: 1rem;
+}
+.app:not([data-layout="desktop"]) .cc-todo .pill.gold.cc-pts {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+}
+
+/* Static confetti spread along the card's top, right and bottom edges, inside its padding: clear of
+   the badge, the title and the pill, and away from the rounded corners. */
 .now-card > .cc-spark {
   position: absolute;
   inset: 0;
@@ -38,73 +163,122 @@
 }
 .cc-spark i {
   position: absolute;
+  display: block;
   border-radius: 2px;
   opacity: 0.9;
 }
 .cc-spark i:nth-child(1) {
-  top: 16px;
-  right: 54px;
+  top: 6px;
+  left: 38%;
+  width: 7px;
+  height: 12px;
   background: var(--orange);
   transform: rotate(24deg);
-  width: 8px;
-  height: 14px;
 }
 .cc-spark i:nth-child(2) {
-  top: 22px;
-  right: 22px;
-  background: var(--gold);
-  transform: rotate(-32deg);
-  width: 6px;
-  height: 10px;
-}
-.cc-spark i:nth-child(3) {
-  top: 92px;
-  right: 34px;
-  background: #5b93ff;
-  transform: rotate(58deg);
-  width: 8px;
-  height: 14px;
-}
-.cc-spark i:nth-child(4) {
-  top: 120px;
-  right: 58px;
-  background: #fff;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  opacity: 0.6;
-}
-.cc-spark i:nth-child(5) {
-  top: 140px;
-  right: 18px;
-  background: #5b93ff;
-  transform: rotate(-48deg);
-  width: 6px;
-  height: 11px;
-}
-.cc-spark i:nth-child(6) {
-  top: 168px;
-  right: 44px;
-  background: var(--gold);
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-.cc-spark i:nth-child(7) {
-  top: 44px;
-  right: 16px;
-  background: var(--orange);
-  transform: rotate(-70deg);
+  top: 4px;
+  left: 51%;
   width: 5px;
   height: 9px;
-  opacity: 0.75;
+  background: var(--gold);
+  transform: rotate(-32deg);
 }
-.cc-spark i:nth-child(8) {
-  top: 112px;
-  right: 14px;
-  background: #fff;
+.cc-spark i:nth-child(3) {
+  top: 7px;
+  left: 63%;
+  width: 7px;
+  height: 11px;
+  background: #5b93ff;
+  transform: rotate(58deg);
+}
+.cc-spark i:nth-child(4) {
+  top: 5px;
+  left: 75%;
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  opacity: 0.55;
+  background: #fff;
+  opacity: 0.7;
+}
+.cc-spark i:nth-child(5) {
+  top: 8px;
+  left: 86%;
+  width: 6px;
+  height: 10px;
+  background: var(--orange);
+  transform: rotate(-48deg);
+}
+.cc-spark i:nth-child(6) {
+  top: 34px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.cc-spark i:nth-child(7) {
+  top: 40%;
+  right: 6px;
+  width: 5px;
+  height: 10px;
+  background: #5b93ff;
+  transform: rotate(30deg);
+}
+.cc-spark i:nth-child(8) {
+  top: 58%;
+  right: 9px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.6;
+}
+.cc-spark i:nth-child(9) {
+  top: 74%;
+  right: 6px;
+  width: 5px;
+  height: 9px;
+  background: var(--orange);
+  transform: rotate(-60deg);
+}
+.cc-spark i:nth-child(10) {
+  bottom: 6px;
+  left: 48%;
+  width: 6px;
+  height: 11px;
+  background: #5b93ff;
+  transform: rotate(70deg);
+}
+.cc-spark i:nth-child(11) {
+  bottom: 5px;
+  left: 60%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.cc-spark i:nth-child(12) {
+  bottom: 7px;
+  left: 71%;
+  width: 7px;
+  height: 12px;
+  background: var(--orange);
+  transform: rotate(-20deg);
+}
+.cc-spark i:nth-child(13) {
+  bottom: 6px;
+  left: 82%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.65;
+}
+.cc-spark i:nth-child(14) {
+  top: 16px;
+  right: 24px;
+  width: 4px;
+  height: 8px;
+  background: var(--gold);
+  transform: rotate(40deg);
 }

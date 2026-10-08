@@ -8,26 +8,48 @@ import { fmt, heard, lyricRows, type MicFeedback, pad2, type StepCtx, type StepO
 
 const playIco = (playing: boolean) => <Icon name={playing ? 'pause' : 'play'} size={20} />;
 
-/** "0:12 / 0:58"; before the metadata arrives only the position shows (never the prototype's "/ —"). */
-const clock = (t: number, d: number) => (d ? `${fmt(t)} / ${fmt(d)}` : fmt(t));
+/**
+ * "0:12 / 0:58"; before the metadata arrives only the position shows (never the prototype's "/ —").
+ * The duration is rounded (a 2,6 s file reads "0:03", not "0:02").
+ */
+const clock = (t: number, d: number) => (d ? `${fmt(t)} / ${fmt(Math.round(d))}` : fmt(t));
+
+/** One hue per character of the episode, in cast order (used when the catalog colours repeat). */
+const HUES = ['#F45A28', '#2A6FF5', '#1F7A4C', '#E9A200', '#8E5BD6', '#D9645B', '#0E8A9A'];
+
+/**
+ * The colour of a character in this episode: its avatar ring (cast strip) and its dot (Take It In).
+ * The catalog's colours when they tell the whole cast apart; otherwise (the prototype's cast was
+ * four slate characters and one blue, so the blue one looked "selected") one hue per character.
+ */
+export function castColor(Ep: StepCtx['Ep'], cat: StepCtx['cat'], who: string): string {
+  const own = Ep.cast.map((n) => cat.cast[n]?.color ?? '');
+  const distinct = own.every((c) => c) && new Set(own.map((c) => c.toLowerCase())).size === own.length;
+  const i = Ep.cast.indexOf(who);
+  if (i < 0) return cat.cast[who]?.color ?? 'var(--muted)';
+  return distinct ? (own[i] as string) : (HUES[i % HUES.length] as string);
+}
 
 /**
  * The episode's cast. Phone: an even strip (avatar over name), one column per character (the
- * prototype's wrapping pills left a ragged 3 + 2). Desktop: one row of avatar + name pills.
- * Every avatar is navy; the character's colour (the same dot as in Take It In) is only its ring.
+ * prototype's wrapping pills left a ragged 3 + 2). Desktop: a row of avatar + name pills, each as
+ * wide as its name. Every avatar is navy; the character's colour (its dot in Take It In) is the ring.
  */
-function CastStrip({ Ep, cat, desk }: Pick<StepCtx, 'Ep' | 'cat' | 'desk'>) {
+function CastStrip({ Ep, cat, desk, bare = false }: Pick<StepCtx, 'Ep' | 'cat' | 'desk'> & { bare?: boolean }) {
   const n = Ep.cast.length;
+  // Up to 6 characters: one even row spread across the full width (phone: equal columns; desktop:
+  // pills as wide as their names, spaced evenly from edge to edge). More than 6 wrap.
+  const even = n > 0 && n <= 6;
   return (
     <div
-      class="pl-cast"
-      style={n && n <= 6 ? { gridTemplateColumns: `repeat(${n}, minmax(0, ${desk ? '150px' : '1fr'}))` } : undefined}
+      class={`pl-cast${even ? ' pl-even' : ''}${bare ? ' pl-bare' : ''}`}
+      style={even ? { gridTemplateColumns: desk ? `repeat(${n}, auto)` : `repeat(${n}, minmax(0, 1fr))` } : undefined}
     >
       {Ep.cast.map((name) => {
         const c = cat.cast[name];
         return (
           <span key={name} class="pl-castm">
-            <b class="pl-ava" style={{ '--c': c?.color ?? 'var(--line2)' }}>
+            <b class="pl-ava" style={{ '--c': castColor(Ep, cat, name) }}>
               {c?.initials ?? name.slice(0, 2).toUpperCase()}
             </b>
             <span class="pl-castn">{name}</span>
@@ -66,9 +88,7 @@ function Intro({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx): StepOut {
           <div class="bgimg" style={{ backgroundImage: homeBg ? `url(${homeBg})` : undefined, opacity: '.3' }} />
           <div class="row between">
             <span class="kick">Abertura</span>
-            <span class="pill" style={{ background: 'var(--navy2)', color: '#fff' }}>
-              Ep. {pad2(Ep.num)}
-            </span>
+            <span class="pill pl-eppill">Ep. {pad2(Ep.num)}</span>
           </div>
           <div>
             <div class="h1" style={{ color: '#fff' }}>
@@ -88,8 +108,14 @@ function Intro({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx): StepOut {
                 <div class="bar grow">
                   <i id="pl-bar" style={{ width: `${P.aD ? Math.round((P.aT / P.aD) * 100) : 0}%` }} />
                 </div>
-                <span class="xs" id="pl-time" style={{ color: '#fff' }}>
-                  {clock(P.aT, P.aD)}
+                {/* The opening is a short sting: before it plays, "vinheta · 3 s" says so (a bare
+                    "0:00 / 0:03" read like placeholder audio); while it plays, the clock. */}
+                <span class="xs" id="pl-time" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
+                  {P.playing || P.aT > 0
+                    ? clock(P.aT, P.aD)
+                    : P.aD
+                      ? `vinheta · ${Math.max(1, Math.round(P.aD))} s`
+                      : 'vinheta'}
                 </span>
               </div>
             ) : null}
@@ -119,7 +145,7 @@ function Intro({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx): StepOut {
               <>
                 <div
                   class="lbl"
-                  style={topics.length ? { borderTop: '1.5px solid var(--line)', paddingTop: '12px' } : undefined}
+                  style={topics.length ? { borderTop: '1.5px solid var(--line2)', paddingTop: '14px' } : undefined}
                 >
                   Quem aparece
                 </div>
@@ -145,19 +171,20 @@ function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
   return {
     dock: (
       <div class="stack" style={{ '--gap': '8px' }}>
-        <div class="row between">
-          <div style={{ minWidth: '0' }}>
+        {/* Label and title are one block; the Tradução toggle centres on that block. */}
+        <div class="row between" style={{ '--gap': '12px' }}>
+          <div class="pl-songh">
             <div class="lbl">{step === 2 ? 'Música · 1ª passada' : 'Música · cante junto'}</div>
-            <div class="h2 mt4">{Ep.songTitle}</div>
+            <div class="h2">{Ep.songTitle}</div>
           </div>
           <button
             type="button"
-            class="row"
+            class="row pl-trans"
             aria-pressed={P.trans}
             onClick={tap(a.trans)}
-            style={{ '--gap': '8px', fontWeight: '800', minHeight: '44px' }}
+            style={{ '--gap': '8px', fontWeight: '800', minHeight: '44px', flex: 'none' }}
           >
-            {'Tradução '}
+            <span class="pl-transl">Tradução</span>
             <span class={`toggle${P.trans ? ' on' : ''}`}>
               <i />
             </span>
@@ -189,7 +216,15 @@ function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
       <>
         {/* Step 10's instruction scrolls away with the lyrics instead of making the fixed dock taller. */}
         {step === 10 ? (
-          <p class="sm pl-sing">Agora é sua vez. Cante junto: a letra acompanha a música. +10 pontos ao terminar.</p>
+          <div class="pl-sing">
+            <span class="pl-singi" aria-hidden="true">
+              <Icon name="mic" size={18} />
+            </span>
+            <span class="grow">
+              <b>Agora é sua vez:</b> cante junto <span class="nw">até o fim.</span>
+            </span>
+            <span class="pill pl-singp">+10 pontos</span>
+          </div>
         ) : null}
         <div class="stack" style={{ '--gap': '2px' }}>
           {rows.map(({ l, n, first }, i) => (
@@ -240,12 +275,7 @@ function NextCard({
   children: ComponentChildren;
 }) {
   return (
-    <button
-      type="button"
-      class="card row pl-next"
-      onClick={onClick}
-      style={{ '--gap': '14px', border: '2px dashed var(--navy)' }}
-    >
+    <button type="button" class="card row pl-next" onClick={onClick} style={{ '--gap': '14px' }}>
       <span class="pl-cico">
         <Icon name={icon} size={22} />
       </span>
@@ -268,7 +298,10 @@ function Ebook({ Ep, cat, s, P, a, tap }: StepCtx): StepOut {
             <span class="lbl">
               E-book {pad2(Ep.ebook)} · Episódios {Ep.ebookEps}
             </span>
-            <span class="pill">PDF</span>
+            <span class="pill navy pl-pdf">
+              <Icon name="book" size={14} />
+              PDF
+            </span>
           </div>
           <div class="h1">{Ep.ebookTitle}</div>
           <p class="p-read">{Ep.scope}</p>
@@ -283,14 +316,15 @@ function Ebook({ Ep, cat, s, P, a, tap }: StepCtx): StepOut {
         </div>
         {s.ebooks[Ep.ebook] ? (
           <>
-            <div class="card gr stack" style={{ '--gap': '14px' }}>
+            <div class="card gr stack pl-ebdone" style={{ '--gap': '16px' }}>
               {/* The prototype's single success line, plus the actions it lacked (open / download again). */}
               <div class="row" style={{ '--gap': '12px' }}>
                 <span class="iconbtn" style={{ background: 'var(--green)', color: '#fff', border: '0', flex: 'none' }}>
                   <Icon name="check" size={20} />
                 </span>
-                <span class="p grow">
-                  <b style={{ color: 'var(--green)' }}>E-book baixado.</b> O episódio está liberado.
+                <span class="grow pl-ebok">
+                  <b>E-book baixado.</b>
+                  <span>O episódio está liberado.</span>
                 </span>
               </div>
               <div class="pl-ebtns">
@@ -298,6 +332,7 @@ function Ebook({ Ep, cat, s, P, a, tap }: StepCtx): StepOut {
                 <Btn
                   label={busy ? 'Baixando…' : 'Baixar de novo'}
                   kind="light compact"
+                  cls="pl-again"
                   icon="download"
                   onClick={a.download}
                 />
@@ -331,11 +366,19 @@ function Look({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx, onVideoEnd: () => v
   return {
     body: (
       <>
-        <div class="lbl">Cena · Act 1</div>
+        <div class="row between" style={{ '--gap': '10px' }}>
+          <div class="lbl">Cena · Act 1</div>
+          {Ep.sceneVideo && P.vD ? (
+            <span class="pl-vdur">
+              <Icon name="clock" size={14} />
+              {fmt(P.vD)}
+            </span>
+          ) : null}
+        </div>
         {Ep.sceneVideo ? (
-          // Until the student presses play the scene is a clean poster (its first frame) with one big
-          // play button: no native control bar over the picture and no loading spinner. The native
-          // controls appear once it plays.
+          // Until the student presses play the scene is a clean poster (its first frame) with one play
+          // button in the middle: no native control bar, no caption over the picture and no loading
+          // spinner. The native controls appear once it plays.
           <div class="pl-video">
             {/* biome-ignore lint/a11y/useMediaCaption: the scene has no caption track yet; the dialogue is in Take It In */}
             <video
@@ -356,12 +399,11 @@ function Look({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx, onVideoEnd: () => v
                   tap(() => a.vidStart(v))(ev);
                 }}
               >
-                <span class="pl-vbtn">
-                  <Icon name="play" size={30} />
-                </span>
-                <span class="pl-vcap">
-                  <span>Assistir à cena</span>
-                  {P.vD ? <span class="pill">{fmt(P.vD)}</span> : null}
+                <span class="pl-vbar">
+                  <span class="pl-vbtn">
+                    <Icon name="play" size={22} />
+                  </span>
+                  <span class="pl-vlbl">Assistir à cena</span>
                 </span>
               </button>
             )}
@@ -374,23 +416,20 @@ function Look({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx, onVideoEnd: () => v
             </div>
           </div>
         )}
-        {Ep.cast.length ? (
-          <div class="card" style={{ padding: '14px 12px' }}>
-            <CastStrip Ep={Ep} cat={cat} desk={desk} />
-          </div>
-        ) : null}
+        {/* The cast sits straight on the page (a card around five names was heavy). */}
+        {Ep.cast.length ? <CastStrip Ep={Ep} cat={cat} desk={desk} bare /> : null}
         <div class="lbl mt8">Vocabulário visual · toque para ouvir</div>
         <div class="grid2 pl-vocab">
           {Ep.visual.map((v, i) => (
             <button
               type="button"
               key={v.id ?? i}
-              class="card row"
+              class="card row pl-vcard"
               onClick={tap(() => a.say(v.en))}
               style={{ '--gap': '12px', padding: '12px 14px' }}
             >
               <span class="sayico">
-                <Icon name="speaker" size={16} />
+                <Icon name="speaker" size={18} />
               </span>
               <span class="grow" style={{ minWidth: '0' }}>
                 <span class="en" style={{ display: 'block' }}>
@@ -419,38 +458,49 @@ const SPEEDS = [0.75, 1, 1.25] as const;
 function Dialog({ Ep, cat, P, desk, a, tap }: StepCtx): StepOut {
   const spoken = Ep.dialog.filter((d) => !d.stage).length;
   const pct = Ep.dialog.length ? Math.round(((P.line + (P.playing ? 1 : 0)) / Ep.dialog.length) * 100) : 0;
+  // Spoken lines already passed (the line being spoken counts): "3 de 15 falas" beside the track.
+  const past = Ep.dialog.slice(0, P.line + (P.playing ? 1 : 0)).filter((d) => !d.stage).length;
+  const progress = (
+    <div class={`row pl-dtrack ${desk ? 'grow' : ''}`} style={{ '--gap': '10px' }}>
+      <div class="bar pl-dprog grow">
+        <i style={{ width: `${pct}%` }} />
+      </div>
+      <span class="pl-dcount">
+        <b>{past}</b>
+        {` de ${spoken} falas`}
+      </span>
+    </div>
+  );
   return {
     dock: (
-      <div class="row" style={{ '--gap': '10px' }}>
-        <button
-          type="button"
-          class={`playbtn${P.playing ? '' : ' navy'}`}
-          onClick={tap(a.play)}
-          aria-label="Tocar diálogo"
-          style={{ width: '48px', height: '48px' }}
-        >
-          {playIco(P.playing)}
-        </button>
-        <div class={desk ? '' : 'grow'} style={desk ? { flex: 'none', minWidth: '150px' } : undefined}>
-          <div class="h3" style={{ fontSize: '.95rem' }}>
-            {P.playing ? 'Tocando' : 'Ouvir tudo'}
+      <div class="stack" style={{ '--gap': '8px' }}>
+        <div class="row" style={{ '--gap': '10px' }}>
+          <button
+            type="button"
+            class={`playbtn${P.playing ? '' : ' navy'}`}
+            onClick={tap(a.play)}
+            aria-label="Tocar diálogo"
+            style={{ width: '48px', height: '48px' }}
+          >
+            {playIco(P.playing)}
+          </button>
+          <div class={desk ? '' : 'grow'} style={desk ? { flex: 'none', minWidth: '150px' } : undefined}>
+            <div class="h3" style={{ fontSize: '.95rem' }}>
+              {P.playing ? 'Tocando' : 'Ouvir tudo'}
+            </div>
+            <div class="xs">{P.playing ? 'rolagem automática' : 'ou toque numa fala'}</div>
           </div>
-          <div class="xs">
-            {P.playing ? 'rolagem automática' : `ou toque numa fala${desk ? ` · ${spoken} falas` : ''}`}
+          {desk ? progress : null}
+          <div class="seg">
+            {SPEEDS.map((v) => (
+              <button type="button" key={v} class={P.speed === v ? 'on' : ''} onClick={tap(() => a.speed(v))}>
+                {`${String(v).replace('.', ',')}×`}
+              </button>
+            ))}
           </div>
         </div>
-        {desk ? (
-          <div class="bar grow" style={{ margin: '0 8px' }}>
-            <i style={{ width: `${pct}%` }} />
-          </div>
-        ) : null}
-        <div class="seg">
-          {SPEEDS.map((v) => (
-            <button type="button" key={v} class={P.speed === v ? 'on' : ''} onClick={tap(() => a.speed(v))}>
-              {`${String(v).replace('.', ',')}×`}
-            </button>
-          ))}
-        </div>
+        {/* Phone: the progress runs under the controls, the full width of the dock. */}
+        {desk ? null : progress}
       </div>
     ),
     body: (
@@ -473,14 +523,22 @@ function Dialog({ Ep, cat, P, desk, a, tap }: StepCtx): StepOut {
             >
               {d.who ? (
                 <div class="who pl-who">
-                  <i style={{ background: cat.cast[d.who]?.color ?? 'var(--orange)' }} />
+                  <i style={{ background: castColor(Ep, cat, d.who) }} />
                   {d.who.toUpperCase()}
                 </div>
               ) : null}
-              <div class={desk ? 'grid' : 'stack'} style={{ '--gap': '3px' }}>
-                <div class="en">{d.en}</div>
-                <div class="pt">{d.pt}</div>
-              </div>
+              {d.stage ? (
+                // A stage direction is not a line anyone says: one centred band, English · Portuguese.
+                <div class="pl-stagex">
+                  <div class="en">{d.en}</div>
+                  <div class="pt">{d.pt}</div>
+                </div>
+              ) : (
+                <div class={desk ? 'grid' : 'stack'} style={{ '--gap': '3px' }}>
+                  <div class="en">{d.en}</div>
+                  <div class="pt">{d.pt}</div>
+                </div>
+              )}
               {d.err || d.hook ? <div class={`note${d.err ? ' err' : ''}`}>{d.err || d.hook}</div> : null}
             </button>
           ))}
@@ -492,7 +550,7 @@ function Dialog({ Ep, cat, P, desk, a, tap }: StepCtx): StepOut {
 
 // ---------- 6 · Take the Mic (gravar) ----------
 
-function Mic({ Ep, s, P, training, a, tap }: StepCtx): StepOut {
+function Mic({ Ep, s, P, desk, training, a, tap }: StepCtx): StepOut {
   const m = Ep.mic[P.micIdx];
   if (!m) return { body: <></> };
   const sc = s.scores[m.id];
@@ -507,44 +565,55 @@ function Mic({ Ep, s, P, training, a, tap }: StepCtx): StepOut {
           : 'Toque no microfone e fale · +5 a +15';
   // Training mode hides the score: the card is neutral too (green/blue would give the score away).
   const hidden = training && !P.showScore;
+  const fbText = fbObj ? (
+    <span class="sm pl-fbt" style={{ color: 'var(--navy)' }}>
+      {fbObj.praise_pt || m.fb}
+      {fbObj.heard ? (
+        <>
+          <br />
+          {`Entendi: “${fbObj.heard}”`}
+        </>
+      ) : null}
+      {fbObj.issues.map((x, i) => (
+        <Fragment key={i}>
+          <br />
+          <b>{x.word}:</b> {x.tip_pt}
+        </Fragment>
+      ))}
+    </span>
+  ) : null;
   const fb =
     fbObj && P.mic !== 'rec' && P.mic !== 'busy' ? (
-      <div
-        class={`fb ${hidden ? 'tip' : fbObj.score >= 8 ? 'ok' : 'fix'} row pop pl-fb`}
-        style={{ '--gap': '12px', alignItems: 'flex-start', padding: '10px 12px' }}
-      >
-        {hidden ? (
-          <button
-            type="button"
-            class="pl-reveal"
-            onClick={tap(a.showScore)}
-            aria-label="Ver nota (escondida no modo treino)"
-          >
-            <Icon name="eye" size={18} />
-            <span>Ver nota</span>
-          </button>
-        ) : (
+      hidden ? (
+        // Score hidden. Desktop: the text in its own column, "Ver nota" centred on the right. Phone: a
+        // head row ("Modo treino · nota escondida" + "Ver nota"), the text under it at full width.
+        <div class="fb tip pop pl-fb pl-fbh" style={{ padding: '10px 12px' }}>
+          <div class="pl-fbhd">
+            <span class="pl-fbk">Nota escondida</span>
+            <button
+              type="button"
+              class="pl-reveal"
+              onClick={tap(a.showScore)}
+              aria-label="Ver nota (escondida no modo treino)"
+            >
+              <Icon name="eye" size={18} />
+              <span>Ver nota</span>
+            </button>
+          </div>
+          {fbText}
+        </div>
+      ) : (
+        <div
+          class={`fb ${fbObj.score >= 8 ? 'ok' : 'fix'} row pop pl-fb`}
+          style={{ '--gap': '12px', alignItems: 'flex-start', padding: '10px 12px' }}
+        >
           <span class="num" style={{ fontSize: '1.6rem', lineHeight: '1', flex: 'none' }}>
             {fbObj.score}
             <span class="xs muted">/10</span>
           </span>
-        )}
-        <span class="sm pl-fbt" style={{ color: 'var(--navy)' }}>
-          {fbObj.praise_pt || m.fb}
-          {fbObj.heard ? (
-            <>
-              <br />
-              {`Entendi: “${fbObj.heard}”`}
-            </>
-          ) : null}
-          {fbObj.issues.map((x, i) => (
-            <Fragment key={i}>
-              <br />
-              <b>{x.word}:</b> {x.tip_pt}
-            </Fragment>
-          ))}
-        </span>
-      </div>
+          {fbText}
+        </div>
+      )
     ) : null;
   return {
     dock: (
@@ -571,21 +640,22 @@ function Mic({ Ep, s, P, training, a, tap }: StepCtx): StepOut {
             <Icon name={P.mic === 'rec' ? 'stop' : 'mic'} size={28} />
           </button>
         </div>
-        {/* On a phone the status takes its own line under Ouvir + waveform (beside them it was squeezed
-            into a narrow 3-line column). */}
-        <div class="row pl-microw" style={{ '--gap': '10px' }}>
+        {/* Ouvir, then the take's waveform (grey: nothing recorded; orange and moving: recording;
+            blue: a recorded take) and the status. On a phone the status drops under them. */}
+        <div class={`row pl-microw${P.mic === 'rec' ? ' rec' : ''}`} style={{ '--gap': '12px' }}>
           <button type="button" class="btn light compact" onClick={tap(() => a.say(m.en))}>
             <Icon name="speaker" size={18} />
             <span>Ouvir</span>
           </button>
-          <div class={`waves mini${P.mic === 'rec' ? ' rec' : P.mic === 'done' || fbObj ? ' done' : ''}`}>
-            {Array.from({ length: 10 }, (_, i) => (
-              <i key={i} style={{ height: `${8 + ((i * 7) % 16)}px`, animationDelay: `${i * 0.06}s` }} />
+          <div
+            class={`waves mini pl-waves${P.mic === 'rec' ? ' rec' : P.mic === 'done' || fbObj ? ' done' : ''}`}
+            aria-hidden="true"
+          >
+            {Array.from({ length: desk ? 16 : 22 }, (_, i) => (
+              <i key={i} style={{ height: `${8 + ((i * 7) % 17)}px`, animationDelay: `${i * 0.05}s` }} />
             ))}
           </div>
-          <span class="sm grow pl-mics" style={{ fontWeight: '700', lineHeight: '1.35', color: 'var(--navy)' }}>
-            {status}
-          </span>
+          <span class="sm grow pl-mics">{status}</span>
         </div>
         {fb}
       </div>
@@ -635,10 +705,7 @@ function Mic({ Ep, s, P, training, a, tap }: StepCtx): StepOut {
         </div>
         <p class="sm pl-note">
           <Icon name="bulb" size={16} />
-          <span>
-            A nota mede quanto da sua fala foi entendida, não quanto você soa americano.
-            {hidden ? ' No modo treino ela fica escondida até você tocar em “Ver nota”.' : ''}
-          </span>
+          <span>A nota mede quanto da sua fala foi entendida, não quanto você soa americano.</span>
         </p>
       </>
     ),
@@ -653,37 +720,82 @@ function toBlock(i: number): void {
   cards[i]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
+/** "hi /haɪ/" → the word and its IPA, so the transcription gets a font that has the IPA glyphs. */
+function PairWord({ t, cls }: { t: string; cls: string }) {
+  const m = /^(.*?)\s*(\/[^/]+\/)\s*$/.exec(t);
+  return (
+    <span class={cls}>
+      <b>{m ? m[1] : t}</b>
+      {m ? <span class="pl-ipa">{m[2]}</span> : null}
+    </span>
+  );
+}
+
 function Lesson({ Ep, desk, a, tap }: StepCtx): StepOut {
   const pr = Ep.pron;
-  // Desktop "Nesta lição": one entry per block, so a long lesson has a visible outline and a way to
-  // jump (on a phone the outline would add a screen of scrolling before the first block).
+  // "Nesta lição": one entry per block, so a long lesson has a visible outline and a way to jump
+  // (desktop: an even two-column index; phone: a folded one-line summary that opens the list, so the
+  // outline does not push the lesson a screen down).
   const toc = Ep.lesson.map((b, i) => {
     const m = /^\s*(\d+)\s*·\s*(.+)$/.exec(b.k);
     return { n: m ? m[1] : String(i + 1), t: sentenceCase((m ? m[2] : b.k) ?? '') };
   });
+  // Desktop: the blocks fill an even two-column grid and "Pronúncia" is a pill in the head (a lone
+  // full-width last entry unbalanced the grid). Phone: Pronúncia closes the list.
+  const pronBtn = pr ? (
+    <button type="button" class="pl-tocpr" onClick={tap(() => toBlock(toc.length))}>
+      <Icon name="speaker" size={14} />
+      <span>Pronúncia</span>
+    </button>
+  ) : null;
+  const entries = (
+    <div class="pl-tocl">
+      {toc.map((x, i) => (
+        <button type="button" key={i} class="pl-tocb" onClick={tap(() => toBlock(i))}>
+          <span class="num pl-tocn">{x.n}</span>
+          <span>{x.t}</span>
+        </button>
+      ))}
+      {pr && !desk ? (
+        <button type="button" class="pl-tocb" onClick={tap(() => toBlock(toc.length))}>
+          <span class="num pl-tocn">
+            <Icon name="speaker" size={14} />
+          </span>
+          <span>Pronúncia</span>
+        </button>
+      ) : null}
+    </div>
+  );
+  const parts = `${toc.length} blocos${pr ? ' e pronúncia' : ''}`;
   return {
     body: (
       <>
-        {desk && toc.length > 2 ? (
-          <nav class="card stack pl-toc" style={{ '--gap': '10px' }} aria-label="Nesta lição">
-            <div class="lbl or">Nesta lição</div>
-            <div class="pl-tocl">
-              {toc.map((x, i) => (
-                <button type="button" key={i} class="pl-tocb" onClick={tap(() => toBlock(i))}>
-                  <span class="num">{x.n}</span>
-                  <span>{x.t}</span>
-                </button>
-              ))}
-              {pr ? (
-                <button type="button" class="pl-tocb" onClick={tap(() => toBlock(toc.length))}>
-                  <span class="num">
-                    <Icon name="speaker" size={14} />
-                  </span>
-                  <span>Pronúncia</span>
-                </button>
-              ) : null}
-            </div>
-          </nav>
+        {toc.length > 2 ? (
+          desk ? (
+            <nav class="card stack pl-toc" style={{ '--gap': '10px' }} aria-label="Nesta lição">
+              <div class="row between" style={{ '--gap': '10px' }}>
+                <div class="lbl or">Nesta lição</div>
+                {pronBtn}
+              </div>
+              {entries}
+            </nav>
+          ) : (
+            <details class="card pl-toc pl-tocd">
+              <summary>
+                <span class="pl-tocico" aria-hidden="true">
+                  <Icon name="list" size={18} />
+                </span>
+                <span class="grow pl-tocst">
+                  <span class="lbl or">Nesta lição</span>
+                  <span class="pl-tocsub">{parts}</span>
+                </span>
+                <span class="pl-tocchev" aria-hidden="true">
+                  <Icon name="down" size={18} />
+                </span>
+              </summary>
+              <nav aria-label="Nesta lição">{entries}</nav>
+            </details>
+          )
         ) : null}
         <Blocks list={Ep.lesson} badLabel="EVITE" />
         {pr ? (
@@ -701,11 +813,11 @@ function Lesson({ Ep, desk, a, tap }: StepCtx): StepOut {
                 {/* Minimal pairs: with /h/ ≠ without /h/, both sides weighted alike, the gloss under them. */}
                 {pr.pairs.map((pa, i) => (
                   <div key={i} class="pl-pair">
-                    <b>{pa.a}</b>
+                    <PairWord t={pa.a} cls="pl-pa" />
                     <span class="pl-vs" aria-hidden="true">
                       ≠
                     </span>
-                    <b>{pa.b}</b>
+                    <PairWord t={pa.b} cls="pl-pb" />
                     <span class="pl-gloss">{pa.c}</span>
                   </div>
                 ))}
@@ -740,13 +852,31 @@ const heardCls = (t: string) => (heard.has(t) ? ' heard' : '');
  * Desktop keyword grid: the column count (5 down to 3) whose last row is full or at least half full,
  * so no chip is left alone on a row ("ready" was, as the 16th of 16).
  */
-function wordCols(n: number): number {
-  for (let c = 5; c >= 3; c--) if (n % c === 0 || n % c >= Math.ceil(c / 2)) return Math.min(c, n);
-  return 4;
+function wordCols(n: number, max: number, min: number): number {
+  for (let c = max; c >= min; c--) if (n % c === 0 || n % c >= Math.ceil(c / 2)) return Math.min(c, n);
+  return min;
 }
 
 function Away({ Ep, desk, a, tap }: StepCtx): StepOut {
-  const cols = wordCols(Ep.awayWords.length);
+  // Keywords in even rows on both layouts (desktop: 5 down to 3 columns; phone: 3), a short last row
+  // centred.
+  const cols = desk ? wordCols(Ep.awayWords.length, 5, 3) : Math.min(3, Ep.awayWords.length || 1);
+  const row = (x: StepCtx['Ep']['awayExp'][number], i: number) => (
+    <button type="button" key={i} class={`listrow sayrow${heardCls(x.en)}`} onClick={tap(() => a.sayMark(x.en))}>
+      <span class="sayico">
+        <Icon name="speaker" size={16} />
+      </span>
+      <span class="grow pl-exp">
+        {/* Phone: English and its translation share a line when they fit, the note under them. */}
+        <span class="pl-expl">
+          <span class="en">{x.en}</span>
+          <span class="pt">{x.pt}</span>
+        </span>
+        {/* No usage note: the desktop column simply stays empty (a dash read as unfinished). */}
+        {x.note ? <span class="pl-expn">{x.note}</span> : desk ? <span class="pl-expn" /> : null}
+      </span>
+    </button>
+  );
   return {
     body: (
       <>
@@ -758,34 +888,25 @@ function Away({ Ep, desk, a, tap }: StepCtx): StepOut {
           <div class="lbl or" style={{ padding: '12px 0 6px' }}>
             Expressões-chave
           </div>
-          {/* English over its translation, both left-aligned (the prototype pushed the translation to
-              the far right and wrapped both mid-phrase); two columns of rows on desktop. */}
-          <div class="pl-explist">
-            {Ep.awayExp.map((x, i) => (
-              <button
-                type="button"
-                key={i}
-                class={`listrow sayrow${heardCls(x.en)}`}
-                onClick={tap(() => a.sayMark(x.en))}
-              >
-                <span class="sayico">
-                  <Icon name="speaker" size={16} />
-                </span>
-                <span class="grow pl-exp">
-                  <span class="en">{x.en}</span>
-                  <span class="pt">{x.pt}</span>
-                  {x.note ? <span class="sm pl-expn">{x.note}</span> : null}
-                </span>
-              </button>
-            ))}
-          </div>
+          {/* Phone: English over its translation and note, left-aligned (the prototype pushed the
+              translation to the far right and wrapped both mid-phrase). Desktop: one row per
+              expression, English · translation · note in three aligned columns. */}
+          {desk ? (
+            <div class="pl-explist pl-exptab">
+              <div class="pl-exphead" aria-hidden="true">
+                <span>Inglês</span>
+                <span>Tradução</span>
+                <span>Quando usar</span>
+              </div>
+              {Ep.awayExp.map(row)}
+            </div>
+          ) : (
+            <div class="pl-explist">{Ep.awayExp.map(row)}</div>
+          )}
         </div>
         <div class="card stack" style={{ '--gap': '10px' }}>
           <div class="lbl or">Palavras-chave</div>
-          <div
-            class={`chips${desk ? ' pl-words8' : ''}`}
-            style={desk ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` } : undefined}
-          >
+          <div class="chips pl-words8" style={{ '--cols': String(cols) }}>
             {Ep.awayWords.map((w) => (
               <button type="button" key={w} class={`pill saypill${heardCls(w)}`} onClick={tap(() => a.sayMark(w))}>
                 <Icon name="speaker" size={14} />
@@ -854,6 +975,11 @@ function Action({ Ep, cat, s, P, desk, a, tap }: StepCtx): StepOut {
   const all = Ep.ex.flatMap((x) => x.items);
   const totalAll = all.length;
   const answeredAll = all.filter((x) => s.exAns[x.id] != null).length;
+  // Desktop answers side by side only in even pairs that fit their column on one line (four in two
+  // rows of two, or two side by side); three answers, or longer ones, stay one per line (three in a
+  // row looked squeezed).
+  const longest = Math.max(0, ...it.opts.map((o) => o.length));
+  const optCols = desk && (it.opts.length === 4 || it.opts.length === 2) && longest <= 28 ? 2 : 1;
   return {
     body: (
       <>
@@ -881,14 +1007,10 @@ function Action({ Ep, cat, s, P, desk, a, tap }: StepCtx): StepOut {
             </span>
             <Dots n={ex.items.length} cur={itIdx} w={16} />
           </div>
-          <div class="h2">{it.q}</div>
+          <div class="h2 pl-q">{it.q}</div>
           <div
-            class={`stack pl-opts${desk && it.opts.length <= 4 ? ' pl-optrow' : ''}`}
-            style={
-              desk && it.opts.length <= 4
-                ? { gridTemplateColumns: `repeat(${it.opts.length === 4 ? 2 : it.opts.length}, minmax(0, 1fr))` }
-                : { '--gap': '8px' }
-            }
+            class={`stack pl-opts${optCols > 1 ? ' pl-optrow' : ''}`}
+            style={optCols > 1 ? { gridTemplateColumns: `repeat(${optCols}, minmax(0, 1fr))` } : { '--gap': '8px' }}
           >
             {it.opts.map((o, i) => (
               <button
@@ -910,10 +1032,11 @@ function Action({ Ep, cat, s, P, desk, a, tap }: StepCtx): StepOut {
             </div>
           ) : null}
         </div>
-        {/* Desktop: two equal halves. Phone: "Anterior" at its own width, the next button fills the rest. */}
+        {/* "Anterior" is a quiet secondary button (a third of the row on desktop, its own width on a
+            phone) and the next button takes the rest, so the forward action leads. */}
         <div class="pl-exnav">
           {P.exIdx || itIdx ? (
-            <Btn label="Anterior" kind="ghost compact" onClick={() => a.exGo(-1)} icon="back" />
+            <Btn label="Anterior" kind="light compact" cls="pl-exprev" onClick={() => a.exGo(-1)} icon="back" />
           ) : (
             <span />
           )}
@@ -968,7 +1091,7 @@ function Action({ Ep, cat, s, P, desk, a, tap }: StepCtx): StepOut {
                         Feito
                       </span>
                     ) : (
-                      <span class="pill">{`${got}/${n}`}</span>
+                      <span class={`pill pl-expill${got ? ' bl' : ''}`}>{`${got}/${n}`}</span>
                     )}
                   </button>
                 );
