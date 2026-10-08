@@ -7,6 +7,17 @@ import { MediaPreview, useMedia } from '../../ui/media';
 import type { TabId } from './episodeSpecs';
 
 type Any = Record<string, unknown>;
+
+/**
+ * One hue per character, in cast order: the student app's castColor() fallback (apps/app/web
+ * screens/player/steps.tsx HUES) used while the course cast shares one colour.
+ */
+export const CAST_HUES = ['#F45A28', '#2A6FF5', '#1F7A4C', '#E9A200', '#8E5BD6', '#D9645B', '#0E8A9A'];
+
+function castHue(cast: readonly string[], who: string): string {
+  const i = cast.findIndex((n) => n.toLowerCase() === who.toLowerCase());
+  return i < 0 ? 'var(--muted)' : (CAST_HUES[i % CAST_HUES.length] as string);
+}
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
@@ -46,7 +57,10 @@ function Lyric({ en, pt, gap }: { en: string; pt: string; gap: string }) {
 
 function BlockRowView({ r, bad }: { r: BlockRow; bad: string }) {
   return (
-    <div class="stack" style={{ '--gap': '4px', padding: '12px 14px', borderRadius: '14px', background: 'var(--cream)' }}>
+    <div
+      class="stack"
+      style={{ '--gap': '4px', padding: '12px 14px', borderRadius: '14px', background: 'var(--cream)' }}
+    >
       {r.q ? (
         <div class="sm" style={{ fontWeight: '700' }}>
           {r.q}
@@ -91,7 +105,16 @@ export function BlockView({ b }: { b: Block }) {
         <div class="stack" style={{ '--gap': '10px' }}>
           {b.bullets.map((x, i) => (
             <div key={i} class="row top" style={{ '--gap': '10px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--orange)', flex: 'none', marginTop: '9px' }} />
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: 'var(--orange)',
+                  flex: 'none',
+                  marginTop: '9px',
+                }}
+              />
               <span class="p-read">{x}</span>
             </div>
           ))}
@@ -127,8 +150,9 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
             {str(d.synopsis) ? <p class="sm">{str(d.synopsis)}</p> : null}
             {arr<string>(d.castNames).length ? (
               <div class="row wrapx" style={{ '--gap': '6px' }}>
-                {arr<string>(d.castNames).map((n) => (
-                  <span key={n} class="pill" style={{ background: 'var(--navy2)', color: '#fff' }}>
+                {arr<string>(d.castNames).map((n, i) => (
+                  <span key={n} class="pill ad-castpill" style={{ '--c': CAST_HUES[i % CAST_HUES.length] }}>
+                    <i aria-hidden="true" />
                     {n}
                   </span>
                 ))}
@@ -185,7 +209,12 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
             <div class="stack" style={{ '--gap': '4px' }}>
               {lines.map((l, i) => (
                 <div key={i} class={`dialog-line${l.stage ? ' stage' : ''}`}>
-                  {str(l.who) && !l.stage ? <div class="who">{str(l.who).toUpperCase()}</div> : null}
+                  {str(l.who) && !l.stage ? (
+                    <div class="who ad-who" style={{ '--c': castHue(arr<string>(d.castNames), str(l.who)) }}>
+                      <i aria-hidden="true" />
+                      {str(l.who).toUpperCase()}
+                    </div>
+                  ) : null}
                   <div class="en">{str(l.en)}</div>
                   <div class="pt">{str(l.pt)}</div>
                   {str(l.err) ? <div class="note err">{str(l.err)}</div> : null}
@@ -222,10 +251,19 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
     }
     case 'licao': {
       const blocks = arr<Block>(d.lesson);
-      const pron = d.pron as { k?: string; parts?: { b: string; t: string }[]; pairs?: { a: string; b: string; c: string }[]; words?: string[] } | null;
+      const pron = d.pron as {
+        k?: string;
+        parts?: { b: string; t: string }[];
+        pairs?: { a: string; b: string; c: string }[];
+        words?: string[];
+      } | null;
       return (
         <>
-          {blocks.length ? blocks.map((b, i) => <BlockView key={i} b={b} />) : <Empty what="Os blocos da lição aparecem aqui." />}
+          {blocks.length ? (
+            blocks.map((b, i) => <BlockView key={i} b={b} />)
+          ) : (
+            <Empty what="Os blocos da lição aparecem aqui." />
+          )}
           {pron ? (
             <div class="card stack" style={{ '--gap': '10px' }}>
               <div class="lbl or">{pron.k || 'Pronúncia'}</div>
@@ -268,7 +306,11 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
                   <div class="grow">
                     <div class="en">{str(x.en)}</div>
                     <div class="pt sm">{str(x.pt)}</div>
-                    {str(x.note) ? <div class="xs" style={{ fontStyle: 'italic' }}>{str(x.note)}</div> : null}
+                    {str(x.note) ? (
+                      <div class="xs" style={{ fontStyle: 'italic' }}>
+                        {str(x.note)}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -324,7 +366,16 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
       return (
         <div class="stack" style={{ '--gap': '12px' }}>
           <div class="card tc stack" style={{ '--gap': '8px', alignItems: 'center' }}>
-            <span class="ad-kpi-ic" style={{ width: '56px', height: '56px', background: 'var(--goldT)', color: '#B27A00', borderRadius: '50%' }}>
+            <span
+              class="ad-kpi-ic"
+              style={{
+                width: '56px',
+                height: '56px',
+                background: 'var(--goldT)',
+                color: '#B27A00',
+                borderRadius: '50%',
+              }}
+            >
               <Icon name="trophy" size={28} />
             </span>
             <div class="h2">{done.title}</div>
@@ -347,13 +398,13 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
   }
 }
 
-export function EpisodePreview({ doc, tab }: { doc: Any; tab: TabId }) {
+export function EpisodePreview({ doc, tab, dirty }: { doc: Any; tab: TabId; dirty?: boolean }) {
   const navy = tab === 'musica';
   return (
     <aside class="ad-preview" aria-label="Prévia para o aluno">
-      <div class="row between">
+      <div class="row between wrapx" style={{ '--gap': '6px' }}>
         <span class="lbl">Prévia no app</span>
-        <span class="xs">rascunho, não publicado</span>
+        <span class="xs">{dirty ? 'Com as edições ainda não salvas' : 'Versão do rascunho (vale após publicar)'}</span>
       </div>
       <div class="ad-phone">
         <div class={`ad-phone-in${navy ? ' navy' : ''}`}>

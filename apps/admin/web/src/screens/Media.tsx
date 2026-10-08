@@ -8,7 +8,18 @@ import { fmtBytes, fmtDateTime, fmtDuration } from '../format';
 import { setQuery } from '../router';
 import { useLoad, usePaged } from '../ui/async';
 import { Icon } from '../ui/icons';
-import { Button, CopyButton, Empty, ErrorBox, Facts, FilterChips, MoreButton, Page, SearchBox, Skeleton } from '../ui/kit';
+import {
+  Button,
+  CopyButton,
+  Empty,
+  ErrorBox,
+  Facts,
+  FilterChips,
+  MoreButton,
+  Page,
+  SearchBox,
+  Skeleton,
+} from '../ui/kit';
 import {
   DropZone,
   forgetMedia,
@@ -85,7 +96,13 @@ function Detail({ m, onClose, onDeleted }: { m: MediaRow; onClose: () => void; o
       onClose={onClose}
       foot={
         <>
-          <Button label="Excluir" icon="trash" kind="ad-danger-l" disabled={!refs.data || used.length > 0} onClick={remove} />
+          <Button
+            label="Excluir"
+            icon="trash"
+            kind="ad-danger-l"
+            disabled={!refs.data || used.length > 0}
+            onClick={remove}
+          />
           <span class="grow" />
           <CopyButton text={m.id} label="Copiar id" />
           <a class="btn compact light" href={m.url} target="_blank" rel="noopener">
@@ -134,7 +151,13 @@ function Detail({ m, onClose, onDeleted }: { m: MediaRow; onClose: () => void; o
                     ) : (
                       <b>{label}</b>
                     )}
-                    <div class="xs">{r.table === 'content_releases' ? (r.column === 'current' ? 'publicação atual' : 'publicação guardada (para voltar)') : `campo ${r.column}`}</div>
+                    <div class="xs">
+                      {r.table === 'content_releases'
+                        ? r.column === 'current'
+                          ? 'publicação atual'
+                          : 'publicação guardada (para voltar)'
+                        : `campo ${r.column}`}
+                    </div>
                   </div>
                 </li>
               );
@@ -156,7 +179,10 @@ export function Media({ q }: ScreenProps) {
   const [open, setOpen] = useState<MediaRow | null>(null);
   const page = usePaged(
     async (cursor, signal) => {
-      const res = await call(adminMediaApi.list, { query: { kind: kind || undefined, q: search || undefined, cursor, limit: 60 }, signal });
+      const res = await call(adminMediaApi.list, {
+        query: { kind: kind || undefined, q: search || undefined, cursor, limit: 60 },
+        signal,
+      });
       rememberMedia(res.items);
       return res;
     },
@@ -171,7 +197,12 @@ export function Media({ q }: ScreenProps) {
       kicker="Conteúdo"
       bar={
         <div class="ad-filters">
-          <SearchBox value={search} onValue={(v) => setQuery({ q: v })} placeholder="Buscar por nome, caminho ou id" id="media-q" />
+          <SearchBox
+            value={search}
+            onValue={(v) => setQuery({ q: v })}
+            placeholder="Buscar por nome, caminho ou id"
+            id="media-q"
+          />
           <FilterChips
             label="Tipo"
             value={kind}
@@ -192,7 +223,9 @@ export function Media({ q }: ScreenProps) {
         <div class="stack" style={{ '--gap': '8px' }}>
           <div class="row between">
             <span class="lbl">Envios</span>
-            {ups.items.some((u) => u.status !== 'up') ? <Button label="Limpar concluídos" kind="link" onClick={ups.clearDone} /> : null}
+            {ups.items.some((u) => u.status !== 'up') ? (
+              <Button label="Limpar concluídos" kind="link" onClick={ups.clearDone} />
+            ) : null}
           </div>
           <UploadList items={ups.items} />
         </div>
@@ -202,12 +235,22 @@ export function Media({ q }: ScreenProps) {
       ) : page.loading ? (
         <Skeleton rows={4} height={120} />
       ) : !page.items.length ? (
-        <Empty icon="image" title={search || kind ? 'Nada com esses filtros.' : 'A biblioteca está vazia.'} body="Envie imagens, áudios, vídeos ou PDFs acima." />
+        <Empty
+          icon="image"
+          title={search || kind ? 'Nada com esses filtros.' : 'A biblioteca está vazia.'}
+          body="Envie imagens, áudios, vídeos ou PDFs acima."
+        />
       ) : (
         <>
-          <div class="ad-mgrid" role="list" aria-label="Arquivos">
+          <div class="ad-mgrid">
             {page.items.map((m) => (
-              <button key={m.id} type="button" class="ad-mcard" role="listitem" onClick={() => setOpen(m)} aria-label={`${mediaName(m)}, ${mediaMeta(m)}`}>
+              <button
+                key={m.id}
+                type="button"
+                class="ad-mcard"
+                onClick={() => setOpen(m)}
+                aria-label={`${mediaName(m)}, ${mediaMeta(m)}`}
+              >
                 <MediaTile m={m} />
                 <span class="ad-pick-n">{mediaName(m)}</span>
                 <span class="xs">{mediaMeta(m)}</span>

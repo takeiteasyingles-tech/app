@@ -124,6 +124,16 @@ export function errorEnvelope(code: ErrorCode, message?: string, details?: unkno
   return new ApiError(code, message, details).toEnvelope();
 }
 
+const ERROR_CODE_SET: ReadonlySet<string> = new Set(ERROR_CODES);
+
+/**
+ * Same test as ErrorEnvelope.safeParse(value).success, written by hand: the browser clients call it
+ * on every failed request, and a schema here would pull zod into their bundles.
+ */
 export function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
-  return ErrorEnvelope.safeParse(value).success;
+  if (typeof value !== 'object' || value === null) return false;
+  const error = (value as { error?: unknown }).error;
+  if (typeof error !== 'object' || error === null) return false;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return typeof code === 'string' && ERROR_CODE_SET.has(code) && typeof message === 'string';
 }

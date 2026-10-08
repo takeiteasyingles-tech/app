@@ -1,5 +1,6 @@
 // Account data operations: "Zerar progresso", LGPD export and account deletion (spec 01 §12, 04 §3).
 import { type Query, q } from '@tie/worker-core';
+import { MOD_SESSION_ID } from '../ai/context';
 
 /**
  * Statements that clear learning progress (the prototype's PROGRESS_KEYS) while keeping the
@@ -8,6 +9,11 @@ import { type Query, q } from '@tie/worker-core';
  */
 export function resetProgressQueries(db: D1Database, userId: string): Query<never>[] {
   const del = (table: string) => q<never>(db, `DELETE FROM ${table} WHERE user_id = ?`, userId);
+  // Finished or not, a Mic session a moderator still has to review is evidence: it stays (with its
+  // turns) until the item is decided; the Mic retention prunes it afterwards (spec 06 "Reset progress").
+  const pendingReview = `SELECT ${MOD_SESSION_ID} FROM moderation_items m
+    WHERE m.status = 'pending' AND m.subject_user_id = ?1 AND m.ref_type IN ('mic_session', 'mic_turn')
+      AND m.ref_id IS NOT NULL`;
   return [
     del('episode_progress'),
     del('step_completions'),
@@ -21,7 +27,12 @@ export function resetProgressQueries(db: D1Database, userId: string): Query<neve
     del('daily_stats'),
     del('point_ledger'),
     del('user_badges'),
-    del('mic_sessions'), // mic_turns cascade
+    del('karaoke_picks'),
+    q<never>(
+      db,
+      `DELETE FROM mic_sessions WHERE user_id = ?1 AND (flagged = 0 OR id NOT IN (${pendingReview}))`,
+      userId,
+    ), // mic_turns cascade
     q<never>(
       db,
       `UPDATE user_stats SET points = 0, streak = 0, last_day = NULL, challenge_best = 0, last_extra_id = NULL
@@ -58,6 +69,7 @@ const EXPORT_TABLES: ReadonlyArray<readonly [string, string]> = [
   ['daily_stats', 'SELECT * FROM daily_stats WHERE user_id = ?1 ORDER BY local_date'],
   ['point_ledger', 'SELECT * FROM point_ledger WHERE user_id = ?1 ORDER BY id'],
   ['user_badges', 'SELECT * FROM user_badges WHERE user_id = ?1'],
+  ['karaoke_picks', 'SELECT * FROM karaoke_picks WHERE user_id = ?1 ORDER BY picked_at'],
   [
     'mic_sessions',
     `SELECT id, assistant_key, mode, mission_key, extra_id, started_at, ended_at, secs, status, report, report_source

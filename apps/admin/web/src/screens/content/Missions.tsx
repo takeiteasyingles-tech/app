@@ -1,6 +1,6 @@
 // Missões do Mic: scripted role-plays (the assistant's turns, the words each one teaches, where it
 // ends). The AI improvises around them; the demo mode plays them as written.
-import { adminContentApi, MissionEdit as MissionSchema, type MissionRow } from '@tie/shared/contracts/admin';
+import { adminContentApi, type MissionRow, MissionEdit as MissionSchema } from '@tie/shared/contracts/admin';
 import { useState } from 'preact/hooks';
 import { call } from '../../api';
 import { go } from '../../router';
@@ -10,7 +10,7 @@ import { Async, Button, Empty, Page } from '../../ui/kit';
 import { type Col, Table } from '../../ui/table';
 import { zodErrors } from '../../ui/validate';
 import type { ScreenProps } from '../registry';
-import { type CrudApi, CreateModal, crud, DraftNote, keysOf, patchOf, pick, slugify } from './common';
+import { CreateModal, type CrudApi, crud, DraftNote, keysOf, patchOf, pick, slugify } from './common';
 import { DocEditor } from './DocEditor';
 
 const C = adminContentApi;
@@ -127,12 +127,22 @@ export function Missions(_: ScreenProps) {
   ];
   const all = load.data?.items ?? [];
   return (
-    <Page title="Missões do Mic" kicker="Conteúdo" actions={<Button label="Nova missão" icon="plus" onClick={() => setCreating(true)} />}>
+    <Page
+      title="Missões do Mic"
+      kicker="Conteúdo"
+      actions={<Button label="Nova missão" icon="plus" onClick={() => setCreating(true)} />}
+    >
       <DraftNote />
       <Async load={load}>
         {(d) =>
           d.items.length ? (
-            <Table rows={d.items} cols={cols} rowKey={(m) => m.key} href={(m) => `conteudo/missoes/${m.key}`} caption="Missões" />
+            <Table
+              rows={d.items}
+              cols={cols}
+              rowKey={(m) => m.key}
+              href={(m) => `conteudo/missoes/${m.key}`}
+              caption="Missões"
+            />
           ) : (
             <Empty icon="target" title="Nenhuma missão ainda." />
           )

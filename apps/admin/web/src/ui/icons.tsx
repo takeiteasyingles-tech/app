@@ -1,6 +1,6 @@
 // Icons: the student app's set (@tie/ui, generated from the prototype) plus the few the panel needs,
 // drawn in the same 24×24, 2.2px round-stroke style so both read as one family.
-import { Icon as TieIcon, isIconName } from '@tie/ui/icons';
+import { isIconName, Icon as TieIcon } from '@tie/ui/icons';
 import type { JSX } from 'preact';
 
 const EXTRA: Record<string, () => JSX.Element> = {
@@ -87,6 +87,8 @@ const EXTRA: Record<string, () => JSX.Element> = {
     </>
   ),
   up: () => <path d="m6 15 6-6 6 6" />,
+  moveUp: () => <path d="M12 19.5V5M6.5 10.5 12 5l5.5 5.5" />,
+  moveDown: () => <path d="M12 4.5V19M6.5 13.5 12 19l5.5-5.5" />,
   key: () => (
     <>
       <circle cx="8" cy="15" r="4" />
@@ -152,7 +154,13 @@ export type AdminIconName = string;
 /** TIE.icon for the panel: the student set first, then the admin extras. */
 export function Icon({ name, size = 22, label }: { name: AdminIconName; size?: number; label?: string }) {
   if (isIconName(name) || !EXTRA[name]) {
-    return <TieIcon name={name} size={size} extra={label ? { 'aria-hidden': 'false', role: 'img', 'aria-label': label } : undefined} />;
+    return (
+      <TieIcon
+        name={name}
+        size={size}
+        extra={label ? { 'aria-hidden': 'false', role: 'img', 'aria-label': label } : undefined}
+      />
+    );
   }
   const draw = EXTRA[name];
   return (

@@ -14,12 +14,15 @@ import { type ScreenProps, useChrome } from '../../frame';
 import { replace } from '../../router';
 import { layoutOf } from '../../shell';
 import { state } from '../../store';
+import { HERO_URL } from './hero';
 import { isLegalDoc, LegalLink, LegalSheet } from './legal';
 import { afterAuth, emailOk } from './session';
 import { TURNSTILE_ERROR, useTurnstile } from './turnstile';
 import './entrada.css';
 
-const HERO_IMG = 'url(/img/login.webp)';
+// The photo comes in two sizes (hero.ts): the desktop original, a lighter copy for phones.
+const HERO_IMG = `url(${HERO_URL.desktop})`;
+const HERO_IMG_MOBILE = `url(${HERO_URL.mobile})`;
 /**
  * Desktop: the photo fills the left side, framed on the café (its "Good Coffee" window lettering whole,
  * the neighbour's "River & Oak" sign out of frame rather than cut) and the copy sits on the soft veil
@@ -33,7 +36,7 @@ const HERO_DESKTOP = { backgroundImage: HERO_IMG, backgroundPosition: '48% 42%' 
  * bottom padding keeps the subtitle clear of the card that overlaps the hero by 20px.
  */
 const HERO_MOBILE = {
-  backgroundImage: HERO_IMG,
+  backgroundImage: HERO_IMG_MOBILE,
   backgroundPosition: 'center top',
   backgroundSize: '100% auto',
   backgroundRepeat: 'no-repeat',

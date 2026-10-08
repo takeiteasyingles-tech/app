@@ -3,16 +3,50 @@
 // auditada). Ações que o papel não permite somem; as que o servidor recusaria (a própria conta, alguém
 // de papel acima) aparecem desativadas com o motivo.
 import { canGrantRole, type Role } from '@tie/shared/authz';
-import { type AdminMicSessionRow, adminPlansApi, adminUsersApi, type LinkRes, type UserDetail as UD } from '@tie/shared/contracts/admin';
+import {
+  type AdminMicSessionRow,
+  adminPlansApi,
+  adminUsersApi,
+  type LinkRes,
+  type UserDetail as UD,
+} from '@tie/shared/contracts/admin';
 import { useState } from 'preact/hooks';
 import { call, errorMessage } from '../api';
-import { fmtAgo, fmtDate, fmtDateTime, fmtDuration, fmtInt, fmtLong, fmtMinutes, fromDateInputEnd, toDateInput } from '../format';
+import {
+  fmtAgo,
+  fmtDate,
+  fmtDateTime,
+  fmtDay,
+  fmtDuration,
+  fmtInt,
+  fmtMinutes,
+  fmtMonth,
+  fromDateInputEnd,
+  toDateInput,
+} from '../format';
 import { rememberEmail } from '../people';
 import { go } from '../router';
 import { auth, can, ROLE_LABEL } from '../session';
 import { useBusy, useLoad, usePaged } from '../ui/async';
 import { Icon } from '../ui/icons';
-import { Async, Button, Card, CopyButton, Empty, ErrorBox, Facts, Field, Meter, MoreButton, OneTimeLink, Page, Pill, Sel, Switch, TextIn } from '../ui/kit';
+import {
+  Async,
+  Button,
+  Card,
+  CopyButton,
+  Empty,
+  ErrorBox,
+  Facts,
+  Field,
+  Meter,
+  MoreButton,
+  OneTimeLink,
+  Page,
+  Pill,
+  Sel,
+  Switch,
+  TextIn,
+} from '../ui/kit';
 import { confirmAction } from '../ui/modal';
 import { type Col, Table } from '../ui/table';
 import { toast } from '../ui/toast';
@@ -33,34 +67,49 @@ function canManage(target: readonly Role[]): boolean {
 }
 
 function PlanCard({ u, onChange }: { u: UD; onChange: () => void }) {
-  const plans = useLoad(async (signal) => (can('plans.manage') ? (await call(adminPlansApi.list, { signal })).items : null), []);
+  const plans = useLoad(
+    async (signal) => (can('plans.manage') ? (await call(adminPlansApi.list, { signal })).items : null),
+    [],
+  );
   const cur = u.plan;
-  const [planId, setPlanId] = useState(cur?.plan.id ?? '');
-  const [exp, setExp] = useState(toDateInput(cur?.expiresAt ?? null));
-  const [busy, run] = useBusy();
+  const savedPlan = cur?.plan.id ?? '';
+  const savedExp = toDateInput(cur?.expiresAt ?? null);
+  const [planId, setPlanId] = useState(savedPlan);
+  const [exp, setExp] = useState(savedExp);
   const editable = can('users.plan') && canManage(u.roles) && u.id !== auth.value?.user.id;
   const usedPct = u.quota.limitS ? u.quota.usedS / u.quota.limitS : 0;
-  const save = () =>
-    void run(async () => {
-      try {
-        await call(adminUsersApi.assignPlan, {
+  const changed = planId !== savedPlan || exp !== savedExp;
+  const fallback = plans.data?.find((p) => p.isDefault) ?? null;
+  const active = plans.data?.filter((p) => p.active) ?? [];
+  // Like every other account action: say what changes, confirm, then audit (users.plan).
+  const save = () => {
+    const next = active.find((p) => p.id === planId);
+    if (!next) return;
+    const from = cur ? cur.plan.name : fallback ? `${fallback.name} (padrão)` : 'o plano padrão';
+    const until = exp ? `, válido até ${fmtDay(exp)}` : ', sem validade';
+    void confirmAction({
+      title: planId === savedPlan ? `Mudar a validade do ${next.name}?` : `Mudar para o plano ${next.name}?`,
+      body: `${u.email} passa de ${from} para ${next.name} (${fmtInt(next.aiMinutesMonth)} min de IA por mês${until}). Vale na hora e fica na auditoria. Para voltar atrás, atribua o plano anterior por aqui.`,
+      confirm: 'Mudar plano',
+      run: () =>
+        call(adminUsersApi.assignPlan, {
           params: { id: u.id },
           body: { planId, expiresAt: exp ? fromDateInputEnd(exp) : null },
-        });
+        }),
+    }).then((ok) => {
+      if (ok) {
         toast('Plano atualizado.');
         onChange();
-      } catch (e) {
-        toast(errorMessage(e), 'err');
       }
     });
-  const active = plans.data?.filter((p) => p.active) ?? [];
+  };
   return (
-    <Card title="Plano e minutos de IA" sub={`Período ${u.quota.period}`}>
+    <Card title="Plano e minutos de IA" sub={`Minutos de ${fmtMonth(u.quota.period)}`}>
       <Facts
         rows={[
-          ['Plano atribuído', cur ? `${cur.plan.name} (${cur.plan.slug})` : 'Nenhum: usa o plano padrão'],
-          ['Desde', cur ? fmtDate(cur.assignedAt) : '—'],
-          ['Validade', cur?.expiresAt ? fmtDate(cur.expiresAt) : cur ? 'Sem validade' : '—'],
+          ['Plano', cur ? cur.plan.name : fallback ? `${fallback.name} (padrão)` : 'O plano padrão'],
+          ['Origem', cur ? `Atribuído em ${fmtDate(cur.assignedAt)}` : 'Padrão: nenhum plano atribuído'],
+          ['Validade', cur?.expiresAt ? `Até ${fmtDate(cur.expiresAt)}` : 'Sem validade'],
         ]}
       />
       <div class="stack" style={{ '--gap': '6px' }}>
@@ -75,13 +124,21 @@ function PlanCard({ u, onChange }: { u: UD; onChange: () => void }) {
       {editable && plans.data ? (
         <div class="ad-grid">
           <Field id="u-plan" label="Mudar para">
-            <Sel id="u-plan" value={planId} onValue={setPlanId} options={[['', 'Escolha um plano'], ...active.map((p) => [p.id, `${p.name} · ${p.aiMinutesMonth} min/mês`] as const)]} />
+            <Sel
+              id="u-plan"
+              value={planId}
+              onValue={setPlanId}
+              options={[
+                ['', 'Escolha um plano'],
+                ...active.map((p) => [p.id, `${p.name} · ${p.aiMinutesMonth} min/mês`] as const),
+              ]}
+            />
           </Field>
           <Field id="u-exp" label="Válido até" opt hint="Sem data, não expira.">
             <TextIn id="u-exp" type="date" value={exp} onValue={setExp} min={toDateInput(Date.now() + 86_400_000)} />
           </Field>
           <div class="ad-span">
-            <Button label="Salvar plano" icon="check" busy={busy} disabled={!planId} onClick={save} />
+            <Button label="Mudar plano" icon="check" disabled={!planId || !changed} onClick={save} />
           </div>
         </div>
       ) : can('users.plan') && !editable ? (
@@ -100,7 +157,9 @@ function RolesCard({ u, onRoles }: { u: UD; onRoles: (r: Role[]) => void }) {
   const toggle = async (r: Role, on: boolean) => {
     setBusy(r);
     try {
-      const res = await call(on ? adminUsersApi.grantRole : adminUsersApi.revokeRole, { params: { id: u.id, role: r } });
+      const res = await call(on ? adminUsersApi.grantRole : adminUsersApi.revokeRole, {
+        params: { id: u.id, role: r },
+      });
       onRoles(res.roles);
       toast(on ? `Papel ${ROLE_LABEL[r]} concedido.` : `Papel ${ROLE_LABEL[r]} removido.`);
     } catch (e) {
@@ -122,11 +181,21 @@ function RolesCard({ u, onRoles }: { u: UD; onRoles: (r: Role[]) => void }) {
           const allowed = canGrantRole(mine, r) && manage && !self && u.status === 'active';
           return (
             <div key={r} class="ad-bool">
-              <Switch id={`role-${r}`} on={on} label={`Papel ${ROLE_LABEL[r]}`} disabled={!allowed || busy !== null} onChange={(v) => void toggle(r, v)} />
+              <Switch
+                id={`role-${r}`}
+                on={on}
+                label={`Papel ${ROLE_LABEL[r]}`}
+                disabled={!allowed || busy !== null}
+                onChange={(v) => void toggle(r, v)}
+              />
               <label for={`role-${r}`} class="grow">
                 <span class="ad-bool-l">{ROLE_LABEL[r]}</span>
                 <small class="xs">
-                  {r === 'admin' ? 'Tudo, menos dar o papel admin.' : r === 'editor' ? 'Conteúdo, mídia e publicação.' : 'Usuários, suspensões e moderação.'}
+                  {r === 'admin'
+                    ? 'Tudo, menos dar o papel admin.'
+                    : r === 'editor'
+                      ? 'Conteúdo, mídia e publicação.'
+                      : 'Usuários, suspensões e moderação.'}
                 </small>
               </label>
             </div>
@@ -147,7 +216,11 @@ function RolesCard({ u, onRoles }: { u: UD; onRoles: (r: Role[]) => void }) {
 function ActionsCard({ u, reload, onLink }: { u: UD; reload: () => void; onLink: (l: LinkRes) => void }) {
   const self = u.id === auth.value?.user.id;
   const manage = canManage(u.roles);
-  const blocked = self ? 'Use a sua conta pela página Minha conta.' : !manage ? 'Esta conta tem um papel acima do seu.' : null;
+  const blocked = self
+    ? 'Use a sua conta pela página Minha conta.'
+    : !manage
+      ? 'Esta conta tem um papel acima do seu.'
+      : null;
   const [linkBusy, runLink] = useBusy();
   const suspended = u.status === 'suspended';
   const suspend = () =>
@@ -214,15 +287,36 @@ function ActionsCard({ u, reload, onLink }: { u: UD; reload: () => void; onLink:
       ) : null}
       <div class="stack" style={{ '--gap': '8px' }}>
         {can('users.suspend') ? (
-          <Button label={suspended ? 'Reativar conta' : 'Suspender conta'} icon={suspended ? 'check' : 'lock'} kind="light" disabled={!!blocked} onClick={suspend} />
+          <Button
+            label={suspended ? 'Reativar conta' : 'Suspender conta'}
+            icon={suspended ? 'check' : 'lock'}
+            kind="light"
+            disabled={!!blocked}
+            onClick={suspend}
+          />
         ) : null}
         {can('users.reset_link') ? (
-          <Button label="Gerar link de nova senha" icon="key" kind="light" busy={linkBusy} disabled={!!blocked || suspended} onClick={resetLink} />
+          <Button
+            label="Gerar link de nova senha"
+            icon="key"
+            kind="light"
+            busy={linkBusy}
+            disabled={!!blocked || suspended}
+            onClick={resetLink}
+          />
         ) : null}
         {can('users.progress_reset') ? (
-          <Button label="Zerar progresso" icon="refresh" kind="light" disabled={!manage && !self} onClick={progressReset} />
+          <Button
+            label="Zerar progresso"
+            icon="refresh"
+            kind="light"
+            disabled={!manage && !self}
+            onClick={progressReset}
+          />
         ) : null}
-        {can('users.delete') ? <Button label="Excluir conta" icon="trash" kind="ad-danger-l" disabled={!!blocked} onClick={remove} /> : null}
+        {can('users.delete') ? (
+          <Button label="Excluir conta" icon="trash" kind="ad-danger-l" disabled={!!blocked} onClick={remove} />
+        ) : null}
       </div>
     </Card>
   );
@@ -239,7 +333,7 @@ const MIC_COLS = (open: (id: string) => void): Col<AdminMicSessionRow>[] => [
     ),
   },
   { key: 'mode', label: 'Modo', cell: (s) => MODE_LABEL[s.mode] },
-  { key: 'asst', label: 'Assistente', cell: (s) => s.assistant },
+  { key: 'asst', label: 'Assistente', cell: (s) => s.assistant.charAt(0).toUpperCase() + s.assistant.slice(1) },
   { key: 'dur', label: 'Duração', cls: 'num', cell: (s) => fmtDuration(s.secs * 1000) },
   { key: 'turns', label: 'Falas', cls: 'num', cell: (s) => fmtInt(s.turns) },
   { key: 'flag', label: 'Sinal', cell: (s) => (s.flagged ? <Pill label="Sinalizada" tone="or" icon="flag" /> : '—') },
@@ -249,14 +343,19 @@ function MicSessions({ userId }: { userId: string }) {
   const [shown, setShown] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const page = usePaged(
-    async (cursor, signal) => (shown ? call(adminUsersApi.micSessions, { query: { userId, cursor, limit: 20 }, signal }) : { items: [], nextCursor: null }),
+    async (cursor, signal) =>
+      shown
+        ? call(adminUsersApi.micSessions, { query: { userId, cursor, limit: 20 }, signal })
+        : { items: [], nextCursor: null },
     [shown, userId],
   );
   return (
     <Card
       title="Conversas do Mic"
       sub="Transcrições das conversas com as assistentes"
-      actions={!shown ? <Button label="Mostrar conversas" icon="eye" kind="light" onClick={() => setShown(true)} /> : null}
+      actions={
+        !shown ? <Button label="Mostrar conversas" icon="eye" kind="light" onClick={() => setShown(true)} /> : null
+      }
     >
       {!shown ? (
         <p class="sm">
@@ -267,7 +366,7 @@ function MicSessions({ userId }: { userId: string }) {
       ) : page.loading ? (
         <span class="ad-skel" style={{ height: '120px' }} />
       ) : !page.items.length ? (
-        <Empty icon="mic" title="Nenhuma conversa." />
+        <Empty icon="mic" title="Nenhuma conversa." body="As conversas aparecem aqui quando o aluno usa o Mic." />
       ) : (
         <>
           <Table rows={page.items} cols={MIC_COLS(setOpen)} rowKey={(s) => s.id} caption="Conversas do Mic" />
@@ -281,11 +380,14 @@ function MicSessions({ userId }: { userId: string }) {
 
 export function UserDetail({ params }: ScreenProps) {
   const id = params.id ?? '';
-  const load = useLoad(async (signal) => {
-    const u = await call(adminUsersApi.get, { params: { id }, signal });
-    rememberEmail(u.id, u.email);
-    return u;
-  }, [id]);
+  const load = useLoad(
+    async (signal) => {
+      const u = await call(adminUsersApi.get, { params: { id }, signal });
+      rememberEmail(u.id, u.email);
+      return u;
+    },
+    [id],
+  );
   const [link, setLink] = useState<LinkRes | null>(null);
   const u = load.data;
   const title = u ? u.profile?.name || u.email : 'Usuário';
@@ -297,9 +399,18 @@ export function UserDetail({ params }: ScreenProps) {
             <section class="card ad-card" aria-label="Resumo">
               <div class="row wrapx" style={{ '--gap': '14px' }}>
                 {u.photo && u.photo.status === 'active' ? (
-                  <img class="ad-photo" style={{ width: '64px', height: '64px', borderRadius: '50%' }} src={u.photo.url} alt="Foto do aluno" />
+                  <img
+                    class="ad-photo"
+                    style={{ width: '64px', height: '64px', borderRadius: '50%' }}
+                    src={u.photo.url}
+                    alt="Foto do aluno"
+                  />
                 ) : (
-                  <span class="ad-me-av" style={{ width: '64px', height: '64px', fontSize: '1.6rem' }} aria-hidden="true">
+                  <span
+                    class="ad-me-av"
+                    style={{ width: '64px', height: '64px', fontSize: '1.6rem' }}
+                    aria-hidden="true"
+                  >
                     {u.email.slice(0, 1).toUpperCase()}
                   </span>
                 )}
@@ -310,7 +421,9 @@ export function UserDetail({ params }: ScreenProps) {
                   <div class="row wrapx" style={{ '--gap': '6px' }}>
                     <Pill label={STATUS_LABEL[u.status]} tone={STATUS_TONE[u.status]} />
                     <RolePills roles={u.roles} />
-                    {u.lockedUntil && u.lockedUntil > Date.now() ? <Pill label="Bloqueada por tentativas" tone="or" icon="lock" /> : null}
+                    {u.lockedUntil && u.lockedUntil > Date.now() ? (
+                      <Pill label="Bloqueada por tentativas" tone="or" icon="lock" />
+                    ) : null}
                   </div>
                 </div>
                 <div class="row" style={{ '--gap': '6px' }}>
@@ -318,7 +431,13 @@ export function UserDetail({ params }: ScreenProps) {
                 </div>
               </div>
             </section>
-            {link ? <OneTimeLink url={link.url} expiresAt={link.expiresAt} note="Envie só para o dono da conta: o link troca a senha dele. Um link novo anula o anterior." /> : null}
+            {link ? (
+              <OneTimeLink
+                url={link.url}
+                expiresAt={link.expiresAt}
+                note="Envie só para o dono da conta: o link troca a senha dele. Um link novo anula o anterior."
+              />
+            ) : null}
             <div class="ad-cols">
               <div class="stack" style={{ '--gap': '18px' }}>
                 <Card title="Perfil" sub={u.profile ? undefined : 'Cadastro ainda não começou'}>
@@ -329,7 +448,12 @@ export function UserDetail({ params }: ScreenProps) {
                         ['Nome completo', u.profile.fullName ?? '—'],
                         ['Faixa etária', u.profile.ageBand ?? '—'],
                         ['Nível', LEVEL_LABEL[u.profile.level] ?? u.profile.level],
-                        ['Cadastro', u.profile.onbCompletedAt ? `Concluído em ${fmtDate(u.profile.onbCompletedAt)}` : `Na etapa ${u.profile.onbStep} de 7`],
+                        [
+                          'Cadastro',
+                          u.profile.onbCompletedAt
+                            ? `Concluído em ${fmtDate(u.profile.onbCompletedAt)}`
+                            : `Na etapa ${u.profile.onbStep} de 7`,
+                        ],
                       ]}
                     />
                   ) : (
@@ -337,7 +461,7 @@ export function UserDetail({ params }: ScreenProps) {
                   )}
                 </Card>
                 <Card title="Progresso">
-                  <div class="ad-kpis">
+                  <div class="ad-kpis three">
                     <div class="ad-kpi">
                       <span class="lbl">Pontos</span>
                       <span class="num ad-kpi-v">{fmtInt(u.stats.points)}</span>
@@ -345,7 +469,15 @@ export function UserDetail({ params }: ScreenProps) {
                     <div class="ad-kpi">
                       <span class="lbl">Sequência</span>
                       <span class="num ad-kpi-v">{fmtInt(u.stats.streak)}</span>
-                      <span class="xs">{u.stats.lastDay ? `último dia ${u.stats.lastDay}` : 'sem dias ainda'}</span>
+                      <span class="xs">
+                        {u.stats.lastDay ? (
+                          <>
+                            último dia <span class="ad-nw">{fmtDay(u.stats.lastDay)}</span>
+                          </>
+                        ) : (
+                          'sem dias ainda'
+                        )}
+                      </span>
                     </div>
                     <div class="ad-kpi">
                       <span class="lbl">Conversas</span>
@@ -356,8 +488,11 @@ export function UserDetail({ params }: ScreenProps) {
                 <Card title="Conta">
                   <Facts
                     rows={[
-                      ['Criada', fmtLong(u.createdAt)],
-                      ['Último login', u.lastLoginAt ? `${fmtDateTime(u.lastLoginAt)} (${fmtAgo(u.lastLoginAt)})` : 'Nunca'],
+                      ['Criada', fmtDateTime(u.createdAt)],
+                      [
+                        'Último login',
+                        u.lastLoginAt ? `${fmtDateTime(u.lastLoginAt)} (${fmtAgo(u.lastLoginAt)})` : 'Nunca',
+                      ],
                       ['Fuso', u.tz],
                       ['Tentativas erradas', String(u.failedLogins)],
                       ['Bloqueada até', u.lockedUntil ? fmtDateTime(u.lockedUntil) : '—'],
@@ -374,10 +509,22 @@ export function UserDetail({ params }: ScreenProps) {
                   <RolesCard u={u} onRoles={(roles) => load.setData((prev) => ({ ...(prev as UD), roles }))} />
                 ) : null}
                 {u.photo ? (
-                  <Card title="Foto de perfil" actions={can('moderation.manage') ? <a class="btn compact light" href="#/moderacao?kind=photo">Moderação</a> : null}>
+                  <Card
+                    title="Foto de perfil"
+                    actions={
+                      can('moderation.manage') ? (
+                        <a class="btn compact light" href="#/moderacao?kind=photo">
+                          Moderação
+                        </a>
+                      ) : null
+                    }
+                  >
                     <div class="row wrapx" style={{ '--gap': '14px' }}>
                       <img class="ad-photo" src={u.photo.url} alt="Foto enviada pelo aluno" />
-                      <Pill label={u.photo.status === 'active' ? 'Visível' : 'Removida pela moderação'} tone={u.photo.status === 'active' ? 'gr' : 'gold'} />
+                      <Pill
+                        label={u.photo.status === 'active' ? 'Visível' : 'Removida pela moderação'}
+                        tone={u.photo.status === 'active' ? 'gr' : 'gold'}
+                      />
                     </div>
                   </Card>
                 ) : null}

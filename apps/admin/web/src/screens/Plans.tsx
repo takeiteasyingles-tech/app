@@ -10,7 +10,7 @@ import {
 import { useState } from 'preact/hooks';
 import type { z } from 'zod';
 import { call, errorMessage, issuesOf } from '../api';
-import { fmtDate, fmtInt } from '../format';
+import { fmtDate, fmtInt, plural } from '../format';
 import { useLoad } from '../ui/async';
 import { Icon } from '../ui/icons';
 import { Async, Button, Empty, Field, Page, Pill, Switch, TextIn } from '../ui/kit';
@@ -39,7 +39,14 @@ function Features({ f }: { f: Record<string, unknown> }) {
   );
 }
 
-const blankPlan = (): PlanInput => ({ slug: '', name: '', aiMinutesMonth: 60, features: {}, isDefault: false, active: true });
+const blankPlan = (): PlanInput => ({
+  slug: '',
+  name: '',
+  aiMinutesMonth: 60,
+  features: {},
+  isDefault: false,
+  active: true,
+});
 
 function PlanModal({ plan, onClose, onSaved }: { plan: PlanRow | null; onClose: () => void; onSaved: () => void }) {
   const [v, setV] = useState<PlanInput>(
@@ -100,12 +107,31 @@ function PlanModal({ plan, onClose, onSaved }: { plan: PlanRow | null; onClose: 
     >
       <form id="plan-form" class="ad-grid" onSubmit={save} noValidate>
         <Field id="pl-name" label="Nome" err={errors.name}>
-          <TextIn id="pl-name" value={v.name} onValue={(s) => set('name', s)} err={errors.name} data-autofocus maxLength={80} />
+          <TextIn
+            id="pl-name"
+            value={v.name}
+            onValue={(s) => set('name', s)}
+            err={errors.name}
+            data-autofocus
+            maxLength={80}
+          />
         </Field>
         <Field id="pl-slug" label="Slug" hint="Minúsculas, números e hífen." err={errors.slug}>
-          <TextIn id="pl-slug" class="ad-mono" value={v.slug} onValue={(s) => set('slug', s.toLowerCase())} err={errors.slug} maxLength={40} />
+          <TextIn
+            id="pl-slug"
+            class="ad-mono"
+            value={v.slug}
+            onValue={(s) => set('slug', s.toLowerCase())}
+            err={errors.slug}
+            maxLength={40}
+          />
         </Field>
-        <Field id="pl-min" label="Minutos de IA por mês" err={errors.aiMinutesMonth} hint="Conversa, pronúncia e voz somam no mesmo limite.">
+        <Field
+          id="pl-min"
+          label="Minutos de IA por mês"
+          err={errors.aiMinutesMonth}
+          hint="Conversa, pronúncia e voz somam no mesmo limite."
+        >
           <TextIn
             id="pl-min"
             type="number"
@@ -137,7 +163,12 @@ function PlanModal({ plan, onClose, onSaved }: { plan: PlanRow | null; onClose: 
           <div class="stack" style={{ '--gap': '10px' }}>
             {known.map((k) => (
               <div key={k} class="ad-bool">
-                <Switch id={`pl-f-${k}`} on={!!v.features[k]} label={FEATURE_LABEL[k] ?? k} onChange={(on) => setFeature(k, on)} />
+                <Switch
+                  id={`pl-f-${k}`}
+                  on={!!v.features[k]}
+                  label={FEATURE_LABEL[k] ?? k}
+                  onChange={(on) => setFeature(k, on)}
+                />
                 <label for={`pl-f-${k}`} class="grow">
                   <span class="ad-bool-l">{FEATURE_LABEL[k] ?? k}</span>
                   <small class="xs ad-mono">{k}</small>
@@ -148,13 +179,25 @@ function PlanModal({ plan, onClose, onSaved }: { plan: PlanRow | null; onClose: 
               <div key={k} class="row" style={{ '--gap': '8px' }}>
                 <span class="pill bl ad-mono">{k}</span>
                 <span class="grow xs">{String(v.features[k])}</span>
-                <button type="button" class="ad-ib danger" aria-label={`Remover o recurso ${k}`} onClick={() => setFeature(k, null)}>
+                <button
+                  type="button"
+                  class="ad-ib danger"
+                  aria-label={`Remover o recurso ${k}`}
+                  onClick={() => setFeature(k, null)}
+                >
                   <Icon name="trash" size={16} />
                 </button>
               </div>
             ))}
             <div class="row" style={{ '--gap': '8px' }}>
-              <TextIn id="pl-fk" class="ad-mono" value={extraKey} onValue={setExtraKey} placeholder="outro_recurso" aria-label="Chave de um recurso novo" />
+              <TextIn
+                id="pl-fk"
+                class="ad-mono"
+                value={extraKey}
+                onValue={setExtraKey}
+                placeholder="outro_recurso"
+                aria-label="Chave de um recurso novo"
+              />
               <Button
                 label="Adicionar"
                 icon="plus"
@@ -205,7 +248,23 @@ export function Plans(_: ScreenProps) {
     },
     { key: 'min', label: 'Minutos/mês', cls: 'num', cell: (p) => fmtInt(p.aiMinutesMonth) },
     { key: 'feat', label: 'Recursos', cell: (p) => <Features f={p.features} /> },
-    { key: 'users', label: 'Pessoas', cls: 'num', cell: (p) => (p.users ? <a class="ad-linkbtn" href={`#/usuarios?plan=${encodeURIComponent(p.slug)}`}>{fmtInt(p.users)}</a> : '0') },
+    {
+      key: 'users',
+      label: 'Pessoas',
+      cls: 'num',
+      cell: (p) =>
+        p.users ? (
+          <a
+            class="ad-countlink"
+            href={`#/usuarios?plan=${encodeURIComponent(p.slug)}`}
+            aria-label={`Ver ${plural(p.users, 'pessoa', 'pessoas')} no plano ${p.name}`}
+          >
+            {fmtInt(p.users)}
+          </a>
+        ) : (
+          '0'
+        ),
+    },
     {
       key: 'state',
       label: 'Situação',
@@ -222,24 +281,41 @@ export function Plans(_: ScreenProps) {
       label: 'Ações',
       cls: 'shrink',
       cell: (p) => (
-        <span class="row" style={{ '--gap': '4px' }}>
-          <Button label="Editar" icon="pen" kind="light" onClick={() => setEditing(p)} />
-          {p.active && !p.isDefault ? <Button ariaLabel={`Desativar ${p.name}`} icon="lock" kind="light" onClick={() => deactivate(p)} /> : null}
+        <span class="row" style={{ '--gap': '6px' }}>
+          <Button label="Editar" ariaLabel={`Editar ${p.name}`} icon="pen" kind="light" onClick={() => setEditing(p)} />
+          {p.active && !p.isDefault ? (
+            <Button
+              label="Desativar"
+              ariaLabel={`Desativar ${p.name}`}
+              icon="lock"
+              kind="ad-danger-l"
+              onClick={() => deactivate(p)}
+            />
+          ) : null}
         </span>
       ),
     },
   ];
   return (
-    <Page title="Planos" kicker="Pessoas" actions={<Button label="Novo plano" icon="plus" onClick={() => setEditing('new')} />}>
+    <Page
+      title="Planos"
+      kicker="Pessoas"
+      actions={<Button label="Novo plano" icon="plus" onClick={() => setEditing('new')} />}
+    >
       <div class="ad-note bl">
-        <Icon name="bulb" size={18} /> Sem cobrança: o plano só define minutos de IA e recursos. Atribua pela página de cada usuário.
+        <Icon name="bulb" size={18} /> Sem cobrança: o plano só define minutos de IA e recursos. Atribua pela página de
+        cada usuário. Quem não tem plano atribuído usa o plano padrão e conta nele em “Pessoas”.
       </div>
       <Async load={load}>
         {(d) =>
           d.items.length ? (
             <Table rows={d.items} cols={cols} rowKey={(p) => p.id} caption="Planos" hi={(p) => p.isDefault} />
           ) : (
-            <Empty icon="coin" title="Nenhum plano ainda." action={<Button label="Criar o primeiro" icon="plus" onClick={() => setEditing('new')} />} />
+            <Empty
+              icon="coin"
+              title="Nenhum plano ainda."
+              action={<Button label="Criar o primeiro" icon="plus" onClick={() => setEditing('new')} />}
+            />
           )
         }
       </Async>

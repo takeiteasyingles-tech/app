@@ -1,34 +1,26 @@
 // S1 Auth & account: /api/auth/* (config, signup, login, logout, reset/consume, password). Spec 04 §3, §5.
 // Mounted at '/' by worker/src/index.ts, so paths are absolute (appApi.*.path) and middleware is per route.
-import {
-  ApiError,
-  type AuthConfig,
-  type AuthRes,
-  appApi,
-  DEFAULT_TZ,
-  DURATIONS,
-  LIMITS,
-  LOCKOUT_FAILED_LOGINS,
-  newId,
-  type Ok,
-} from '@tie/shared';
+import { ApiError, type AuthConfig, type AuthRes, appApi, DEFAULT_TZ, LIMITS, newId, type Ok } from '@tie/shared';
 import {
   type AppEnv,
   auditFor,
   authRateKey,
   batch,
   batchRun,
+  CLAIMED_BY,
   checkRateLimit,
   clearMediaCookie,
   clearSessionCookie,
   clientIp,
   dummyVerify,
+  failedLoginQuery,
   hashPassword,
   hashToken,
   issueMediaCookie,
   isTokenShape,
   isValidTimeZone,
   localDate,
+  newClaim,
   newSession,
   one,
   type Query,
@@ -174,35 +166,6 @@ interface LoginRow {
   full_name: string | null;
 }
 
-/**
- * Counts one failed login atomically (spec 04 §5: 10 failures lock the account for 15 minutes).
- * Every SET expression reads the pre-update row, so parallel failures each add one instead of
- * overwriting each other. Cases, in order:
- * - lock still on (a racer that passed the pre-check): keep the lock, failed_logins + 1;
- * - this failure reaches the limit: failed_logins = 0, locked_until = now + 15 min;
- * - otherwise: failed_logins + 1 (restarting from 0 after an expired lock), locked_until = NULL.
- */
-function failedLoginQuery(db: D1Database, userId: string, now: number): Query<FailRow> {
-  const next = '(CASE WHEN locked_until IS NULL THEN failed_logins ELSE 0 END) + 1';
-  return q<FailRow>(
-    db,
-    `UPDATE users SET
-       failed_logins = CASE WHEN locked_until > ?1 THEN failed_logins + 1 WHEN ${next} >= ?3 THEN 0 ELSE ${next} END,
-       locked_until = CASE WHEN locked_until > ?1 THEN locked_until WHEN ${next} >= ?3 THEN ?2 ELSE NULL END
-     WHERE id = ?4
-     RETURNING failed_logins, locked_until`,
-    now,
-    now + DURATIONS.lockoutMs,
-    LOCKOUT_FAILED_LOGINS,
-    userId,
-  );
-}
-
-interface FailRow {
-  failed_logins: number;
-  locked_until: number | null;
-}
-
 routes.post(api.login.path, vJson(api.login.body), async (c) => {
   const body = c.req.valid('json');
   await checkRateLimit(c.env, 'RL_AUTH', authRateKey(c, body.email));
@@ -298,19 +261,26 @@ routes.post(api.resetConsume.path, vJson(api.resetConsume.body), async (c) => {
   const userId = row.user_id;
   const passHash = await hashPassword(body.password);
 
-  // The first statement claims the token; the rest only apply if this request's claim won.
-  const claimed = `(SELECT used_at FROM one_time_tokens WHERE token_hash = ?) = ?`;
+  // The first statement claims the token with a per-request nonce; the rest only apply if this
+  // request's claim won (two consumers in the same millisecond cannot both win).
+  const nonce = newClaim();
   const [claim] = await batchRun(db, [
-    q(db, 'UPDATE one_time_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL', now, tokenHash),
     q(
       db,
-      `UPDATE users SET pass_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ? AND ${claimed}`,
+      'UPDATE one_time_tokens SET used_at = ?, claim = ? WHERE token_hash = ? AND used_at IS NULL',
+      now,
+      nonce,
+      tokenHash,
+    ),
+    q(
+      db,
+      `UPDATE users SET pass_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ? AND ${CLAIMED_BY}`,
       passHash,
       userId,
       tokenHash,
-      now,
+      nonce,
     ),
-    q(db, `DELETE FROM sessions WHERE user_id = ? AND ${claimed}`, userId, tokenHash, now),
+    q(db, `DELETE FROM sessions WHERE user_id = ? AND ${CLAIMED_BY}`, userId, tokenHash, nonce),
   ]);
   if (!claim?.changes) throw new ApiError('token_invalid');
   // Audited only by the request whose claim won (a racer that lost writes nothing).

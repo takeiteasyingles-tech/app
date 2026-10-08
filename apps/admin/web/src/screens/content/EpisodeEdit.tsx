@@ -9,8 +9,8 @@ import {
   EpisodeEdit as EpisodeEditSchema,
   type EpisodeRow,
   ExerciseEdit,
-  type ExerciseItemRow,
   ExerciseItemEdit,
+  type ExerciseItemRow,
   type ExerciseRow,
   MicPhraseEdit,
   type MicPhraseRow,
@@ -23,7 +23,7 @@ import { go, setLeaveGuard, setQuery } from '../../router';
 import { useLoad } from '../../ui/async';
 import { ErrorSummary, Form, type Obj } from '../../ui/form';
 import { Icon } from '../../ui/icons';
-import { Button, ErrorBox, Page, Seg, Skeleton } from '../../ui/kit';
+import { Button, ErrorBox, Page, Seg, Skeleton, TabsNav } from '../../ui/kit';
 import { wide } from '../../ui/layout';
 import { confirmAction } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -110,7 +110,9 @@ function normalize(d: Doc): Doc {
 function validate(d: Doc): Record<string, string> {
   const out: Record<string, string> = { ...zodErrors(EpisodeEditSchema.create, pick(d, EP_KEYS)) };
   if (d.status === 'published' && !d.done) out.done = 'Um episódio publicado precisa da tela de conclusão.';
-  d.mic.forEach((m, i) => Object.assign(out, prefixErrors(zodErrors(MicPhraseEdit.create, pick(m, MIC_KEYS)), `mic.${i}`)));
+  d.mic.forEach((m, i) => {
+    Object.assign(out, prefixErrors(zodErrors(MicPhraseEdit.create, pick(m, MIC_KEYS)), `mic.${i}`));
+  });
   d.ex.forEach((x, i) => {
     Object.assign(out, prefixErrors(zodErrors(ExerciseEdit.create, pick(x, EX_KEYS)), `ex.${i}`));
     if (!x.items.length) out[`ex.${i}.items`] = 'Inclua pelo menos 1 questão.';
@@ -225,7 +227,8 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
         (kind, id, row) => {
           if (kind === 'remove') b.ex = b.ex.filter((x) => x.id !== id);
           else if (kind === 'create' && row) b.ex.push({ ...(row as unknown as ExerciseRow), items: [] });
-          else if (row) b.ex = b.ex.map((x) => (x.id === id ? { ...(row as unknown as ExerciseRow), items: x.items } : x));
+          else if (row)
+            b.ex = b.ex.map((x) => (x.id === id ? { ...(row as unknown as ExerciseRow), items: x.items } : x));
         },
         (r) => String(r.id),
       );
@@ -238,7 +241,9 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
           diffRows(bx.items as unknown as Obj[], x.items as unknown as Obj[], (r) => String(r.id), ITEM_KEYS),
           ITEM_KEYS,
           (kind, id, row) => {
-            bx.items = applyToBase(bx.items as unknown as Obj[], kind, id, row, (r) => String(r.id)) as unknown as ExerciseItemRow[];
+            bx.items = applyToBase(bx.items as unknown as Obj[], kind, id, row, (r) =>
+              String(r.id),
+            ) as unknown as ExerciseItemRow[];
           },
           (r) => String(r.id),
         );
@@ -287,9 +292,19 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
       title={title}
       kicker="Episódio"
       back="conteudo/episodios"
-      actions={draft ? <Button label="Excluir" icon="trash" kind="ad-danger-l" onClick={remove} /> : null}
+      actions={
+        draft ? (
+          <Button
+            label="Excluir"
+            ariaLabel={`Excluir o episódio ${num}`}
+            icon="trash"
+            kind="ad-danger-l"
+            onClick={remove}
+          />
+        ) : null
+      }
       bar={
-        <nav class="ad-tabs" aria-label="Partes do episódio">
+        <TabsNav label="Partes do episódio">
           {TABS.map(([t, l]) => (
             <a
               key={t}
@@ -302,10 +317,14 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
               }}
             >
               {l}
-              {tabErrors[t] ? <span class="dot" aria-label={`${tabErrors[t]} erros`} /> : null}
+              {tabErrors[t] ? (
+                <span class="dot">
+                  <span class="sr">{`${tabErrors[t]} erros`}</span>
+                </span>
+              ) : null}
             </a>
           ))}
-        </nav>
+        </TabsNav>
       }
     >
       {load.error && !load.data ? (
@@ -340,15 +359,22 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
           <div class="ad-split with-preview">
             {showEditor ? (
               <section class="card ad-card" aria-label={TABS.find(([t]) => t === tab)?.[1]}>
-                <Form specs={TAB_SPECS[tab]} value={draft} set={(fn) => setDraft((p) => (p ? fn(p) : p))} errors={errors} idp="ep" />
+                <Form
+                  specs={TAB_SPECS[tab]}
+                  value={draft}
+                  set={(fn) => setDraft((p) => (p ? fn(p) : p))}
+                  errors={errors}
+                  idp="ep"
+                />
                 {tab === 'mic' ? (
                   <p class="xs">
-                    <Icon name="bulb" size={14} /> Uma frase com notas de alunos não pode ser excluída (o servidor recusa); edite o texto em vez disso.
+                    <Icon name="bulb" size={14} /> Uma frase com notas de alunos não pode ser excluída (o servidor
+                    recusa); edite o texto em vez disso.
                   </p>
                 ) : null}
               </section>
             ) : null}
-            {showPreview ? <EpisodePreview doc={draft} tab={tab} /> : null}
+            {showPreview ? <EpisodePreview doc={draft} tab={tab} dirty={dirty} /> : null}
           </div>
           <SaveBar
             dirty={dirty}

@@ -9,6 +9,7 @@ import {
   gate,
   type MicScoreBody,
   type MicScoreRes,
+  newId,
   PRONOUNCE_GOOD,
   type StepOkBody,
   type StepOkRes,
@@ -18,7 +19,7 @@ import { batch, fail, one, q, run } from '@tie/worker-core';
 // The attempt token is S7's: POST /api/pronounce (routes/ai.ts) signs every phraseId attempt, mic
 // phrases and dub lines alike, with ai/attempt.ts signAttempt; micScore verifies it with the same
 // module. test/interop.test.ts runs the real /api/pronounce route and feeds its token to micScore.
-import { ATTEMPT_TTL_MS, verifyAttempt } from '../ai';
+import { ATTEMPT_CLAIMED, attemptSig, claimAttempt, verifyAttempt } from '../ai';
 import { type EpisodeContext, loadEpisodeContext } from './content';
 import type { LearningDeps } from './deps';
 
@@ -190,10 +191,10 @@ export async function exercise(d: LearningDeps, body: ExerciseBody): Promise<Exe
  * phrase's scripted result. 'demo' (the client scored it locally, no AI) stores the client's number
  * as is, flagged by mic_scores.source = 'demo'. Neither 'script' nor 'demo' ever awards more than mic_try.
  *
- * Replays of an 'ia' attempt (outbox replay, a reused token) are no-ops on the stats: the attempt's
- * identity is its token's issue time (exp − ATTEMPT_TTL_MS), stored as mic_scores.updated_at, and an
- * 'ia' write whose issue time is not after the row's last write counts nothing (attempts and last
- * stay; best is a MAX, so it is safe either way). Awards are keyed, so replaying them is harmless.
+ * Replays of an 'ia' attempt (outbox replay, a reused token) are no-ops on the stats: each token is
+ * single use (attempt_uses, keyed by its signature), and a write whose claim lost counts nothing
+ * (attempts and last stay; best is a MAX, so it is safe either way). Two real attempts always both
+ * count, in whatever order they arrive. Awards are keyed, so replaying them is harmless.
  * 'demo'/'script' writes carry no server-issued identity and still count as a new try each time.
  */
 export async function micScore(d: LearningDeps, body: MicScoreBody): Promise<MicScoreRes> {
@@ -208,16 +209,15 @@ export async function micScore(d: LearningDeps, body: MicScoreBody): Promise<Mic
 
   let score = body.score;
   let verified = false;
-  /** When this attempt happened: the token's issue time for 'ia', else now. */
-  let stamp = d.now;
+  let token: string | null = null;
   if (body.source === 'ia') {
     const claims = await verifyAttempt(d.attemptSecret, body.attempt, d.now);
-    if (!claims || claims.userId !== d.userId || claims.phraseId !== body.phraseId) {
+    if (!claims || claims.userId !== d.userId || claims.phraseId !== body.phraseId || !body.attempt) {
       throw fail('token_invalid', 'Não deu para confirmar essa gravação. Grave de novo.');
     }
     score = claims.score;
     verified = true;
-    stamp = Math.min(d.now, claims.exp - ATTEMPT_TTL_MS);
+    token = body.attempt;
   } else if (body.source === 'script') {
     score = phrase.result;
   }
@@ -225,27 +225,28 @@ export async function micScore(d: LearningDeps, body: MicScoreBody): Promise<Mic
   assertOpen(ctx);
   if (!reached(ctx, MIC_STEP)) throw gated(undefined, { prog: ctx.prog, step: MIC_STEP });
 
-  // In DO UPDATE every expression reads the row as it was before this statement, so `fresh` is
-  // evaluated once against the old updated_at for all columns.
-  const fresh = "NOT (excluded.source = 'ia' AND mic_scores.updated_at >= excluded.updated_at)";
-  const row = await one<{ last_score: number; best_score: number; attempts: number }>(
-    d.db,
-    `INSERT INTO mic_scores(user_id, phrase_id, last_score, best_score, attempts, source, updated_at)
-     VALUES(?, ?, ?, ?, 1, ?, ?)
-     ON CONFLICT(user_id, phrase_id) DO UPDATE SET
-       last_score = CASE WHEN ${fresh} THEN excluded.last_score ELSE mic_scores.last_score END,
-       best_score = MAX(mic_scores.best_score, excluded.best_score),
-       attempts = mic_scores.attempts + CASE WHEN ${fresh} THEN 1 ELSE 0 END,
-       source = CASE WHEN ${fresh} THEN excluded.source ELSE mic_scores.source END,
-       updated_at = MAX(mic_scores.updated_at, excluded.updated_at)
-     RETURNING last_score, best_score, attempts`,
-    d.userId,
-    body.phraseId,
-    score,
-    score,
-    body.source,
-    stamp,
+  // `fresh`: this write is a new try (always for demo/script; for 'ia', only when this request
+  // claimed the token). The claim runs first in the same transaction.
+  const claim = newId(d.now);
+  const fresh = token ? ATTEMPT_CLAIMED : '1';
+  const freshBinds = token ? [attemptSig(token), claim] : [];
+  const upsert = d.db
+    .prepare(
+      `INSERT INTO mic_scores(user_id, phrase_id, last_score, best_score, attempts, source, updated_at)
+       VALUES(?, ?, ?, ?, 1, ?, ?)
+       ON CONFLICT(user_id, phrase_id) DO UPDATE SET
+         last_score = CASE WHEN ${fresh} THEN excluded.last_score ELSE mic_scores.last_score END,
+         best_score = MAX(mic_scores.best_score, excluded.best_score),
+         attempts = mic_scores.attempts + CASE WHEN ${fresh} THEN 1 ELSE 0 END,
+         source = CASE WHEN ${fresh} THEN excluded.source ELSE mic_scores.source END,
+         updated_at = MAX(mic_scores.updated_at, excluded.updated_at)
+       RETURNING last_score, best_score, attempts`,
+    )
+    .bind(d.userId, body.phraseId, score, score, body.source, d.now, ...freshBinds, ...freshBinds, ...freshBinds);
+  const results = await d.db.batch<{ last_score: number; best_score: number; attempts: number }>(
+    token ? [claimAttempt(d.db, token, d.userId, claim, d.now), upsert] : [upsert],
   );
+  const row = results[results.length - 1]?.results[0];
   if (!row) throw new Error('mic score was not stored');
 
   const good = verified && score >= PRONOUNCE_GOOD;

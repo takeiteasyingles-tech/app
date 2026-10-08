@@ -2,7 +2,17 @@
 // child rows: `mic` (Take the Mic phrases) and `ex` (Take Action exercises, each with its `items`).
 import type { Spec } from '../../ui/form';
 
-export type TabId = 'geral' | 'midia' | 'musica' | 'olhar' | 'dialogo' | 'mic' | 'licao' | 'away' | 'exercicios' | 'fim';
+export type TabId =
+  | 'geral'
+  | 'midia'
+  | 'musica'
+  | 'olhar'
+  | 'dialogo'
+  | 'mic'
+  | 'licao'
+  | 'away'
+  | 'exercicios'
+  | 'fim';
 
 export const TABS: readonly (readonly [TabId, string])[] = [
   ['geral', 'Geral'],
@@ -31,7 +41,14 @@ const GERAL: Spec[] = [
     ],
   },
   { t: 'int', k: 'seasonN', label: 'Temporada', opt: 'null', min: 1 },
-  { t: 'int', k: 'ebookNum', label: 'E-book', opt: 'null', min: 1, hint: 'O e-book que cobre este episódio (etapa 3).' },
+  {
+    t: 'int',
+    k: 'ebookNum',
+    label: 'E-book',
+    opt: 'null',
+    min: 1,
+    hint: 'O e-book que cobre este episódio (etapa 3).',
+  },
   { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3, hint: 'Mostrada na Intro (etapa 1).' },
   {
     t: 'strings',
@@ -39,7 +56,7 @@ const GERAL: Spec[] = [
     label: 'Personagens',
     wide: true,
     ph: 'Nome e Enter',
-    hint: 'Quem aparece no episódio (Intro e Take It In). As cores vêm do elenco do curso.',
+    hint: 'Quem aparece no episódio (Intro e Take It In). Cada personagem ganha uma cor própria, na ordem desta lista.',
   },
 ];
 
@@ -96,7 +113,14 @@ const DIALOGO: Spec[] = [
       { t: 'bool', k: 'stage', label: 'Indicação de cena', opt: 'undef', hint: 'Ex.: (the doorbell rings)' },
       { t: 'text', k: 'en', label: 'Inglês', rows: 2 },
       { t: 'text', k: 'pt', label: 'Tradução', rows: 2 },
-      { t: 'text', k: 'err', label: 'Nota de erro comum', opt: 'undef', rows: 2, hint: 'Aparece em azul abaixo da fala.' },
+      {
+        t: 'text',
+        k: 'err',
+        label: 'Nota de erro comum',
+        opt: 'undef',
+        rows: 2,
+        hint: 'Aparece em azul abaixo da fala.',
+      },
       { t: 'text', k: 'hook', label: 'Destaque', opt: 'undef' },
     ],
   },
@@ -132,9 +156,24 @@ export const BLOCK_SPECS: Spec[] = [
   { t: 'text', k: 'title', label: 'Título', opt: 'undef' },
   { t: 'text', k: 'body', label: 'Texto', opt: 'undef', rows: 3 },
   { t: 'text', k: 'body2', label: 'Segundo parágrafo', opt: 'undef', rows: 3 },
-  { t: 'list', k: 'rows', label: 'Exemplos', item: 'exemplo', opt: 'undef', of: ROW_SPECS, summary: (v) => String(v.en ?? '') },
+  {
+    t: 'list',
+    k: 'rows',
+    label: 'Exemplos',
+    item: 'exemplo',
+    opt: 'undef',
+    of: ROW_SPECS,
+    summary: (v) => String(v.en ?? ''),
+  },
   { t: 'lines', k: 'bullets', label: 'Tópicos', opt: 'undef', rows: 3 },
-  { t: 'text', k: 'callout', label: 'Destaque final', opt: 'undef', rows: 2, hint: 'Card azul-marinho no fim do bloco.' },
+  {
+    t: 'text',
+    k: 'callout',
+    label: 'Destaque final',
+    opt: 'undef',
+    rows: 2,
+    hint: 'Card azul-marinho no fim do bloco.',
+  },
   { t: 'text', k: 'badLabel', label: 'Rótulo da forma errada', opt: 'undef', hint: 'Padrão: "NÃO É".' },
 ];
 
@@ -269,7 +308,13 @@ const FIM: Spec[] = [
       { t: 'text', k: 'nextSub', label: 'Próximo: subtítulo' },
       { t: 'text', k: 'nextNote', label: 'Próximo: nota', rows: 2 },
       { t: 'text', k: 'cta', label: 'Texto do botão' },
-      { t: 'text', k: 'go', label: 'Destino do botão', mono: true, hint: 'Rota sem "#/": episodio/2, ebook/1 ou inicio.' },
+      {
+        t: 'text',
+        k: 'go',
+        label: 'Destino do botão',
+        mono: true,
+        hint: 'Rota sem "#/": episodio/2, ebook/1 ou inicio.',
+      },
     ],
   },
 ];

@@ -1,6 +1,12 @@
 // E-books: the list and the editor (Take Five blocks, Take it for Real cards, Take the Lead turns,
 // the chat, the Extras cards, the PDF) with the e-book test questions as child rows.
-import { adminContentApi, EbookEdit as EbookSchema, type EbookRow, TestQuestionEdit, type TestQuestionRow } from '@tie/shared/contracts/admin';
+import {
+  adminContentApi,
+  type EbookRow,
+  EbookEdit as EbookSchema,
+  TestQuestionEdit,
+  type TestQuestionRow,
+} from '@tie/shared/contracts/admin';
 import { useState } from 'preact/hooks';
 import { call } from '../../api';
 import { fmtAgo, fmtDateTime } from '../../format';
@@ -11,7 +17,17 @@ import { Async, Button, Empty, Page, Pill } from '../../ui/kit';
 import { type Col, Table } from '../../ui/table';
 import { prefixErrors, zodErrors } from '../../ui/validate';
 import type { ScreenProps } from '../registry';
-import { applyRows, applyToBase, type CrudApi, CreateModal, DraftNote, diffRows, keysOf, patchOf, pick } from './common';
+import {
+  applyRows,
+  applyToBase,
+  CreateModal,
+  type CrudApi,
+  DraftNote,
+  diffRows,
+  keysOf,
+  patchOf,
+  pick,
+} from './common';
 import { DocEditor, PartialSave, tabFinder } from './DocEditor';
 import { BlockView } from './EpisodePreview';
 import { BLOCK_SPECS } from './episodeSpecs';
@@ -41,7 +57,16 @@ const SPECS: Record<string, readonly Spec[]> = {
     { t: 'int', k: 'passScore', label: 'Acertos para passar no teste', min: 0 },
     { t: 'media', k: 'pdfMedia', label: 'PDF do e-book', kind: 'pdf', opt: 'null' },
   ],
-  five: [{ t: 'list', k: 'five', label: 'Páginas do Take Five', item: 'bloco', of: BLOCK_SPECS, summary: (v) => [v.k, v.title].filter(Boolean).join(' · ') }],
+  five: [
+    {
+      t: 'list',
+      k: 'five',
+      label: 'Páginas do Take Five',
+      item: 'bloco',
+      of: BLOCK_SPECS,
+      summary: (v) => [v.k, v.title].filter(Boolean).join(' · '),
+    },
+  ],
   real: [
     {
       t: 'list',
@@ -66,7 +91,15 @@ const SPECS: Record<string, readonly Spec[]> = {
       make: () => ({ m: { en: '', pt: '' }, opts: [{ en: '', pt: '' }] }),
       of: [
         { t: 'obj', k: 'm', label: 'Fala da Margaret', of: BI('Fala') },
-        { t: 'list', k: 'opts', label: 'Respostas', item: 'resposta', inline: true, of: OPT_SPECS, hint: 'A certa não tem correção; as erradas explicam o porquê.' },
+        {
+          t: 'list',
+          k: 'opts',
+          label: 'Respostas',
+          item: 'resposta',
+          inline: true,
+          of: OPT_SPECS,
+          hint: 'A certa não tem correção; as erradas explicam o porquê.',
+        },
       ],
     },
   ],
@@ -127,7 +160,13 @@ const SPECS: Record<string, readonly Spec[]> = {
         { t: 'text', k: 'partTitle', label: 'Título da parte' },
         { t: 'text', k: 'q', label: 'Pergunta', rows: 2 },
         { t: 'choices', k: 'opts', label: 'Opções', answer: 'answerIdx', opt: 'null', min: 2, max: 6 },
-        { t: 'strings', k: 'accept', label: 'Respostas digitadas aceitas', opt: 'null', hint: 'Use quando não há opções. Comparadas sem acento, caixa e pontuação.' },
+        {
+          t: 'strings',
+          k: 'accept',
+          label: 'Respostas digitadas aceitas',
+          opt: 'null',
+          hint: 'Use quando não há opções. Comparadas sem acento, caixa e pontuação.',
+        },
         { t: 'text', k: 'show', label: 'Resposta mostrada na revisão', opt: 'null' },
         { t: 'text', k: 'audio', label: 'Texto do áudio', opt: 'null' },
         { t: 'text', k: 'rev', label: 'O que revisar', opt: 'null', rows: 2 },
@@ -205,7 +244,9 @@ async function persist(base: Doc, d: Doc): Promise<Doc> {
       diffRows(b.tq as unknown as Obj[], d.tq as unknown as Obj[], (r) => String(r.id), TQ_KEYS),
       TQ_KEYS,
       (kind, id, row) => {
-        b.tq = applyToBase(b.tq as unknown as Obj[], kind, id, row, (r) => String(r.id)) as unknown as TestQuestionRow[];
+        b.tq = applyToBase(b.tq as unknown as Obj[], kind, id, row, (r) =>
+          String(r.id),
+        ) as unknown as TestQuestionRow[];
       },
       (r) => String(r.id),
     );
@@ -307,7 +348,11 @@ export function Ebooks(_: ScreenProps) {
         </span>
       ),
     },
-    { key: 'pdf', label: 'PDF', cell: (e) => (e.pdfMedia ? <Pill label="Com PDF" tone="gr" /> : <Pill label="Sem PDF" />) },
+    {
+      key: 'pdf',
+      label: 'PDF',
+      cell: (e) => (e.pdfMedia ? <Pill label="Com PDF" tone="gr" /> : <Pill label="Sem PDF" />),
+    },
     { key: 'five', label: 'Take Five', cls: 'num', cell: (e) => String(e.five.length) },
     { key: 'lead', label: 'Take the Lead', cls: 'num', cell: (e) => String(e.lead.length), desktopOnly: true },
     { key: 'pass', label: 'Passa com', cls: 'num', cell: (e) => String(e.passScore) },
@@ -315,12 +360,22 @@ export function Ebooks(_: ScreenProps) {
   ];
   const next = (load.data?.items ?? []).reduce((m, e) => Math.max(m, e.num), 0) + 1;
   return (
-    <Page title="E-books" kicker="Conteúdo" actions={<Button label="Novo e-book" icon="plus" onClick={() => setCreating(true)} />}>
+    <Page
+      title="E-books"
+      kicker="Conteúdo"
+      actions={<Button label="Novo e-book" icon="plus" onClick={() => setCreating(true)} />}
+    >
       <DraftNote />
       <Async load={load}>
         {(d) =>
           d.items.length ? (
-            <Table rows={d.items} cols={cols} rowKey={(e) => String(e.num)} href={(e) => `conteudo/ebooks/${e.num}`} caption="E-books" />
+            <Table
+              rows={d.items}
+              cols={cols}
+              rowKey={(e) => String(e.num)}
+              href={(e) => `conteudo/ebooks/${e.num}`}
+              caption="E-books"
+            />
           ) : (
             <Empty icon="book" title="Nenhum e-book ainda." />
           )
@@ -337,7 +392,19 @@ export function Ebooks(_: ScreenProps) {
           create={async (id, title) => {
             const num = Number(id);
             await call(C.ebooks.create, {
-              body: { num, title, epsLabel: null, scope: null, five: [], real: [], lead: [], chat: [], extrasCards: [], pdfMedia: null, passScore: 14 },
+              body: {
+                num,
+                title,
+                epsLabel: null,
+                scope: null,
+                five: [],
+                real: [],
+                lead: [],
+                chat: [],
+                extrasCards: [],
+                pdfMedia: null,
+                passScore: 14,
+              },
             });
             go(`conteudo/ebooks/${num}`);
           }}

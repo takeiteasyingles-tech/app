@@ -3,7 +3,7 @@
 // serialized across slots with a lock: the seed package writes its SQL and compiled files to one shared
 // packages/seed/out dir.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { D1_NAME, targetFlags } from '@tie/seed/wrangler';
 import { APP_DIRS, OUT_ROOT, PROTO_DIR, REPO_ROOT, type Slot } from './config';
@@ -77,6 +77,13 @@ export async function seedSlot(
   });
   try {
     if (!opts.force && fresh()) return 'skipped';
+    // Start from an empty persist dir: wrangler skips migrations it already applied, so an edit to an
+    // applied migration (a trigger, say) would otherwise survive the re-seed. The slot lock is held and
+    // its dev server is not running yet, so nothing has the D1 files open.
+    if (existsSync(sl.persistAbs)) {
+      log(`seed: wiping ${sl.persistRel} (inputs changed or --force-seed)`);
+      rmSync(sl.persistAbs, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
     log(`seed: npm run seed -- --local --persist-to ${sl.persistRel}`);
     const t0 = Date.now();
     await runNode(npmCli(), ['run', 'seed', '--', '--local', '--persist-to', sl.persistRel], {

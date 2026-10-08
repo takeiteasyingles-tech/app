@@ -1,7 +1,8 @@
 // Cloudflare Turnstile for the admin login and invite accept (Worker actions 'login' / 'invite').
 // Same approach as the student app (apps/app/web/src/screens/entrada/turnstile.ts): the widget runs
 // "interaction-only", the script (allowed by the CSP) loads on the first focus in the form, and on
-// localhost the always-pass test key stands in, with a dummy token when the script is unreachable.
+// localhost (no sitekey configured) the always-pass test key stands in with a dummy token, without
+// loading the script.
 // The admin Worker has no public config endpoint, so the sitekey is a build-time value
 // (VITE_TURNSTILE_SITEKEY, the same value as the Worker's TURNSTILE_SITEKEY var).
 import { useEffect, useRef } from 'preact/hooks';
@@ -78,6 +79,14 @@ export function useTurnstile(action: 'login' | 'invite'): TurnstileHandle {
     const key = siteKey();
     void (async () => {
       if (!key) throw new Error('no sitekey');
+      // Local dev with the always-pass test key: the Worker's test secret accepts any token without
+      // calling Cloudflare, so the external script (and its iframe's console noise) is skipped.
+      if (key === TEST_SITEKEY && isLocal()) {
+        st.dummy = true;
+        st.token = DUMMY_TOKEN;
+        settle(DUMMY_TOKEN);
+        return;
+      }
       let api: TurnstileApi;
       try {
         api = await loadScript();

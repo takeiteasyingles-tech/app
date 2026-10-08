@@ -9,6 +9,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     app: 'app',
     prototype: false,
     skipBuild: process.env.E2E_SKIP_BUILD === '1',
+    forceSeed: process.env.E2E_FORCE_SEED === '1',
     // Real Worker clock: the e2e user signs up "now", like a person would.
     realClock: true,
     log: (m) => console.log(`[e2e slot ${SLOT}] ${m}`),

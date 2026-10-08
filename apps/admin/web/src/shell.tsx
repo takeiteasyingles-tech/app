@@ -6,24 +6,22 @@ import { Component, type ComponentChildren, type FunctionComponent } from 'preac
 import { useEffect, useLayoutEffect, useState } from 'preact/hooks';
 import { NAV_GROUPS, type NavItem } from './nav';
 import { replace, route, withQuery } from './router';
-import { SCREENS, type ScreenProps } from './screens/registry';
 import { Login } from './screens/Login';
+import { SCREENS, type ScreenProps } from './screens/registry';
 import { auth, authStatus, can, loadSession, logout, pendingModeration, ROLE_LABEL } from './session';
 import { Icon } from './ui/icons';
 import { Button, Empty, NoAccess, Page, Skeleton } from './ui/kit';
 import { menuOpen, wide } from './ui/layout';
 import { DialogHost, Modal } from './ui/modal';
-import { Toasts } from './ui/toast';
+import { dropStaleToasts, Toasts } from './ui/toast';
 
 function Frame({ children, layout }: { children?: ComponentChildren; layout: 'desktop' | 'mobile' }) {
   return (
     <div class="app ad-app" id="app" data-layout={layout} data-theme="cream">
-      <a class="ad-skip" href="#main" onClick={(e) => {
-        e.preventDefault();
-        document.getElementById('main')?.focus();
-      }}>
+      {/* A button, not href="#main": the hash is the router's, "#main" would be a route. */}
+      <button type="button" class="ad-skip" onClick={() => document.getElementById('main')?.focus()}>
         Pular para o conteúdo
-      </a>
+      </button>
       <div id="content" style={{ display: 'contents' }}>
         {children}
         <div id="overlayroot" />
@@ -33,6 +31,8 @@ function Frame({ children, layout }: { children?: ComponentChildren; layout: 'de
     </div>
   );
 }
+
+const ACCOUNT_HREF = '#/conta';
 
 const visible = (it: NavItem) => !it.perm || can(it.perm);
 
@@ -44,7 +44,7 @@ function NavLinks({ active, onPick }: { active: string; onPick?: () => void }) {
         const items = g.items.filter(visible);
         if (!items.length) return null;
         return (
-          <div key={g.label ?? 'top'} class="ad-navgroup" role="group" aria-label={g.label ?? 'Início'}>
+          <div key={g.label ?? 'top'} class="ad-navgroup">
             {g.label ? <div class="lbl ad-navlbl">{g.label}</div> : null}
             {items.map((it) => (
               <a
@@ -56,7 +56,9 @@ function NavLinks({ active, onPick }: { active: string; onPick?: () => void }) {
               >
                 <Icon name={it.icon} size={20} />
                 <span>{it.label}</span>
-                {it.href === 'moderacao' && pending ? <span class="badge">{pending > 99 ? '99+' : pending}</span> : null}
+                {it.href === 'moderacao' && pending ? (
+                  <span class="badge">{pending > 99 ? '99+' : pending}</span>
+                ) : null}
               </a>
             ))}
           </div>
@@ -84,7 +86,7 @@ function UserFoot({ onPick }: { onPick?: () => void }) {
         </div>
       </div>
       <div class="row" style={{ '--gap': '6px' }}>
-        <a class="ad-me-btn grow" href="#/conta" onClick={onPick}>
+        <a class="ad-me-btn grow" href={ACCOUNT_HREF} onClick={onPick}>
           <Icon name="key" size={16} />
           <span>Minha conta</span>
         </a>
@@ -101,7 +103,7 @@ function Side({ active }: { active: string }) {
   return (
     <aside class="side on-navy ad-side" aria-label="Seções do painel">
       <a href="#/" class="ad-brand" aria-label="Take It Easy · Painel">
-        <Logo size={17} white />
+        <Logo size={15} white />
         <span class="ad-brand-tag">ADMIN</span>
       </a>
       <nav class="ad-nav">
@@ -120,8 +122,8 @@ function MobileMenu({ active }: { active: string }) {
     menuOpen.value = false;
   };
   return (
-    <Modal title="Menu" onClose={close}>
-      <nav class="ad-mnav on-navy" aria-label="Seções do painel">
+    <Modal title="Menu" onClose={close} cls="ad-navsheet on-navy">
+      <nav class="ad-mnav" aria-label="Seções do painel">
         <NavLinks active={active} onPick={close} />
       </nav>
       <UserFoot onPick={close} />
@@ -145,7 +147,9 @@ class Boundary extends Component<{ children: ComponentChildren }, { error: unkno
         <Empty
           icon="alert"
           title="Algo deu errado nesta tela."
-          body={detail ? <pre class="ad-json">{detail}</pre> : 'Recarregue a página. Se continuar, avise o time técnico.'}
+          body={
+            detail ? <pre class="ad-json">{detail}</pre> : 'Recarregue a página. Se continuar, avise o time técnico.'
+          }
           action={<Button label="Recarregar" icon="refresh" onClick={() => location.reload()} />}
         />
       </Page>
@@ -176,7 +180,15 @@ function ScreenHost({ name, props }: { name: string; props: ScreenProps }) {
   if (!def) {
     return (
       <Page title="Página não encontrada">
-        <Empty icon="search" title="Não existe nada neste endereço." action={<a class="btn compact navy" href="#/">Ir para o painel</a>} />
+        <Empty
+          icon="search"
+          title="Não existe nada neste endereço."
+          action={
+            <a class="btn compact navy" href="#/">
+              Ir para o painel
+            </a>
+          }
+        />
       </Page>
     );
   }
@@ -234,7 +246,9 @@ export function Shell() {
     st === 'out' && !isPublic
       ? withQuery('entrar', { volta: r.path && r.path !== 'painel' ? r.path : undefined })
       : st === 'in' && r.name === 'login'
-        ? r.q.volta && !r.q.volta.startsWith('entrar') ? r.q.volta : ''
+        ? r.q.volta && !r.q.volta.startsWith('entrar')
+          ? r.q.volta
+          : ''
         : null;
 
   useLayoutEffect(() => {
@@ -243,6 +257,7 @@ export function Shell() {
 
   useEffect(() => {
     menuOpen.value = false;
+    dropStaleToasts();
   }, [r.path]);
 
   if (st === 'loading' || st === 'offline') {

@@ -63,6 +63,7 @@ export async function send<E extends EndpointDef>(
   const callOpts: CallOptions<E> = { ...opts };
   if (ep.method !== 'GET' && !callOpts.idempotencyKey && isOutboxPath(urlFor(ep, opts))) {
     callOpts.idempotencyKey = newIdempotencyKey();
+    callOpts.outboxUser = before.user?.id;
   }
   let res: ResOf<E>;
   try {

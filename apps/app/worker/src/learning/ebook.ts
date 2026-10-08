@@ -84,7 +84,7 @@ function snapshotRow(x: TestQuestion): TestQuestionRow {
  * by foreign key), else from D1. An e-book no published episode belongs to is content_unavailable.
  */
 async function loadTest(d: LearningDeps, n: number) {
-  const [availability, [ebooks, questions, answers]] = await Promise.all([
+  const [availability, [ebooks, questions, answers, doneRows, resultRows]] = await Promise.all([
     ebookOpen(d, n),
     batch(d.db, [
       q<EbookRow>(d.db, 'SELECT num, pass_score, NULL AS pdf_key FROM ebooks WHERE num = ?', n),
@@ -100,11 +100,29 @@ async function loadTest(d: LearningDeps, n: number) {
         d.userId,
         n,
       ),
+      q<{ episode_num: number }>(
+        d.db,
+        'SELECT episode_num FROM episode_progress WHERE user_id = ? AND done_at IS NOT NULL',
+        d.userId,
+      ),
+      q<{ submitted: number }>(
+        d.db,
+        'SELECT 1 AS submitted FROM ebook_test_results WHERE user_id = ? AND ebook_num = ?',
+        d.userId,
+        n,
+      ),
     ] as const),
   ]);
   const row = ebooks[0];
   if (!row) throw fail('not_found');
   if (!availability.open) throw fail('content_unavailable');
+  // The trilha opens the test once every published episode of the e-book is done (Trilha.tsx
+  // ExtrasNode); the endpoints hold the same line (spec 06 "Progress and e-book tests").
+  const done = new Set(doneRows.map((r) => r.episode_num));
+  const missing = availability.episodes.filter((e) => !done.has(e));
+  if (missing.length) {
+    throw fail('gated', `Termine os episódios do e-book ${n} para fazer o teste.`, { episodes: missing });
+  }
 
   let passScore = row.pass_score;
   let rows: TestQuestionRow[] = questions;
@@ -126,7 +144,12 @@ async function loadTest(d: LearningDeps, n: number) {
     const v = a.choice_idx ?? a.text_value;
     if (v != null) saved.set(a.question_id, v);
   }
-  return { book: { num: row.num, pass_score: passScore }, questions: rows.map(toGradable), saved };
+  return {
+    book: { num: row.num, pass_score: passScore },
+    questions: rows.map(toGradable),
+    saved,
+    submittedBefore: resultRows.length > 0,
+  };
 }
 
 /** Validates the submitted answers against the question list; null (or blank text) clears one. */
@@ -209,9 +232,14 @@ export async function saveAnswers(d: LearningDeps, n: number, body: TestAnswersB
   return { ok: true };
 }
 
-/** POST /api/ebooks/:n/test/submit: merges `answers` over the saved ones, grades, stores the result. */
+/**
+ * POST /api/ebooks/:n/test/submit: merges `answers` over the saved ones, grades, stores the result.
+ * The expected answers (`show`) come back with the first graded submit only: afterwards the endpoint
+ * would be an answer oracle (submit blanks, read the key, redo, pass). Later results carry '' and the
+ * client's review falls back to the published e-book file (spec 06 "Progress and e-book tests").
+ */
 export async function submitTest(d: LearningDeps, n: number, body: TestSubmitBody): Promise<TestResult> {
-  const { book, questions, saved } = await loadTest(d, n);
+  const { book, questions, saved, submittedBefore } = await loadTest(d, n);
   const changes = normalizeAnswers(questions, body.answers ?? {});
   const merged = new Map(saved);
   for (const [question, v] of changes) {
@@ -221,7 +249,8 @@ export async function submitTest(d: LearningDeps, n: number, body: TestSubmitBod
 
   const results = questions.map((question) => {
     const given = merged.get(question.id) ?? null;
-    return { questionId: question.id, n: question.n, correct: isCorrect(question, given), given, show: question.show };
+    const show = submittedBefore ? '' : question.show;
+    return { questionId: question.id, n: question.n, correct: isCorrect(question, given), given, show };
   });
   const score = results.filter((r) => r.correct).length;
   const passed = score >= book.pass_score;

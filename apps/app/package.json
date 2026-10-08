@@ -5,9 +5,12 @@
   "type": "module",
   "description": "tie-app Worker: student PWA (static assets) + /api + /m media.",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --env local",
+    "dev:ai": "wrangler dev",
     "build": "vite build",
-    "deploy": "wrangler deploy",
+    "budgets": "tsx scripts/budgets.ts",
+    "check:models": "tsx scripts/checkModels.ts",
+    "deploy": "npm run check:models && wrangler deploy",
     "typecheck": "tsc -p tsconfig.json && tsc -p worker/tsconfig.json && tsc -p web/tsconfig.json && tsc -p web/tsconfig.test.json",
     "test": "vitest run --passWithNoTests",
     "db:migrate:local": "wrangler d1 migrations apply tie-db --local"

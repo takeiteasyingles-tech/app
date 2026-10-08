@@ -1,5 +1,5 @@
 import { type Catalog, type Ebook, type Episode, FLAGS, type GateEpisode, type GateState, stepKey } from '@tie/shared';
-import { batch, type ContentService, fromJson, isEnabled, one, q } from '@tie/worker-core';
+import { all, batch, type ContentService, fromJson, isEnabled, q } from '@tie/worker-core';
 import type { LearningDeps } from './deps';
 
 // Published content for the learning routes, and the user's state for ONE episode.
@@ -273,17 +273,18 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
 export async function ebookOpen(
   d: LearningDeps,
   n: number,
-): Promise<{ open: boolean; snapshot: Ebook | null; source: ContentSource['kind'] }> {
+): Promise<{ open: boolean; snapshot: Ebook | null; source: ContentSource['kind']; episodes: number[] }> {
   const src = await contentSource(d);
   if (src.kind === 'snapshot') {
-    const open = src.catalog.episodes.some((e) => isPublished(e.status) && e.ebook === n);
+    const episodes = src.catalog.episodes.filter((e) => isPublished(e.status) && e.ebook === n).map((e) => e.num);
+    const open = episodes.length > 0;
     const file = open ? await snapshotFile(() => src.content.ebook(n)) : null;
-    return { open, snapshot: file, source: 'snapshot' };
+    return { open, snapshot: file, source: 'snapshot', episodes };
   }
-  const row = await one<{ ok: number }>(
+  const rows = await all<{ num: number }>(
     d.db,
-    "SELECT 1 AS ok FROM episodes WHERE ebook_num = ? AND status = 'published' LIMIT 1",
+    "SELECT num FROM episodes WHERE ebook_num = ? AND status = 'published' ORDER BY num",
     n,
   );
-  return { open: row != null, snapshot: null, source: 'd1' };
+  return { open: rows.length > 0, snapshot: null, source: 'd1', episodes: rows.map((r) => r.num) };
 }

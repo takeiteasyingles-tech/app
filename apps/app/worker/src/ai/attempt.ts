@@ -78,6 +78,34 @@ export async function verifyAttempt(
   return { userId: u, phraseId: p, score: s, exp: e };
 }
 
+/** A token's identity for single use: its signature (attempt_uses.token_sig). */
+export function attemptSig(token: string): string {
+  return token.split('.')[2] ?? '';
+}
+
+/**
+ * Batchable single-use claim of an attempt token: the first request to run it owns the token. Pair it
+ * with ATTEMPT_CLAIMED (binds: sig, claim) in the statements that must apply once per real attempt.
+ * Replays (outbox, a reused token) then change nothing, whatever the order attempts arrive in.
+ */
+export function claimAttempt(
+  db: D1Database,
+  token: string,
+  userId: string,
+  claim: string,
+  now: number,
+): D1PreparedStatement {
+  return db
+    .prepare('INSERT OR IGNORE INTO attempt_uses(token_sig, user_id, claim, used_at) VALUES(?, ?, ?, ?)')
+    .bind(attemptSig(token), userId, claim, now);
+}
+
+/** True only inside the request whose claimAttempt() won (2 binds: sig, claim). */
+export const ATTEMPT_CLAIMED = '(SELECT claim FROM attempt_uses WHERE token_sig = ?) = ?';
+
+/** Consumed tokens are kept a day (tokens live ATTEMPT_TTL_MS); the retention cron drops the rest. */
+export const ATTEMPT_USES_KEEP_MS = 24 * 60 * 60_000;
+
 /** True when the token is valid for this user, phrase and score. */
 export async function attemptMatches(
   secret: string,

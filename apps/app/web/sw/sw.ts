@@ -2,7 +2,8 @@
 // tie-app service worker (vite-plugin-pwa injectManifest, spec 04 §5 "Service worker").
 // - Shell: precached (self.__WB_MANIFEST); navigations fall back to the precached index.html.
 // - /api/content/v/*: CacheFirst (versioned, immutable snapshots).
-// - /api/content/manifest and GET /api/me*: NetworkFirst with a 3 s timeout (offline start).
+// - /api/content/manifest and GET /api/me*: NetworkFirst with a 3 s timeout (offline start);
+//   /api/me/export is never cached.
 // - /m/media/*: CacheFirst + RangeRequestsPlugin + Expiration (60 entries / 30 days, purge on quota).
 //   User uploads (/m/users/*) are never cached (moderation can remove them).
 // - Offline outbox: non-GET /api/* writes that carry an Idempotency-Key and fail on the network are
@@ -17,7 +18,17 @@ import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from
 import { RangeRequestsPlugin } from 'workbox-range-requests';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, NetworkFirst } from 'workbox-strategies';
-import { CACHE_NAMES, IDEMPOTENCY_HEADER, isOutboxPath, MSG, OUTBOX_HEADER, type SwMessage } from './protocol';
+import {
+  CACHE_NAMES,
+  IDEMPOTENCY_HEADER,
+  isOutboxPath,
+  isUncacheableMePath,
+  MSG,
+  OUTBOX_HEADER,
+  replayOutcome,
+  type SwMessage,
+  USER_CACHES,
+} from './protocol';
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: (string | { url: string; revision: string | null })[] };
 
@@ -60,15 +71,38 @@ registerRoute(
 
 registerRoute(
   ({ url, request }) =>
-    sameOrigin(url) && request.method === 'GET' && (url.pathname === '/api/me' || url.pathname.startsWith('/api/me/')),
+    sameOrigin(url) &&
+    request.method === 'GET' &&
+    (url.pathname === '/api/me' || url.pathname.startsWith('/api/me/')) &&
+    !isUncacheableMePath(url.pathname),
   networkFirst3s(CACHE_NAMES.me),
 );
+
+/**
+ * Audio and video elements only ask for byte ranges, and a 206 is never cached, so without this a
+ * played file never reached the cache. Their first request is `Range: bytes=0-`, whose 206 already
+ * carries the whole file: it goes on as a plain 200 with the same body (nothing is downloaded twice),
+ * which the cache keeps; later ranges, offline too, are cut from it by RangeRequestsPlugin. A media
+ * element accepts a 200 for a range request (a server may ignore Range).
+ */
+const wholeFileFromOpenRange = {
+  async fetchDidSucceed({ response }: { response: Response }): Promise<Response> {
+    if (response.status !== 206) return response;
+    const m = /^bytes 0-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') ?? '');
+    if (!m || Number(m[1]) + 1 !== Number(m[2])) return response;
+    const headers = new Headers(response.headers);
+    headers.delete('Content-Range');
+    headers.set('Content-Length', m[2] as string);
+    return new Response(response.body, { status: 200, statusText: 'OK', headers });
+  },
+};
 
 registerRoute(
   ({ url, request }) => sameOrigin(url) && request.method === 'GET' && url.pathname.startsWith('/m/media/'),
   new CacheFirst({
     cacheName: CACHE_NAMES.media,
     plugins: [
+      wholeFileFromOpenRange,
       new CacheableResponsePlugin({ statuses: [200] }),
       new RangeRequestsPlugin(),
       new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60, purgeOnQuotaError: true }),
@@ -85,7 +119,11 @@ async function notify(message: SwMessage): Promise<void> {
 
 let replaying: Promise<void> | null = null;
 
-/** Replays queued writes in order. Network failure → keep and retry later; 4xx → drop (replay cannot fix it). */
+/**
+ * Replays queued writes in order (replayOutcome): network failure, 5xx or 429 → keep and retry later;
+ * 401 → keep everything until someone signs in again (the page flushes after login; a write made for
+ * another account is then refused with 409 by the server and dropped); any other 4xx → drop.
+ */
 async function replay(queue: Queue): Promise<void> {
   let sent = 0;
   let dropped = 0;
@@ -100,12 +138,20 @@ async function replay(queue: Queue): Promise<void> {
       await notify({ type: MSG.outboxReplayed, sent, dropped, pending: true });
       throw err;
     }
-    if (res.status >= 500 || res.status === 429) {
+    const outcome = replayOutcome(res.status);
+    if (outcome === 'retry') {
       await queue.unshiftRequest(entry);
       await notify({ type: MSG.outboxReplayed, sent, dropped, pending: true });
       throw new Error(`outbox replay deferred: HTTP ${res.status}`);
     }
-    if (res.ok) sent++;
+    if (outcome === 'hold') {
+      // Signed out: nothing else will go through either. Not an error (no Background Sync retry
+      // storm); the next flush after a login sends them.
+      await queue.unshiftRequest(entry);
+      await notify({ type: MSG.outboxReplayed, sent, dropped, pending: true });
+      return;
+    }
+    if (outcome === 'sent') sent++;
     else dropped++;
   }
   if (sent || dropped) await notify({ type: MSG.outboxReplayed, sent, dropped, pending: false });
@@ -157,10 +203,11 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
   } else if (data.type === MSG.flushOutbox) {
     event.waitUntil(startReplay(outbox).catch(() => {}));
   } else if (data.type === MSG.logout) {
-    // Per-user data must not outlive the session on a shared device.
+    // Per-user data must not outlive the session on a shared device: every runtime cache (state,
+    // manifest, plan-gated content files, premium media) and the writes still queued.
     event.waitUntil(
       (async () => {
-        await Promise.all([caches.delete(CACHE_NAMES.me), caches.delete(CACHE_NAMES.manifest)]);
+        await Promise.all(USER_CACHES.map((name) => caches.delete(name)));
         while (await outbox.shiftRequest()) {
           // drain
         }

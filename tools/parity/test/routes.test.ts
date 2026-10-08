@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadFixture } from '../src/fixture/state';
-import { adminRoutes, appRoutes, hashOf, selectRoutes } from '../src/routes';
+import { ADMIN_ROUTES, adminRoutes, appRoutes, hashOf, selectRoutes } from '../src/routes';
 
 const fixture = loadFixture();
 const all = appRoutes(fixture);
@@ -77,17 +77,46 @@ describe('selectRoutes', () => {
 });
 
 describe('adminRoutes', () => {
-  it('raw hashes become file-safe ids; leading #/ is dropped', () => {
-    const r = adminRoutes('#/usuarios, conteudo/episodios,/planos');
-    expect(r.map((x) => [x.id, x.hash])).toEqual([
-      ['usuarios', 'usuarios'],
-      ['conteudo_episodios', 'conteudo/episodios'],
-      ['planos', 'planos'],
-    ]);
+  it('has the admin route ids, unique, with the staff fixture of each', () => {
+    const ids = ADMIN_ROUTES.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const want of [
+      'login',
+      'dashboard',
+      'users',
+      'user-detail',
+      'plans',
+      'content-episodes',
+      'content-episode-edit',
+      'content-extras',
+      'content-assistants',
+      'content-onboarding',
+      'media',
+      'moderation',
+      'audit',
+      'releases',
+      'settings',
+    ])
+      expect(ids).toContain(want);
+    const by = Object.fromEntries(ADMIN_ROUTES.map((r) => [r.id, r]));
+    expect(by.login).toMatchObject({ hash: 'entrar', staff: 'none' });
+    expect(by['user-detail']?.hash).toBe('usuarios/U_PARITY');
+    expect(by['content-episode-edit']).toMatchObject({ hash: 'conteudo/episodios/1', staff: 'super_admin' });
+    expect(by['editor-content-episode-edit']).toMatchObject({ hash: 'conteudo/episodios/1', staff: 'editor' });
   });
 
-  it('all / empty → the admin root', () => {
-    expect(adminRoutes('all')).toEqual([{ id: 'root', hash: '', user: 'main' }]);
-    expect(adminRoutes('')).toEqual([{ id: 'root', hash: '', user: 'main' }]);
+  it('ids select from the table, in order; all / empty → the whole table', () => {
+    expect(adminRoutes('settings, login').map((x) => x.id)).toEqual(['settings', 'login']);
+    expect(adminRoutes('all')).toHaveLength(ADMIN_ROUTES.length);
+    expect(adminRoutes('')).toHaveLength(ADMIN_ROUTES.length);
+  });
+
+  it('anything else is a raw hash with a file-safe id, captured as the super_admin', () => {
+    const r = adminRoutes('#/usuarios/U_X, conteudo/extras/abc,/planos/z');
+    expect(r.map((x) => [x.id, x.hash, x.staff])).toEqual([
+      ['usuarios_U_X', 'usuarios/U_X', 'super_admin'],
+      ['conteudo_extras_abc', 'conteudo/extras/abc', 'super_admin'],
+      ['planos_z', 'planos/z', 'super_admin'],
+    ]);
   });
 });

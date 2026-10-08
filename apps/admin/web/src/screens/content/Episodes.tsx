@@ -61,7 +61,9 @@ export function Episodes({ q }: ScreenProps) {
   const [creating, setCreating] = useState(false);
   const all = load.data?.items ?? [];
   const email = useEmails(all.map((e) => e.updatedBy));
-  const rows = all.filter((e) => (!status || e.status === status) && (!search || `${e.num} ${e.title}`.toLowerCase().includes(search)));
+  const rows = all.filter(
+    (e) => (!status || e.status === status) && (!search || `${e.num} ${e.title}`.toLowerCase().includes(search)),
+  );
   const count = (s: string) => all.filter((e) => e.status === s).length;
   const cols: Col<EpisodeRow>[] = [
     {
@@ -71,8 +73,11 @@ export function Episodes({ q }: ScreenProps) {
         <span class="row" style={{ '--gap': '10px' }}>
           <span class="ad-epnum">{String(e.num).padStart(2, '0')}</span>
           <span class="ad-cell2">
-            <span>{e.title}</span>
-            <span class="xs">{e.ebookNum ? `E-book ${e.ebookNum}` : 'Sem e-book'}{e.seasonN ? ` · Temporada ${e.seasonN}` : ''}</span>
+            {e.title.trim() ? <span>{e.title}</span> : <i class="ad-untitled">Sem título</i>}
+            <span class="xs">
+              {e.ebookNum ? `E-book ${e.ebookNum}` : 'Sem e-book'}
+              {e.seasonN ? ` · Temporada ${e.seasonN}` : ''}
+            </span>
           </span>
         </span>
       ),
@@ -84,7 +89,11 @@ export function Episodes({ q }: ScreenProps) {
       cell: (e) => {
         const c = completeness(e);
         return (
-          <span class="row" style={{ '--gap': '8px', minWidth: '120px' }} title="Partes preenchidas: letra, música, Take a Look, diálogo, lição, Take Away, conclusão e mídias">
+          <span
+            class="row"
+            style={{ '--gap': '8px', minWidth: '120px' }}
+            title="Partes preenchidas: letra, música, Take a Look, diálogo, lição, Take Away, conclusão e mídias"
+          >
             <span class="bar grow" style={{ height: '8px' }}>
               <i style={{ width: `${Math.round(c * 100)}%`, background: c === 1 ? 'var(--green)' : undefined }} />
             </span>
@@ -113,7 +122,12 @@ export function Episodes({ q }: ScreenProps) {
       actions={<Button label="Novo episódio" icon="plus" onClick={() => setCreating(true)} />}
       bar={
         <div class="ad-filters">
-          <SearchBox value={q.q ?? ''} onValue={(v) => setQuery({ q: v })} placeholder="Buscar por número ou título" id="ep-q" />
+          <SearchBox
+            value={q.q ?? ''}
+            onValue={(v) => setQuery({ q: v })}
+            placeholder="Buscar por número ou título"
+            id="ep-q"
+          />
           <FilterChips
             label="Situação"
             value={status}
@@ -132,9 +146,19 @@ export function Episodes({ q }: ScreenProps) {
       <Async load={load} rows={8}>
         {() =>
           rows.length ? (
-            <Table rows={rows} cols={cols} rowKey={(e) => String(e.num)} href={(e) => `conteudo/episodios/${e.num}`} caption="Episódios" />
+            <Table
+              rows={rows}
+              cols={cols}
+              rowKey={(e) => String(e.num)}
+              href={(e) => `conteudo/episodios/${e.num}`}
+              caption="Episódios"
+            />
           ) : (
-            <Empty icon="trail" title={all.length ? 'Nenhum episódio com esses filtros.' : 'Nenhum episódio ainda.'} />
+            <Empty
+              icon="trail"
+              title={all.length ? 'Nenhum episódio com esses filtros.' : 'Nenhum episódio ainda.'}
+              body={all.length ? 'Tente outra busca ou outra situação.' : 'Crie o primeiro pelo botão Novo episódio.'}
+            />
           )
         }
       </Async>

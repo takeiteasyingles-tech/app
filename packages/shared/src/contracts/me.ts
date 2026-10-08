@@ -56,8 +56,16 @@ export const MeExport = z.looseObject({
 });
 export type MeExport = z.infer<typeof MeExport>;
 
+/**
+ * `?probe=1`: the shell's start-up call. Signed out (no session, or an expired one) it answers 204
+ * with no body instead of 401, so a first visit logs no failed request (Chrome prints every 4xx as a
+ * console error). A suspended account still gets its 403.
+ */
+export const StateQuery = z.object({ probe: z.literal('1').optional() });
+export type StateQuery = z.infer<typeof StateQuery>;
+
 export const meApi = {
-  state: endpoint({ method: 'GET', path: '/api/me/state', access: 'user', res: TieState }),
+  state: endpoint({ method: 'GET', path: '/api/me/state', access: 'user', query: StateQuery, res: TieState }),
   summary: endpoint({ method: 'GET', path: '/api/me/summary', access: 'user', res: MeSummary }),
   profile: endpoint({ method: 'PUT', path: '/api/me/profile', access: 'user', body: ProfilePatch, res: ProfileRes }),
   profileComplete: endpoint({

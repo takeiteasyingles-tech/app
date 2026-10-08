@@ -1,9 +1,10 @@
 // tie-app Worker. Static Assets serve the PWA; this runs only for /api/* and /m/* (run_worker_first).
-import { appApi } from '@tie/shared';
-import { type AppEnv, createApp, type Env, fail, type ServiceFactories } from '@tie/worker-core';
+import { appApi, isOutboxPath } from '@tie/shared';
+import { type AppEnv, createApp, type Env, fail, idempotency, type ServiceFactories } from '@tie/worker-core';
 import type { Hono } from 'hono';
 import { quotaFactory } from './ai/quota';
 import { awardFactory } from './game';
+import { runRetention } from './retention';
 import ai from './routes/ai';
 import auth from './routes/auth';
 import content, { contentServiceFactory } from './routes/content';
@@ -34,6 +35,9 @@ const app = createApp({
   services: appServices,
 });
 
+// The offline outbox's writes are applied once per Idempotency-Key (spec 06 "Offline outbox").
+app.use('/api/*', idempotency({ applies: (path) => isOutboxPath(path) }));
+
 // GET /api/health is answered by routes/ai (S7).
 const slices: Hono<AppEnv>[] = [
   auth,
@@ -62,4 +66,8 @@ app.all('*', (c) => {
 
 export default {
   fetch: app.fetch,
+  // triggers.crons in wrangler.jsonc: the daily retention run (retention.ts).
+  scheduled(controller, env, ctx) {
+    ctx.waitUntil(runRetention(env, controller.scheduledTime));
+  },
 } satisfies ExportedHandler<Env>;

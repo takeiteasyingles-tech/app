@@ -1,7 +1,7 @@
 // Building blocks of every admin screen, on top of tie.css: the page frame (topbar + scroll + wrap),
 // cards, buttons, inputs, pills, KPI tiles and the empty / loading / error states.
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { errorMessage, isCode } from '../api';
 import { Icon } from './icons';
 import { menuOpen, setTitle, wide } from './layout';
@@ -130,6 +130,9 @@ export function Button({
   id,
   form,
 }: ButtonProps) {
+  // The accessible name never depends on CSS: on phones the topbar shows only the icon, so a text
+  // label is also the button's aria-label (an icon-only button falls back to its title).
+  const name = ariaLabel ?? (typeof label === 'string' ? label : label ? undefined : title);
   return (
     <button
       type={type}
@@ -138,8 +141,8 @@ export function Button({
       class={`btn ${small ? 'compact' : ''} ${kind} ${block ? 'block' : ''} ${label ? '' : 'ad-icon-only'}`}
       disabled={disabled || busy}
       aria-busy={busy ? 'true' : undefined}
-      title={title}
-      aria-label={ariaLabel}
+      title={title ?? (label ? undefined : ariaLabel)}
+      aria-label={name}
       onClick={onClick}
     >
       {busy ? <Spinner /> : icon ? <Icon name={icon} size={18} /> : null}
@@ -150,9 +153,19 @@ export function Button({
 }
 
 /** Link styled as a button (navigation keeps real hrefs: middle-click, copy link). */
-export function LinkButton({ href, label, icon, kind = 'light' }: { href: string; label: string; icon?: string; kind?: string }) {
+export function LinkButton({
+  href,
+  label,
+  icon,
+  kind = 'light',
+}: {
+  href: string;
+  label: string;
+  icon?: string;
+  kind?: string;
+}) {
   return (
-    <a class={`btn compact ${kind}`} href={`#/${href}`}>
+    <a class={`btn compact ${kind}`} href={`#/${href}`} aria-label={label}>
       {icon ? <Icon name={icon} size={18} /> : null}
       <span>{label}</span>
     </a>
@@ -241,7 +254,7 @@ export function TextIn({
       class={`input ad-in ${rest.class ?? ''}`}
       value={value}
       aria-invalid={err ? 'true' : undefined}
-      aria-describedby={err ? `${id}-err` : undefined}
+      aria-describedby={err ? `${id}-err` : (rest['aria-describedby'] as string | undefined)}
       onInput={(e) => onValue((e.currentTarget as HTMLInputElement).value)}
     />
   );
@@ -266,8 +279,29 @@ export function Area({
   mono?: boolean;
   maxLength?: number;
 }) {
+  // Grows with its text (never clips the last line on narrow screens); `rows` is the minimum.
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+    };
+    fit();
+    let w = el.clientWidth;
+    const onResize = () => {
+      if (el.clientWidth !== w) {
+        w = el.clientWidth;
+        fit();
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [value]);
   return (
     <textarea
+      ref={ref}
       id={id}
       class={`input ad-in ad-area ${mono ? 'ad-mono' : ''}`}
       rows={rows}
@@ -362,7 +396,6 @@ export function SearchBox({
   return (
     <form
       class="ad-search"
-      role="search"
       onSubmit={(e) => {
         e.preventDefault();
         onValue(v.trim());
@@ -398,13 +431,20 @@ export function Seg<V extends string>({
   label: string;
 }) {
   return (
-    <div class="seg ad-seg" role="group" aria-label={label}>
+    <fieldset class="seg ad-seg">
+      <legend class="sr">{label}</legend>
       {options.map(([v, l]) => (
-        <button key={v} type="button" class={v === value ? 'on' : ''} aria-pressed={v === value ? 'true' : 'false'} onClick={() => onChange(v)}>
+        <button
+          key={v}
+          type="button"
+          class={v === value ? 'on' : ''}
+          aria-pressed={v === value ? 'true' : 'false'}
+          onClick={() => onChange(v)}
+        >
           {l}
         </button>
       ))}
-    </div>
+    </fieldset>
   );
 }
 
@@ -413,14 +453,28 @@ export function FilterChips<V extends string>({
   options,
   onChange,
   label,
+  showLabel,
+  cls = '',
 }: {
   value: V;
   options: readonly (readonly [V, string, number?])[];
   onChange: (v: V) => void;
   label: string;
+  /** Shows the group's name before the chips (several groups side by side). */
+  showLabel?: boolean;
+  cls?: string;
 }) {
+  // Phone grid columns (admin.css): rows stay full, no chip alone on the last one where it can be helped.
+  const n = options.length;
+  const fcols = n <= 3 ? n : n === 4 ? 2 : 3;
   return (
-    <div class="ad-fchips" role="group" aria-label={label}>
+    <fieldset class={`ad-fchips ${cls}`} style={{ '--fcols': String(fcols) }}>
+      <legend class="sr">{label}</legend>
+      {showLabel ? (
+        <span class="ad-fchips-l" aria-hidden="true">
+          {label}
+        </span>
+      ) : null}
       {options.map(([v, l, n]) => (
         <button
           key={v}
@@ -430,9 +484,59 @@ export function FilterChips<V extends string>({
           onClick={() => onChange(v)}
         >
           {l}
-          {n ? <b>{n}</b> : null}
+          {/* Every chip of a counted group shows its number, 0 included (muted). */}
+          {n !== undefined ? <b class={n ? '' : 'zero'}>{n}</b> : null}
         </button>
       ))}
+    </fieldset>
+  );
+}
+
+/**
+ * The tab strip of an editor (.ad-tabs): scrolls sideways on phones, with faded edges that show there
+ * is more, and keeps the current tab in view when it changes.
+ */
+export function TabsNav({ label, children }: { label: string; children: ComponentChildren }) {
+  const ref = useRef<HTMLElement>(null);
+  const last = useRef('');
+  const [edge, setEdge] = useState({ l: false, r: false });
+  const upd = () => {
+    const el = ref.current;
+    if (!el) return;
+    const l = el.scrollLeft > 2;
+    const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setEdge((p) => (p.l === l && p.r === r ? p : { l, r }));
+  };
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const on = el.querySelector<HTMLElement>('[aria-current="page"]');
+    const key = on?.textContent ?? '';
+    if (on && key !== last.current) {
+      last.current = key;
+      const left = on.offsetLeft;
+      const right = left + on.offsetWidth;
+      if (left < el.scrollLeft + 8 || right > el.scrollLeft + el.clientWidth - 8) {
+        el.scrollLeft = Math.max(0, left - 32);
+      }
+    }
+    upd();
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.addEventListener('scroll', upd, { passive: true });
+    window.addEventListener('resize', upd);
+    return () => {
+      el.removeEventListener('scroll', upd);
+      window.removeEventListener('resize', upd);
+    };
+  }, []);
+  return (
+    <div class={`ad-tabsw${edge.l ? ' fl' : ''}${edge.r ? ' fr' : ''}`}>
+      <nav ref={ref} class="ad-tabs" aria-label={label}>
+        {children}
+      </nav>
     </div>
   );
 }
@@ -536,7 +640,8 @@ export function Empty({
 
 export function Skeleton({ rows = 5, height = 52 }: { rows?: number; height?: number }) {
   return (
-    <div class="stack ad-skel-list" style={{ '--gap': '8px' }} aria-busy="true" aria-label="Carregando">
+    <div class="stack ad-skel-list" style={{ '--gap': '8px' }} aria-busy="true">
+      <span class="sr">Carregando</span>
       {Array.from({ length: rows }, (_, i) => (
         <span key={i} class="ad-skel" style={{ height: `${height}px`, opacity: String(1 - i * 0.12) }} />
       ))}
@@ -611,7 +716,13 @@ export function OneTimeLink({ url, expiresAt, note }: { url: string; expiresAt: 
       <code class="ad-code ad-break">{url}</code>
       <div class="row wrapx between">
         <span class="xs">
-          {note} Vale até {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(expiresAt)}.
+          {note} Vale até{' '}
+          {new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+            timeZone: 'America/Sao_Paulo',
+          }).format(expiresAt)}
+          .
         </span>
         <CopyButton text={url} label="Copiar link" />
       </div>
@@ -624,7 +735,7 @@ export function NoAccess({ what }: { what?: string }) {
     <Empty
       icon="lock"
       title="Esta área não faz parte do seu papel."
-      body={`${what ? `${what}: ` : ''}peça acesso a um admin se precisar dela.`}
+      body={what ? `${what}: peça acesso a um admin se precisar dela.` : 'Peça acesso a um admin se precisar dela.'}
       action={<LinkButton href="" label="Voltar ao painel" icon="home" />}
     />
   );

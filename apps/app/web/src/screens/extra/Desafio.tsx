@@ -390,7 +390,11 @@ export default function Desafio({ q }: ScreenProps) {
       {/* The prototype's bar. Before and after a round it names where the back button goes (the page's
           big title names the game, so the two never repeat or contradict each other); during a round,
           with no big title on the page, it is the game's name. */}
-      <Topbar back="extra" kicker={G.state === 'play' ? 'EXTRA' : undefined} title={G.state === 'play' ? 'Desafio relâmpago' : 'EXTRA'} />
+      <Topbar
+        back="extra"
+        kicker={G.state === 'play' ? 'EXTRA' : undefined}
+        title={G.state === 'play' ? 'Desafio relâmpago' : 'EXTRA'}
+      />
       <div class="scroll">{inner}</div>
       {dock}
     </OnNavy>

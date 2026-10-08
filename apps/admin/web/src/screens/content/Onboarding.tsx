@@ -78,18 +78,36 @@ function itemSpecs(listKey: string, formats: readonly (readonly [string, string]
           ]
         : [];
   const scope: Spec[] =
-    listKey === 'genres' ? [{ t: 'select', k: 'scope', label: 'Formato', options: formats.length ? formats : [['', '—']] }] : [];
+    listKey === 'genres'
+      ? [{ t: 'select', k: 'scope', label: 'Formato', options: formats.length ? formats : [['', '—']] }]
+      : [];
   const inline = listKey === 'days' || listKey === 'minutes';
+  // The 7 onboarding steps and the 7 week days are structure, not options: their texts change, but
+  // nobody adds, removes, reorders or re-keys them here.
+  const structural = listKey === 'onb_steps' || listKey === 'days';
+  const fields = structural
+    ? base.map((s) => (s.k === 'itemKey' ? ({ ...s, ro: true, hint: 'Fixa: o app usa esta chave.' } as Spec) : s))
+    : base;
   return [
     {
       t: 'list',
       k: 'items',
-      label: 'Opções',
-      item: 'opção',
+      label: listKey === 'onb_steps' ? 'Etapas' : 'Opções',
+      item: listKey === 'onb_steps' ? 'etapa' : 'opção',
+      fixed: structural,
+      hint: structural ? 'Lista fixa: edite os textos de cada item.' : undefined,
       inline,
       summary: (v) => `${String(v.label ?? '')}${v.scope ? ` · ${String(v.scope)}` : ''}`,
-      make: () => ({ scope: listKey === 'genres' ? (formats[0]?.[0] ?? '') : '', itemKey: '', label: '', sub: null, icon: null, imgMedia: null, extra: listKey === 'onb_steps' ? { h: '' } : listKey === 'levels' ? { season: 1, cefr: 'A1' } : null }),
-      of: inline ? base.slice(0, 2) : [...scope, ...base, ...extra],
+      make: () => ({
+        scope: listKey === 'genres' ? (formats[0]?.[0] ?? '') : '',
+        itemKey: '',
+        label: '',
+        sub: null,
+        icon: null,
+        imgMedia: null,
+        extra: listKey === 'onb_steps' ? { h: '' } : listKey === 'levels' ? { season: 1, cefr: 'A1' } : null,
+      }),
+      of: inline ? fields.slice(0, 2) : [...scope, ...fields, ...extra],
     },
   ];
 }
@@ -100,12 +118,32 @@ const toDoc = (rows: readonly OptionListRow[], listKey: string): Doc => ({
   items: rows
     .filter((r) => r.listKey === listKey)
     .sort((a, b) => (a.scope === b.scope ? a.sort - b.sort : a.scope.localeCompare(b.scope)))
-    .map((r) => ({ scope: r.scope, itemKey: r.itemKey, label: r.label, sub: r.sub, icon: r.icon, imgMedia: r.imgMedia, extra: r.extra })),
+    .map((r) => ({
+      scope: r.scope,
+      itemKey: r.itemKey,
+      label: r.label,
+      sub: r.sub,
+      icon: r.icon,
+      imgMedia: r.imgMedia,
+      extra: r.extra,
+    })),
 });
 
-function Editor({ listKey, rows, onSaved }: { listKey: string; rows: OptionListRow[]; onSaved: (rows: OptionListRow[]) => void }) {
+function Editor({
+  listKey,
+  rows,
+  onSaved,
+}: {
+  listKey: string;
+  rows: OptionListRow[];
+  onSaved: (rows: OptionListRow[]) => void;
+}) {
   const formats = useMemo(
-    () => rows.filter((r) => r.listKey === 'formats').sort((a, b) => a.sort - b.sort).map((r) => [r.itemKey, r.label] as const),
+    () =>
+      rows
+        .filter((r) => r.listKey === 'formats')
+        .sort((a, b) => a.sort - b.sort)
+        .map((r) => [r.itemKey, r.label] as const),
     [rows],
   );
   const specs = useMemo(() => itemSpecs(listKey, formats), [listKey, formats]);
@@ -122,7 +160,7 @@ function Editor({ listKey, rows, onSaved }: { listKey: string; rows: OptionListR
   useLeaveGuard(dirty);
   const save = async () => {
     if (!dirty || busy) return;
-    const body = { items: draft.items.map((it, i) => ({ ...it, sort: i })) };
+    const body = { items: draft.items.map((it, i): Obj => ({ ...it, sort: i })) };
     const errs: Record<string, string> = zodErrors(OptionListPutBody, body);
     const seen = new Map<string, number>();
     body.items.forEach((it, i) => {
@@ -161,7 +199,8 @@ function Editor({ listKey, rows, onSaved }: { listKey: string; rows: OptionListR
           <span class="pill ad-mono">{listKey}</span>
         </div>
         <div class="ad-note">
-          <Icon name="alert" size={18} /> Mudar uma chave desliga as escolhas que os alunos já fizeram com ela. Prefira mudar só o texto.
+          <Icon name="alert" size={18} /> Mudar uma chave desliga as escolhas que os alunos já fizeram com ela. Prefira
+          mudar só o texto.
         </div>
         <ErrorSummary errors={errors} specs={specs} idp={`ol-${listKey}`} />
         <Form specs={specs} value={draft} set={setDraft as never} errors={errors} idp={`ol-${listKey}`} />
@@ -190,7 +229,10 @@ export function Onboarding({ q }: ScreenProps) {
       <DraftNote />
       <Async load={load}>
         {(d) => (
-          <div class={wide.value ? 'ad-cols main' : 'stack'} style={wide.value ? { gridTemplateColumns: '260px minmax(0, 1fr)' } : undefined}>
+          <div
+            class={wide.value ? 'ad-cols main' : 'stack'}
+            style={wide.value ? { gridTemplateColumns: '260px minmax(0, 1fr)' } : undefined}
+          >
             {wide.value ? (
               <nav class="card ad-card" aria-label="Listas" style={{ padding: '10px', gap: '2px' }}>
                 {LISTS.map(([k, l]) => (
@@ -213,10 +255,22 @@ export function Onboarding({ q }: ScreenProps) {
                 ))}
               </nav>
             ) : (
-              <Sel ariaLabel="Lista" value={listKey} onValue={(v) => setQuery({ lista: v })} options={LISTS.map(([k, l]) => [k, `${l} (${count(k)})`] as const)} />
+              <Sel
+                ariaLabel="Lista"
+                value={listKey}
+                onValue={(v) => setQuery({ lista: v })}
+                options={LISTS.map(([k, l]) => [k, `${l} (${count(k)})`] as const)}
+              />
             )}
             <div class="stack" style={{ '--gap': '18px', minWidth: '0' }}>
-              <Editor key={listKey} listKey={listKey} rows={d.items} onSaved={(rows) => load.setData((p) => ({ items: [...(p?.items ?? []).filter((r) => r.listKey !== listKey), ...rows] }))} />
+              <Editor
+                key={listKey}
+                listKey={listKey}
+                rows={d.items}
+                onSaved={(rows) =>
+                  load.setData((p) => ({ items: [...(p?.items ?? []).filter((r) => r.listKey !== listKey), ...rows] }))
+                }
+              />
             </div>
           </div>
         )}

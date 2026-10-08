@@ -6,7 +6,7 @@
 //   if (import.meta.env.PROD) registerServiceWorker({ onNeedRefresh: (apply) => showPrompt(apply) });
 //   // on logout: await clearUserCaches();
 import { Workbox } from 'workbox-window';
-import { CACHE_NAMES, MSG, OUTBOX_HEADER, type SwMessage } from './protocol';
+import { MSG, OUTBOX_HEADER, type SwMessage, USER_CACHES } from './protocol';
 
 export { OUTBOX_HEADER };
 
@@ -57,11 +57,11 @@ export function flushOutbox(): void {
   navigator.serviceWorker?.controller?.postMessage({ type: MSG.flushOutbox } satisfies SwMessage);
 }
 
-/** Logout: drop per-user caches (state, summary, manifest) and pending writes. */
+/** Logout: drop every per-user cache (state, manifest, content files, media) and pending writes. */
 export async function clearUserCaches(): Promise<void> {
   navigator.serviceWorker?.controller?.postMessage({ type: MSG.logout } satisfies SwMessage);
   if (typeof caches !== 'undefined') {
-    await Promise.all([caches.delete(CACHE_NAMES.me), caches.delete(CACHE_NAMES.manifest)]);
+    await Promise.all(USER_CACHES.map((name) => caches.delete(name)));
   }
 }
 

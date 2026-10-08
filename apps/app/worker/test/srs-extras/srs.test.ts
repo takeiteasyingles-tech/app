@@ -143,6 +143,15 @@ describe('SrsService.grade', () => {
     ]);
   });
 
+  it('concurrent grades never lose a reps increment (reps = reps + 1 in one transaction)', async () => {
+    const h = await harness();
+    const [c] = await h.srs.unlock('u1', 1, 4);
+    const id = c?.id as string;
+    const results = await Promise.all([0, 1, 2, 3, 0].map((g) => h.srs.grade('u1', id, g)));
+    expect(results.map((r) => r.card.reps).sort()).toEqual([1, 2, 3, 4, 5]);
+    expect(h.db.sql('SELECT reps FROM srs_cards WHERE id = ?', id)).toEqual([{ reps: 5 }]);
+  });
+
   it("rejects another user's card as not found and leaves it untouched (IDOR)", async () => {
     const h = await harness();
     const [c] = await h.srs.unlock('u1', 1, 4);

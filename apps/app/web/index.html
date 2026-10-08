@@ -13,6 +13,8 @@
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
     <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
+    <!-- The shell's first request (store/state.ts load()), started with the HTML instead of after the JS. -->
+    <link rel="preload" href="/api/me/state?probe=1" as="fetch" crossorigin />
   </head>
   <body>
     <div class="stage" id="stage"><noscript><p class="noscript">O Take It Easy precisa de JavaScript ligado.</p></noscript></div>

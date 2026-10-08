@@ -26,6 +26,7 @@
     "parity": "npm run parity -w @tie/parity --",
     "parity:reveal": "npm run parity:reveal -w @tie/parity --",
     "e2e": "npm run e2e -w @tie/e2e --",
+    "smoke:full": "npm run smoke:full -w @tie/e2e --",
     "icons": "npm run icons -w @tie/icons"
   },
   "devDependencies": {

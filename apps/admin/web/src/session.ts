@@ -44,7 +44,14 @@ export function refreshBadges(): void {
 
 export async function loadSession(): Promise<void> {
   try {
-    auth.value = await call(adminAuthApi.me);
+    // The probe header turns "no session cookie at all" into a 204 (no failed request in the console).
+    const me: AdminAuthRes | undefined = await call(adminAuthApi.me, { headers: { 'X-Tie-Probe': '1' } });
+    if (!me) {
+      auth.value = null;
+      authStatus.value = 'out';
+      return;
+    }
+    auth.value = me;
     authStatus.value = 'in';
     refreshBadges();
   } catch (err) {
@@ -80,7 +87,10 @@ onUnauthorized((err) => {
   authStatus.value = 'out';
   if (!warned) {
     warned = true;
-    toast(err.code === 'session_expired' ? 'Sua sessão expirou. Entre de novo.' : 'Entre de novo para continuar.', 'warn');
+    toast(
+      err.code === 'session_expired' ? 'Sua sessão expirou. Entre de novo.' : 'Entre de novo para continuar.',
+      'warn',
+    );
     setTimeout(() => {
       warned = false;
     }, 4000);

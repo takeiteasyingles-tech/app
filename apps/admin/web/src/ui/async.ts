@@ -17,7 +17,6 @@ export function useLoad<T>(fn: (signal: AbortSignal) => Promise<T>, deps: readon
   const [tick, setTick] = useState(0);
   const fnRef = useRef(fn);
   fnRef.current = fn;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps are the caller's.
   useEffect(() => {
     const ac = new AbortController();
     setLoading(true);
@@ -72,7 +71,6 @@ export function usePaged<T>(
   const fnRef = useRef(fetchPage);
   fnRef.current = fetchPage;
   const acRef = useRef<AbortController | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps are the caller's.
   useEffect(() => {
     const ac = new AbortController();
     acRef.current = ac;

@@ -316,7 +316,11 @@ describe('plans', () => {
     expect((await admin.client.json(id$(P.remove.path, 'P1'), { method: 'DELETE' })).body).toEqual({ ok: true });
     expect(await one<{ active: number }>("SELECT active FROM plans WHERE id = 'P1'")).toEqual({ active: 0 });
     const users = (await admin.client.json(P.list.path)).body.items.find((p: { id: string }) => p.id === 'P0');
-    expect(users.users).toBe(1);
+    // `users` counts effective plans: the learner assigned to P0 plus every account without an
+    // assignment, which falls back to the default (P0), staff included.
+    const total = await one<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE status <> 'deleted'");
+    expect(total?.n).toBeGreaterThan(1);
+    expect(users.users).toBe(total?.n);
   });
 
   it('changes only the keys a partial update sends', async () => {

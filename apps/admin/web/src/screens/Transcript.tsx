@@ -21,7 +21,7 @@ const FB_LABEL: Record<string, string> = { certo: 'Certo', ajuste: 'Ajuste', nat
 function Turns({ s }: { s: AdminMicSession }) {
   if (!s.turnsList.length) return <p class="sm">Esta conversa não tem falas registradas.</p>;
   return (
-    <div class="ad-chat" aria-label="Transcrição">
+    <section class="ad-chat" aria-label="Transcrição">
       {s.turnsList.map((t) => (
         <Fragment key={t.idx}>
           <div class={`bub ${t.who === 'me' ? 'me' : t.who === 'coach' ? 'coach' : 'her'}`}>
@@ -50,7 +50,7 @@ function Turns({ s }: { s: AdminMicSession }) {
           ) : null}
         </Fragment>
       ))}
-    </div>
+    </section>
   );
 }
 

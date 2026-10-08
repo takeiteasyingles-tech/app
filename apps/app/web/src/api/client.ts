@@ -2,7 +2,7 @@
 // JSON in/out, same-origin cookies, and every failure surfaces as an ApiError carrying the server's
 // {error:{code,message}} envelope (or a synthesized one for network/HTTP errors without a body).
 // Narrow subpath imports keep the other endpoint tables (and their schemas) out of the shell chunk.
-import { IDEMPOTENCY_HEADER } from '@tie/shared/constants';
+import { IDEMPOTENCY_HEADER, OUTBOX_USER_HEADER } from '@tie/shared/constants';
 import {
   type BodyIn,
   buildPath,
@@ -23,6 +23,8 @@ export interface CallOptions<E extends EndpointDef> {
   signal?: AbortSignal;
   /** Replayed outbox writes carry the same key so the server applies them once. */
   idempotencyKey?: string;
+  /** With idempotencyKey: the user the write is for (a replay under another session is refused). */
+  outboxUser?: string;
 }
 
 /** Network failure (offline, DNS, aborted): no response reached the client. */
@@ -112,7 +114,10 @@ export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = 
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(opts.body);
   }
-  if (opts.idempotencyKey) headers[IDEMPOTENCY_HEADER] = opts.idempotencyKey;
+  if (opts.idempotencyKey) {
+    headers[IDEMPOTENCY_HEADER] = opts.idempotencyKey;
+    if (opts.outboxUser) headers[OUTBOX_USER_HEADER] = opts.outboxUser;
+  }
 
   let res: Response;
   try {

@@ -240,4 +240,16 @@ describe('POST /api/progress/mic replays (outbox, reused token)', () => {
     ).toMatchObject({ last: 6, best: 9, attempts: 3 });
     expect(stats()).toEqual([{ last_score: 6, best_score: 9, attempts: 3, source: 'ia' }]);
   });
+
+  it('two real attempts both count, even out of order or issued in the same millisecond (spec 06)', async () => {
+    const early = await signAttempt(SECRET, { userId: USER, phraseId: 'e1-mic-0', score: 5 }, NOW);
+    const late = await signAttempt(SECRET, { userId: USER, phraseId: 'e1-mic-0', score: 8 }, NOW + 2_000);
+    const twin = await signAttempt(SECRET, { userId: USER, phraseId: 'e1-mic-0', score: 7 }, NOW + 2_000);
+    // The later attempt lands first (the earlier one waited in the outbox).
+    await micScore(w.deps(USER, NOW + 3_000), { phraseId: 'e1-mic-0', score: 8, source: 'ia', attempt: late });
+    await micScore(w.deps(USER, NOW + 4_000), { phraseId: 'e1-mic-0', score: 5, source: 'ia', attempt: early });
+    await micScore(w.deps(USER, NOW + 5_000), { phraseId: 'e1-mic-0', score: 7, source: 'ia', attempt: twin });
+    expect(stats()).toEqual([{ last_score: 7, best_score: 8, attempts: 3, source: 'ia' }]);
+    expect(w.db.rows('SELECT COUNT(*) AS n FROM attempt_uses WHERE user_id = ?', USER)).toEqual([{ n: 3 }]);
+  });
 });

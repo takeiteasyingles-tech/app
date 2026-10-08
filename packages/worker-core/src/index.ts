@@ -1,6 +1,7 @@
 export * from './app';
 export * from './audit';
 export * from './auth/cookies';
+export * from './auth/lockout';
 export * from './auth/mediaToken';
 export * from './auth/middleware';
 export * from './auth/pbkdf2';
@@ -14,6 +15,7 @@ export * from './env';
 export * from './errors';
 export * from './flags';
 export * from './headers';
+export * from './idempotency';
 export * from './r2/serveObject';
 export * from './r2/upload';
 export * from './ratelimit';

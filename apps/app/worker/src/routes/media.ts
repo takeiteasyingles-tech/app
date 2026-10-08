@@ -8,6 +8,8 @@
 import { can } from '@tie/shared';
 import {
   type AppEnv,
+  checkRateLimit,
+  clientIp,
   fail,
   HOUR,
   issueMediaCookie,
@@ -87,7 +89,17 @@ async function uploadAllowed(c: Context<AppEnv>, key: string): Promise<UploadRow
   return null;
 }
 
+/**
+ * RL_API key for /m/*: the user named by a valid tie_m cookie, else the client IP. Media has its own
+ * key prefix so video Range requests never eat into the user's /api budget (and vice versa).
+ */
+async function mediaRateKey(c: Context<AppEnv>): Promise<string> {
+  const claims = await readMediaCookie(c);
+  return claims ? `m:u:${claims.userId}` : `m:ip:${clientIp(c)}`;
+}
+
 async function serve(c: Context<AppEnv>): Promise<Response> {
+  await checkRateLimit(c.env, 'RL_API', await mediaRateKey(c));
   const key = mediaKeyFromPath(new URL(c.req.url).pathname);
   if (!key) throw fail('not_found');
   let res: Response;

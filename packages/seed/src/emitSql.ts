@@ -111,8 +111,17 @@ export const CONFIG_SPECS: readonly TableSpec[] = [
   { table: 'ai_prompts', key: ['key'], mode: 'ignore' },
 ];
 
+export interface SeedStatementOptions {
+  /**
+   * 'upsert' (default, local seeds and `--remote --force`): the prototype overwrites the content rows.
+   * 'ignore' (`--remote` without --force): only missing rows are inserted, so content an admin
+   * edited in production is never overwritten (spec 06 "Seeding").
+   */
+  contentMode?: ConflictMode;
+}
+
 /** Every statement of the content + configuration seed, in dependency order. */
-export function seedStatements(content: ContentRows, config: SeedConfig): string[] {
+export function seedStatements(content: ContentRows, config: SeedConfig, opts: SeedStatementOptions = {}): string[] {
   const rowsOf = (table: string): Row[] => {
     const src = { ...content, ...config } as unknown as Record<string, Row[] | undefined>;
     const rows = src[table];
@@ -120,7 +129,8 @@ export function seedStatements(content: ContentRows, config: SeedConfig): string
     return rows;
   };
   const out: string[] = [];
-  for (const spec of CONTENT_SPECS) out.push(...insertStatements(spec, rowsOf(spec.table)));
+  const contentMode = opts.contentMode ?? 'upsert';
+  for (const spec of CONTENT_SPECS) out.push(...insertStatements({ ...spec, mode: contentMode }, rowsOf(spec.table)));
   for (const spec of CONFIG_SPECS) out.push(...insertStatements(spec, rowsOf(spec.table)));
   return out;
 }

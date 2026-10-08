@@ -58,6 +58,17 @@ export function ep1At(base: Any, step: number): Any {
   return s;
 }
 
+/**
+ * Episode 1 finished, as the prototype leaves it after the last step (concluido/1 is only reached
+ * then): every step passed and epsDone[1]. The parity shot of #/concluido/1 is taken as this user.
+ */
+export function ep1Done(base: Any): Any {
+  const s = ep1At(base, 10);
+  for (let n = 1; n <= 10; n++) s.stepOk[`1-${n}`] = true;
+  s.epsDone = { ...s.epsDone, 1: true };
+  return s;
+}
+
 /** Signed in, no profile yet: the onboarding wizard at `onbStep`. */
 export function freshUser(onbStep = 1): Any {
   return {
@@ -79,7 +90,7 @@ export function freshUser(onbStep = 1): Any {
   };
 }
 
-export type UserKey = 'none' | 'main' | 'fresh' | 'ep1-s7' | 'ep1-s8' | 'ep1-s9' | 'ep1-s10';
+export type UserKey = 'none' | 'main' | 'fresh' | 'ep1-s7' | 'ep1-s8' | 'ep1-s9' | 'ep1-s10' | 'ep1-done';
 export type FixtureUserKey = Exclude<UserKey, 'none'>;
 
 export interface FixtureUser {
@@ -133,12 +144,14 @@ const BASE: Record<FixtureUserKey, { userId: string; email: string }> = {
   'ep1-s8': { userId: 'U_PARITY_EP1_S8', email: 'ana.s8@parity.test' },
   'ep1-s9': { userId: 'U_PARITY_EP1_S9', email: 'ana.s9@parity.test' },
   'ep1-s10': { userId: 'U_PARITY_EP1_S10', email: 'ana.s10@parity.test' },
+  'ep1-done': { userId: 'U_PARITY_EP1_DONE', email: 'ana.done@parity.test' },
 };
 
 /** The un-isolated state of a fixture user (the main fixture, a fresh signup, or episode 1 advanced). */
 export function rawState(key: FixtureUserKey, base: Any, opts: { onbStep?: number } = {}): Any {
   if (key === 'main') return clone(base);
   if (key === 'fresh') return freshUser(opts.onbStep ?? 1);
+  if (key === 'ep1-done') return ep1Done(base);
   const step = Number(key.replace('ep1-s', ''));
   return ep1At(base, step);
 }

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "parity": "tsx src/cli.ts",
     "parity:reveal": "tsx src/reveal.ts",
+    "perf": "tsx src/perf.ts",
     "reveal": "tsx src/reveal.ts",
     "compare": "tsx src/compareRuns.ts",
     "fixture:gen": "tsx src/fixture/generate.ts",

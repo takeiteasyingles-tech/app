@@ -4,7 +4,7 @@ import { authApi } from '@tie/shared/contracts/auth';
 import { ApiError } from '@tie/shared/errors';
 import { toast } from '@tie/ui';
 import { call, errorMessage } from '../../api';
-import { clearOfflineData } from '../../core/outbox';
+import { clearOfflineData, flushAfterLogin } from '../../core/outbox';
 import { stop as stopSpeech } from '../../core/speech';
 import { go } from '../../router';
 import { load, signedOut, state } from '../../store';
@@ -17,6 +17,7 @@ export async function afterAuth(): Promise<void> {
   await load();
   const s = state.value;
   if (!s.user) return;
+  flushAfterLogin();
   go(s.profile ? 'inicio' : `cadastro/${s.onbStep || 1}`);
 }
 

@@ -72,7 +72,17 @@ const isSignedOutError = (err: unknown): boolean =>
  */
 export async function load(): Promise<void> {
   try {
-    const s = await call(meApi.state);
+    // probe: signed out answers 204 (no body) rather than a 401 that Chrome logs as an error.
+    // index.html preloads this exact URL, so the request is already in flight when this runs.
+    const s = (await call(meApi.state, { query: { probe: '1' } })) as TieState | undefined;
+    if (!s) {
+      batch(() => {
+        signedOut();
+        loadError.value = '';
+        status.value = 'ready';
+      });
+      return;
+    }
     s.settings = { ...s.settings, phone: false };
     batch(() => {
       state.value = s;

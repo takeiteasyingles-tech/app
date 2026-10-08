@@ -11,9 +11,10 @@ import { type ShotResult, shoot } from './capture';
 import { type AppName, isViewport, runDirs, runIdOf, type ViewportName } from './config';
 import { launchBrowser } from './determinism';
 import { type JobSpec, jobTag, loadFixture, storageOf } from './fixture/state';
-import { type Key, type KeyEntry, writePair } from './pair';
+import { type KeyEntry, writePair } from './pair';
 import { killAll } from './proc';
 import { adminRoutes, appRoutes, hashOf, type RouteDef, selectRoutes } from './routes';
+import { writeRunOutputs } from './runOutputs';
 import { type SlotEnv, startSlot } from './slot';
 
 interface Args {
@@ -91,8 +92,11 @@ interface Job {
 /** The job's user (own D1 rows + session) and what both sides load: cookie, localStorage, hash. */
 function jobInputs(env: SlotEnv, job: Job) {
   if (env.app === 'admin') {
+    const staff = job.route.staff ?? 'super_admin';
+    const who = staff === 'editor' ? env.fixtures.editor : staff === 'super_admin' ? env.fixtures.admin : null;
+    if (staff === 'editor' && !who) throw new Error('no editor fixture in this slot');
     return {
-      cookie: { name: COOKIES.admin, value: env.fixtures.admin.token },
+      cookie: who ? { name: COOKIES.admin, value: who.token } : null,
       state: null,
       hash: job.route.hash,
       userId: null,
@@ -216,6 +220,21 @@ async function main() {
       done++;
       console.log(`  [${done}/${jobs.length}] ${route.id} ${viewport}`);
     });
+    // Written while the slot lock is still held: a second run with the same runId (waiting on the
+    // lock) starts by deleting this run's output, so it must not get the lock before key.json /
+    // index.json exist (spec 06 "Parity harness").
+    shotsIndex.sort((x, y) => x.file.localeCompare(y.file));
+    writeRunOutputs(a.shotsOnly, dirs, {
+      index: { runId, app: a.app, shots: shotsIndex },
+      key: {
+        runId,
+        seed: a.seed,
+        slot: a.slot,
+        createdAt: new Date().toISOString(),
+        pairsDir: dirs.pairs,
+        pairs: keyPairs,
+      },
+    });
   } finally {
     await cleanup();
     process.off('SIGINT', onSignal);
@@ -224,28 +243,12 @@ async function main() {
 
   const secs = Math.round((Date.now() - t0) / 1000);
   if (a.shotsOnly) {
-    mkdirSync(dirs.shots, { recursive: true });
-    shotsIndex.sort((x, y) => x.file.localeCompare(y.file));
-    writeFileSync(
-      join(dirs.shots, 'index.json'),
-      `${JSON.stringify({ runId, app: a.app, shots: shotsIndex }, null, 2)}\n`,
-    );
     console.log(`\nservers stopped. ${shotsIndex.length} shots in ${secs} s`);
     console.log(`shots: ${dirs.shots}`);
     for (const s of shotsIndex)
       console.log(`  ${s.file.padEnd(40)} #/${s.hash}${s.errors.length ? `  (${s.errors.length} errors)` : ''}`);
     return;
   }
-  const key: Key = {
-    runId,
-    seed: a.seed,
-    slot: a.slot,
-    createdAt: new Date().toISOString(),
-    pairsDir: dirs.pairs,
-    pairs: keyPairs,
-  };
-  mkdirSync(dirs.key, { recursive: true });
-  writeFileSync(join(dirs.key, 'key.json'), `${JSON.stringify(key, null, 2)}\n`);
   const list = Object.entries(keyPairs).sort(
     ([, x], [, y]) => x.route.localeCompare(y.route) || x.viewport.localeCompare(y.viewport),
   );

@@ -1,6 +1,6 @@
 // Extras: the catalogue of series, novelas, films, animes… (cover, scene, cast, script lines and
 // vocabulary), with premiere / locked / premium flags and draft or published status.
-import { adminContentApi, ExtraEdit as ExtraSchema, type ExtraRow } from '@tie/shared/contracts/admin';
+import { adminContentApi, type ExtraRow, ExtraEdit as ExtraSchema } from '@tie/shared/contracts/admin';
 import { useMemo, useState } from 'preact/hooks';
 import { call } from '../../api';
 import { go, setQuery } from '../../router';
@@ -11,17 +11,38 @@ import { useMedia } from '../../ui/media';
 import { type Col, Table } from '../../ui/table';
 import { zodErrors } from '../../ui/validate';
 import type { ScreenProps } from '../registry';
-import { type CrudApi, CreateModal, crud, DraftNote, keysOf, patchOf, PubPill, pick, slugify } from './common';
+import { CreateModal, type CrudApi, crud, DraftNote, keysOf, PubPill, patchOf, pick, slugify } from './common';
 import { DocEditor, tabFinder } from './DocEditor';
 import { type Options, useOptions } from './options';
 
 const C = adminContentApi;
 const KEYS = keysOf(ExtraSchema.create);
 
+const FORMAT_LABEL: Record<string, string> = {
+  series: 'Séries',
+  novelas: 'Novelas',
+  filmes: 'Filmes',
+  animes: 'Animes',
+  musica: 'Música',
+  games: 'Games',
+};
+
+/** A format key in words: the list above, then the onboarding list's label, then the key. */
+export function formatLabel(key: string, formats: readonly (readonly [string, string])[] = []): string {
+  return FORMAT_LABEL[key] ?? formats.find(([k]) => k === key)?.[1] ?? key;
+}
+
 function specsFor(o: Options): Record<string, readonly Spec[]> {
   return {
     geral: [
-      { t: 'text', k: 'id', label: 'Identificador', ro: true, mono: true, hint: 'Faz parte do endereço (#/extra/id). Não muda.' },
+      {
+        t: 'text',
+        k: 'id',
+        label: 'Identificador',
+        ro: true,
+        mono: true,
+        hint: 'Faz parte do endereço (#/extra/id). Não muda.',
+      },
       { t: 'text', k: 'title', label: 'Título' },
       {
         t: 'select',
@@ -33,7 +54,12 @@ function specsFor(o: Options): Record<string, readonly Spec[]> {
         ],
       },
       o.formats.length
-        ? { t: 'select', k: 'format', label: 'Formato', options: o.formats }
+        ? {
+            t: 'select',
+            k: 'format',
+            label: 'Formato',
+            options: o.formats.map(([k, l]) => [k, FORMAT_LABEL[k] ?? l] as const),
+          }
         : { t: 'text', k: 'format', label: 'Formato', hint: 'series, novelas, filmes, animes, musica ou games.' },
       { t: 'text', k: 'kind', label: 'Tipo (rótulo)', opt: 'null', hint: 'Ex.: "Sitcom", "Filme · suspense".' },
       { t: 'text', k: 'epLabel', label: 'Episódio / parte', opt: 'null', hint: 'Ex.: "T1 · Ep. 3 · The Wrong Order".' },
@@ -53,7 +79,13 @@ function specsFor(o: Options): Record<string, readonly Spec[]> {
       { t: 'text', k: 'dur', label: 'Duração', opt: 'null', hint: 'Ex.: "8 min".' },
       { t: 'int', k: 'sort', label: 'Ordem no catálogo' },
       { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3 },
-      { t: 'strings', k: 'genres', label: 'Gêneros', suggest: o.genres, hint: 'As chaves do cadastro (gostos do aluno).' },
+      {
+        t: 'strings',
+        k: 'genres',
+        label: 'Gêneros',
+        suggest: o.genres,
+        hint: 'As chaves do cadastro (gostos do aluno).',
+      },
       { t: 'strings', k: 'themes', label: 'Temas', suggest: o.themes },
       { t: 'bool', k: 'premiere', label: 'Estreia', hint: 'Aparece na prateleira de estreias.' },
       { t: 'bool', k: 'locked', label: 'Bloqueado', hint: 'Aparece com cadeado ("Sexta").' },
@@ -77,7 +109,13 @@ function specsFor(o: Options): Record<string, readonly Spec[]> {
           { t: 'text', k: 'color', label: 'Cor (#RRGGBB)', mono: true },
         ],
       },
-      { t: 'text', k: 'dub', label: 'Personagem para dublar', opt: 'null', hint: 'O aluno dubla as falas deste personagem.' },
+      {
+        t: 'text',
+        k: 'dub',
+        label: 'Personagem para dublar',
+        opt: 'null',
+        hint: 'O aluno dubla as falas deste personagem.',
+      },
     ],
     roteiro: [
       {
@@ -214,12 +252,15 @@ function Cover({ id }: { id: string | null }) {
 
 export function Extras({ q }: ScreenProps) {
   const load = useLoad((signal) => call(C.extras.list, { query: {}, signal }), []);
+  const o = useOptions();
   const [creating, setCreating] = useState(false);
   const fmt = q.formato ?? '';
   const search = (q.q ?? '').toLowerCase();
   const all = load.data?.items ?? [];
   const formats = [...new Set(all.map((e) => e.format))];
-  const rows = all.filter((e) => (!fmt || e.format === fmt) && (!search || `${e.id} ${e.title}`.toLowerCase().includes(search)));
+  const rows = all.filter(
+    (e) => (!fmt || e.format === fmt) && (!search || `${e.id} ${e.title}`.toLowerCase().includes(search)),
+  );
   const cols: Col<ExtraRow>[] = [
     {
       key: 't',
@@ -228,13 +269,13 @@ export function Extras({ q }: ScreenProps) {
         <span class="row" style={{ '--gap': '12px' }}>
           <Cover id={e.coverMedia} />
           <span class="ad-cell2">
-            <span>{e.title}</span>
+            {e.title.trim() ? <span>{e.title}</span> : <i class="ad-untitled">Sem título</i>}
             <span class="xs">{[e.kind, e.epLabel].filter(Boolean).join(' · ')}</span>
           </span>
         </span>
       ),
     },
-    { key: 'f', label: 'Formato', cell: (e) => e.format },
+    { key: 'f', label: 'Formato', cell: (e) => formatLabel(e.format, o.formats) },
     { key: 'lv', label: 'Nível', cell: (e) => e.level ?? '—' },
     {
       key: 'flags',
@@ -258,12 +299,20 @@ export function Extras({ q }: ScreenProps) {
       actions={<Button label="Novo Extra" icon="plus" onClick={() => setCreating(true)} />}
       bar={
         <div class="ad-filters">
-          <SearchBox value={q.q ?? ''} onValue={(v) => setQuery({ q: v })} placeholder="Buscar por título ou id" id="ex-q" />
+          <SearchBox
+            value={q.q ?? ''}
+            onValue={(v) => setQuery({ q: v })}
+            placeholder="Buscar por título ou id"
+            id="ex-q"
+          />
           <FilterChips
             label="Formato"
             value={fmt}
             onChange={(v) => setQuery({ formato: v })}
-            options={[['', 'Todos', all.length] as const, ...formats.map((f) => [f, f, all.filter((e) => e.format === f).length] as const)]}
+            options={[
+              ['', 'Todos', all.length] as const,
+              ...formats.map((f) => [f, formatLabel(f, o.formats), all.filter((e) => e.format === f).length] as const),
+            ]}
           />
         </div>
       }
@@ -272,9 +321,19 @@ export function Extras({ q }: ScreenProps) {
       <Async load={load}>
         {() =>
           rows.length ? (
-            <Table rows={rows} cols={cols} rowKey={(e) => e.id} href={(e) => `conteudo/extras/${e.id}`} caption="Extras" />
+            <Table
+              rows={rows}
+              cols={cols}
+              rowKey={(e) => e.id}
+              href={(e) => `conteudo/extras/${e.id}`}
+              caption="Extras"
+            />
           ) : (
-            <Empty icon="tv" title={all.length ? 'Nenhum Extra com esses filtros.' : 'Nenhum Extra ainda.'} />
+            <Empty
+              icon="tv"
+              title={all.length ? 'Nenhum Extra com esses filtros.' : 'Nenhum Extra ainda.'}
+              body={all.length ? 'Tente outra busca ou outro formato.' : 'Crie o primeiro pelo botão Novo Extra.'}
+            />
           )
         }
       </Async>

@@ -58,6 +58,54 @@ export function auditLabel(action: string): string {
   return action;
 }
 
+const TARGET: Record<string, string> = {
+  user: 'Usuário',
+  plan: 'Plano',
+  episode: 'Episódio',
+  extra: 'Extra',
+  album: 'Álbum',
+  track: 'Faixa',
+  assistant: 'Assistente',
+  mic_mission: 'Missão do Mic',
+  mic_phrase: 'Frase do Mic',
+  mic_session: 'Conversa do Mic',
+  exercise: 'Exercício',
+  exercise_item: 'Questão de exercício',
+  ebook: 'E-book',
+  test_question: 'Questão de teste',
+  moderation_item: 'Item da moderação',
+  content_release: 'Publicação',
+  content_blob: 'Bloco de conteúdo',
+  option_list: 'Lista do cadastro',
+  media: 'Arquivo de mídia',
+  flag: 'Flag',
+  setting: 'Configuração',
+  prompt: 'Prompt da IA',
+  game_rules: 'Gamificação',
+};
+
+/** A target type in words ("moderation_item" → "Item da moderação"). */
+export function targetTypeLabel(type: string): string {
+  return TARGET[type] ?? type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * A readable target: the type in words plus the id, with people shown by e-mail and long ids (release
+ * hashes, generated ids) shortened. `full` is the untouched value for a tooltip.
+ */
+export function targetText(
+  type: string | null | undefined,
+  id: string | null | undefined,
+  email?: (id: string) => string | undefined,
+): { text: string; full: string } {
+  if (!type) return { text: '—', full: '' };
+  const full = `${type} ${id ?? ''}`.trim();
+  if (!id) return { text: targetTypeLabel(type), full };
+  const who = type === 'user' ? email?.(id) : undefined;
+  const shown = who ?? (id.length > 18 ? `${id.slice(0, 10)}…` : id);
+  return { text: `${targetTypeLabel(type)} · ${shown}`, full };
+}
+
 /** Icon for an action family. */
 export function auditIcon(action: string): string {
   if (action.startsWith('admin.auth')) return 'key';
@@ -71,6 +119,38 @@ export function auditIcon(action: string): string {
   if (action.startsWith('ai.')) return 'mic';
   if (action.startsWith('game.')) return 'trophy';
   return 'history';
+}
+
+/** Sensitive reads logged on every visit (opening the moderation queue, listing someone's Mic chats). */
+const REPEATED_READS = new Set(['moderation.excerpts_read', 'transcripts.list']);
+
+/** An audit row as listed: a run of the same repeated read by the same person counts as one line. */
+export type AuditLine<E extends { action: string; actorUserId: string | null; at: number }> = E & {
+  /** How many entries the line stands for (1 for every ordinary action). */
+  n: number;
+  /** When the oldest entry of the run happened (= at when n is 1). */
+  firstAt: number;
+};
+
+/**
+ * Collapses back-to-back repeated reads by the same person (newest first in, newest first out), so a
+ * few visits to Moderação do not push the real decisions off the page. Nothing is hidden: the line
+ * says how many reads it stands for.
+ */
+export function groupRepeatedReads<E extends { action: string; actorUserId: string | null; at: number }>(
+  items: readonly E[],
+): AuditLine<E>[] {
+  const out: AuditLine<E>[] = [];
+  for (const e of items) {
+    const last = out[out.length - 1];
+    if (last && REPEATED_READS.has(e.action) && last.action === e.action && last.actorUserId === e.actorUserId) {
+      last.n += 1;
+      last.firstAt = e.at;
+      continue;
+    }
+    out.push({ ...e, n: 1, firstAt: e.at });
+  }
+  return out;
 }
 
 /** Action prefixes the audit filter offers. */

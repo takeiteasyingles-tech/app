@@ -10,7 +10,7 @@ import { setQuery } from '../../router';
 import { useLoad } from '../../ui/async';
 import { ErrorSummary, Form, type Spec } from '../../ui/form';
 import { Icon } from '../../ui/icons';
-import { ErrorBox, Page, Skeleton } from '../../ui/kit';
+import { ErrorBox, Page, Skeleton, TabsNav } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { type Errors, issuesToErrors, zodErrors } from '../../ui/validate';
 import type { ScreenProps } from '../registry';
@@ -137,7 +137,10 @@ function clean(g: G): G {
     levels: g.levels,
     badges: g.badges.map((b) => ({
       ...b,
-      rule: b.rule.type === 'count' ? { type: 'count', kind: b.rule.kind ?? 'step', min: b.rule.min } : { type: b.rule.type, min: b.rule.min },
+      rule:
+        b.rule.type === 'count'
+          ? { type: 'count', kind: b.rule.kind ?? 'step', min: b.rule.min }
+          : { type: b.rule.type, min: b.rule.min },
     })) as G['badges'],
   };
 }
@@ -166,7 +169,8 @@ export function Gamification({ q }: ScreenProps) {
     if (lv[0] && lv[0].minPoints !== 0) errs['levels.0.minPoints'] = 'O primeiro nível começa em 0 ponto.';
     lv.forEach((l, i) => {
       const prev = lv[i - 1];
-      if (prev && l.minPoints <= prev.minPoints) errs[`levels.${body.levels.indexOf(l)}.minPoints`] = 'Precisa ser maior que o do nível anterior.';
+      if (prev && l.minPoints <= prev.minPoints)
+        errs[`levels.${body.levels.indexOf(l)}.minPoints`] = 'Precisa ser maior que o do nível anterior.';
     });
     setErrors(errs);
     if (Object.keys(errs).length) {
@@ -195,11 +199,11 @@ export function Gamification({ q }: ScreenProps) {
       title="Gamificação"
       kicker="Conteúdo · regras"
       bar={
-        <nav class="ad-tabs" aria-label="Partes">
+        <TabsNav label="Partes">
           {TABS.map(([t, l]) => (
             <a
               key={t}
-              href="#/conteudo/gamificacao"
+              href={`#/conteudo/gamificacao?aba=${t}`}
               class={`ad-tab${t === tab ? ' on' : ''}`}
               aria-current={t === tab ? 'page' : undefined}
               onClick={(e) => {
@@ -210,11 +214,12 @@ export function Gamification({ q }: ScreenProps) {
               {l}
             </a>
           ))}
-        </nav>
+        </TabsNav>
       }
     >
       <div class="ad-note">
-        <Icon name="alert" size={18} /> Vale na hora para os próximos pontos. Os alunos veem os textos novos (níveis, medalhas) depois da próxima publicação. Vocabulário da marca: pontos, sequência, meta, medalha.
+        <Icon name="alert" size={18} /> Vale na hora para os próximos pontos. Os alunos veem os textos novos (níveis,
+        medalhas) depois da próxima publicação. Vocabulário da marca: pontos, sequência, meta, medalha.
       </div>
       {load.error && !load.data ? (
         <ErrorBox error={load.error} retry={load.reload} />
@@ -224,7 +229,13 @@ export function Gamification({ q }: ScreenProps) {
         <>
           <ErrorSummary errors={errors} specs={ALL} idp="gm" />
           <section class="card ad-card">
-            <Form specs={SPECS[tab] ?? []} value={draft} set={(fn) => setDraft((p) => (p ? fn(p) : p))} errors={errors} idp="gm" />
+            <Form
+              specs={SPECS[tab] ?? []}
+              value={draft}
+              set={(fn) => setDraft((p) => (p ? fn(p) : p))}
+              errors={errors}
+              idp="gm"
+            />
           </section>
           <SaveBar
             dirty={dirty}

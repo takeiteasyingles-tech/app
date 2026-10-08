@@ -84,6 +84,15 @@ describe('learning routes', () => {
       ebook: 1,
       pdf: '/m/media/bb/ebook1.pdf',
     });
+    // The test opens once both episodes of e-book 1 are done (the trilha's rule).
+    expect((await call('PUT', '/api/ebooks/1/test/answers', { answers: { 'eb1-t1': 0 } })).status).toBe(409);
+    w.db.exec(
+      `INSERT INTO episode_progress(user_id, episode_num, furthest_step, done_at, updated_at)
+       VALUES(?, 1, 10, 1, 1), (?, 2, 10, 1, 1)
+       ON CONFLICT(user_id, episode_num) DO UPDATE SET done_at = 1`,
+      USER,
+      USER,
+    );
     expect(await (await call('PUT', '/api/ebooks/1/test/answers', { answers: { 'eb1-t1': 0 } })).json()).toEqual({
       ok: true,
     });

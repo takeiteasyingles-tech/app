@@ -1,7 +1,7 @@
 // Production build of apps/<app> into its slot outDir (apps/<app>/dist/web-slot<N>), from the app's own
-// vite.config.ts. Only two things change: outDir, and the PWA plugin is dropped (its outDir is pinned
-// to dist/web and the harness blocks service workers anyway), so concurrent slots never write the
-// shared dist/web. Runs in a child process so vite's config bundling stays out of the harness.
+// vite.config.ts. Only two things change: outDir, and the PWA plugin is dropped (the harness blocks
+// service workers anyway; `npm run perf` builds with it). Runs in a child process so vite's config
+// bundling stays out of the harness.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

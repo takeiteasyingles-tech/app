@@ -12,3 +12,20 @@
   log the reason.
 - `npm run typecheck`, `npm run lint`, `npm test` (worker-core also runs `test-workerd/` inside
   workerd against a local D1/R2), `npm run build`.
+- `npm run dev:app` / `npm run dev:admin` run `wrangler dev --env local`: every binding except the
+  remote-only Workers AI, so no `CLOUDFLARE_API_TOKEN` is needed and the AI runs in demo mode. To use
+  the real AI locally, export `CLOUDFLARE_API_TOKEN` and run `npm run dev:ai -w @tie/app` (or `-w @tie/admin`).
+
+## Deploy and seed
+
+The full production runbook (D1, R2, Turnstile, secrets, migrations, seed, bootstrap admin, deploy and
+smoke) is in [docs/DEPLOY.md](docs/DEPLOY.md). Before a deploy, `npm run e2e -- --force-seed` and
+`npm run smoke:full` (signup → … → admin publish → moderation, both Workers on one local slot) must pass.
+
+- `npm run deploy -w @tie/app` first checks the Workers AI model ids against the account catalog
+  (`npm run check:models -w @tie/app`, needs `CLOUDFLARE_API_TOKEN`).
+- `npm run seed -- --remote` only inserts missing content rows and publishes only when nothing is
+  published yet, so admin edits in production are never overwritten. `--remote --force` overwrites
+  the content rows from the prototype and republishes.
+- The app Worker runs the retention cron daily (`triggers.crons`): old Mic transcripts
+  (`retention.transcripts_days`, default 180), expired sessions and one-time tokens.

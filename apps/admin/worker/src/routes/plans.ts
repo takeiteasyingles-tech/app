@@ -20,11 +20,20 @@ const slugTaken = () =>
     issues: [{ path: 'slug', code: 'taken', message: 'Slug em uso.' }],
   });
 
+// `users` counts the accounts whose effective plan this is (the Usuários list's plan column and filter
+// use the same rule): an active, unexpired assignment, else the default plan.
 route(routes, api.list, async (c) => {
   const rows = await all<PlanRowDb & { users: number }>(
     c.env.DB,
-    `SELECT ${PLAN_COLS}, (SELECT COUNT(*) FROM user_plans up WHERE up.plan_id = plans.id) AS users
+    `WITH eff AS (
+       SELECT COALESCE(
+         (SELECT up.plan_id FROM user_plans up JOIN plans ap ON ap.id = up.plan_id AND ap.active = 1
+          WHERE up.user_id = u.id AND (up.expires_at IS NULL OR up.expires_at > ?1)),
+         (SELECT id FROM plans WHERE is_default = 1 AND active = 1)) AS plan_id
+       FROM users u WHERE u.status <> 'deleted')
+     SELECT ${PLAN_COLS}, (SELECT COUNT(*) FROM eff WHERE eff.plan_id = plans.id) AS users
      FROM plans ORDER BY is_default DESC, active DESC, ai_minutes_month, name`,
+    Date.now(),
   );
   return c.json({ items: rows.map((r) => ({ ...planFromRow(r), users: r.users })) });
 });

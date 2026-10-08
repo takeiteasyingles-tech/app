@@ -394,7 +394,7 @@ export const MAX_GUARD_PINNED_SESSIONS = 10;
 export const MAX_REPORT_PINNED_SESSIONS = 5;
 
 /** The mic_sessions id a moderation item points at ('mic_session' → ref_id, 'mic_turn' → `{id}:{idx}`). */
-const MOD_SESSION_ID = `CASE m.ref_type WHEN 'mic_turn'
+export const MOD_SESSION_ID = `CASE m.ref_type WHEN 'mic_turn'
     THEN substr(m.ref_id, 1, length(rtrim(m.ref_id, '0123456789')) - 1) ELSE m.ref_id END`;
 
 /**

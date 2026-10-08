@@ -3,12 +3,12 @@
 import { adminContentApi, adminReleasesApi, type PreviewRes, type Release } from '@tie/shared/contracts/admin';
 import { useState } from 'preact/hooks';
 import { call } from '../api';
-import { fmtAgo, fmtDateTime } from '../format';
+import { fmtAgo, fmtDateTime, fmtInt, plural } from '../format';
 import { useEmails } from '../people';
 import { can } from '../session';
 import { useLoad } from '../ui/async';
 import { Icon } from '../ui/icons';
-import { Area, Async, Button, Card, Empty, ErrorBox, Field, Pill, Page } from '../ui/kit';
+import { Area, Async, Button, Card, Empty, ErrorBox, Field, Page, Pill } from '../ui/kit';
 import { confirmAction } from '../ui/modal';
 import { type Col, Table } from '../ui/table';
 import { toast } from '../ui/toast';
@@ -60,7 +60,15 @@ function PreviewCard({ onPublished }: { onPublished: () => void }) {
     <Card
       title="Publicar o rascunho"
       sub="A prévia compila todo o conteúdo do rascunho e compara com a versão que os alunos veem."
-      actions={<Button label={p ? 'Gerar de novo' : 'Gerar prévia'} icon="refresh" kind={p ? 'light' : 'navy'} busy={busy} onClick={() => void run()} />}
+      actions={
+        <Button
+          label={p ? 'Gerar de novo' : 'Gerar prévia'}
+          icon="refresh"
+          kind={p ? 'light' : 'navy'}
+          busy={busy}
+          onClick={() => void run()}
+        />
+      }
     >
       {err ? <ErrorBox error={err} retry={() => void run()} /> : null}
       {!p && !err ? <p class="sm">Gere a prévia para ver o que muda antes de publicar.</p> : null}
@@ -68,14 +76,16 @@ function PreviewCard({ onPublished }: { onPublished: () => void }) {
         <>
           <div class="row wrapx" style={{ '--gap': '8px' }}>
             <Pill label={`Versão ${short(p.version)}`} tone="navy" />
-            <Pill label={`${p.manifest.files.episodes.length} episódios`} />
-            <Pill label={`${p.manifest.files.ebooks.length} e-books`} />
-            <Pill label={`${p.manifest.files.extras.length} Extras`} />
+            <Pill label={plural(p.manifest.files.episodes.length, 'episódio', 'episódios')} />
+            <Pill label={plural(p.manifest.files.ebooks.length, 'e-book', 'e-books')} />
+            <Pill label={plural(p.manifest.files.extras.length, 'Extra', 'Extras')} />
           </div>
           {p.errors.length ? (
             <section class="stack" style={{ '--gap': '8px' }} aria-label="Problemas">
               <div class="ad-note">
-                <Icon name="alert" size={18} /> {p.errors.length} problema(s) impedem publicar. Corrija no rascunho e gere de novo.
+                <Icon name="alert" size={18} />{' '}
+                {p.errors.length === 1 ? '1 problema impede' : `${fmtInt(p.errors.length)} problemas impedem`} publicar.
+                Corrija no rascunho e gere de novo.
               </div>
               <ul class="ad-feed">
                 {p.errors.slice(0, 30).map((e, i) => (
@@ -109,7 +119,12 @@ function PreviewCard({ onPublished }: { onPublished: () => void }) {
           )}
           {!blocked && p.changed.length ? (
             <div class="stack" style={{ '--gap': '10px' }}>
-              <Field id="pub-notes" label="Notas da versão" opt hint="Ex.: “Episódio 3 publicado; correções no e-book 1”.">
+              <Field
+                id="pub-notes"
+                label="Notas da versão"
+                opt
+                hint="Ex.: “Episódio 3 publicado; correções no e-book 1”."
+              >
                 <Area id="pub-notes" value={notes} onValue={setNotes} rows={2} maxLength={500} />
               </Field>
               <div>
@@ -140,19 +155,17 @@ function History({ tick }: { tick: number }) {
       }
     });
   return (
-    <Card title="Versões publicadas" sub="A atual está em destaque. Versões guardadas permitem voltar atrás.">
+    <Card
+      title="Versões publicadas"
+      sub="A versão em uso fica no topo. As outras, da mais nova para a mais antiga, permitem voltar atrás."
+    >
       <Async load={load}>
         {(d) => {
           const cols: Col<Release>[] = [
             {
               key: 'v',
               label: 'Versão',
-              cell: (r) => (
-                <span class="ad-cell2">
-                  <span class="ad-mono">{short(r.version)}</span>
-                  {r.version === d.current ? <Pill label="Atual" tone="gr" icon="check" /> : null}
-                </span>
-              ),
+              cell: (r) => <span class="ad-mono">{short(r.version)}</span>,
             },
             {
               key: 'at',
@@ -169,20 +182,45 @@ function History({ tick }: { tick: number }) {
             {
               key: 'f',
               label: 'Arquivos',
-              cell: (r) => `${r.manifest.files.episodes.length} ep · ${r.manifest.files.ebooks.length} e-book · ${r.manifest.files.extras.length} Extras`,
+              cell: (r) =>
+                [
+                  plural(r.manifest.files.episodes.length, 'episódio', 'episódios'),
+                  plural(r.manifest.files.ebooks.length, 'e-book', 'e-books'),
+                  plural(r.manifest.files.extras.length, 'Extra', 'Extras'),
+                ].join(' · '),
               desktopOnly: true,
             },
             {
               key: 'a',
               label: 'Ações',
               cls: 'shrink',
-              cell: (r) => (r.version === d.current ? <span class="xs">Em uso</span> : <Button label="Voltar para esta" icon="history" kind="light" onClick={() => rollback(r)} />),
+              cell: (r) =>
+                r.version === d.current ? (
+                  <Pill label="Em uso pelos alunos" tone="gr" icon="check" />
+                ) : (
+                  <Button label="Voltar para esta" icon="history" kind="light" onClick={() => rollback(r)} />
+                ),
             },
           ];
+          // The version learners get now stays on top; the rest keep their order (newest first).
+          const rows = [
+            ...d.items.filter((r) => r.version === d.current),
+            ...d.items.filter((r) => r.version !== d.current),
+          ];
           return d.items.length ? (
-            <Table rows={d.items} cols={cols} rowKey={(r) => r.id} hi={(r) => r.version === d.current} caption="Versões publicadas" />
+            <Table
+              rows={rows}
+              cols={cols}
+              rowKey={(r) => r.id}
+              hi={(r) => r.version === d.current}
+              caption="Versões publicadas"
+            />
           ) : (
-            <Empty icon="rocket" title="Nenhuma versão publicada ainda." />
+            <Empty
+              icon="rocket"
+              title="Nenhuma versão publicada ainda."
+              body="Cada publicação fica guardada aqui, e dá para voltar a qualquer uma delas."
+            />
           );
         }}
       </Async>

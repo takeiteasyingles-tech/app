@@ -114,15 +114,97 @@ export function MediaPreview({ m, size = 'sm' }: { m: MediaRow; size?: 'sm' | 'l
   );
 }
 
-/** Square tile: image thumbnail or the kind's icon. */
+/** True once `ref` comes near the viewport (then stays true). */
+function useNearView(ref: { current: Element | null }): boolean {
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setNear(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNear(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  return near;
+}
+
+/**
+ * Square tile: image thumbnail (shimmer until it loads), a video's first frame (fetched only when the
+ * tile nears the screen) or the kind's icon.
+ */
 export function MediaTile({ m }: { m: MediaRow }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const near = useNearView(ref);
+  const img = useRef<HTMLImageElement>(null);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // An image already in the cache can finish before the listener is attached: read its state once.
+  useEffect(() => {
+    const el = img.current;
+    if (!el?.complete) return;
+    if (el.naturalWidth > 0) setReady(true);
+    else if (el.currentSrc) setFailed(true);
+  }, [m.url]);
+  const visual = (m.kind === 'image' || m.kind === 'video') && !failed;
   return (
-    <span class={`ad-mtile k-${m.kind}`}>
-      {m.kind === 'image' ? (
-        <img src={m.url} alt="" loading="lazy" decoding="async" />
-      ) : (
+    <span
+      ref={ref}
+      class={`ad-mtile k-${m.kind}${visual && !ready ? ' loading' : ''}${ready ? ' ready' : ''}${failed ? ' broken' : ''}`}
+      title={failed ? 'Não deu para carregar a prévia deste arquivo.' : undefined}
+    >
+      {/* Shown under the shimmer while loading, and alone when the preview fails. */}
+      {visual && !ready ? (
+        <span class="ad-mtile-ph" aria-hidden="true">
+          <Icon name={KIND_ICON[m.kind]} size={26} />
+        </span>
+      ) : null}
+      {m.kind === 'image' && !failed ? (
+        <img
+          ref={img}
+          src={m.url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setReady(true)}
+          onError={() => setFailed(true)}
+        />
+      ) : m.kind === 'video' && !failed && near ? (
+        <video
+          src={`${m.url}#t=0.5`}
+          muted
+          playsInline
+          preload="metadata"
+          tabIndex={-1}
+          aria-hidden="true"
+          onLoadedData={() => setReady(true)}
+          onError={() => setFailed(true)}
+        />
+      ) : null}
+      {m.kind === 'video' ? (
+        <span class="ad-mtile-badge" aria-hidden="true">
+          <Icon name="video" size={14} />
+          {m.durationMs ? fmtDuration(m.durationMs) : null}
+        </span>
+      ) : null}
+      {failed ? (
+        <span class="ad-mtile-ph broken" aria-hidden="true">
+          <Icon name={KIND_ICON[m.kind]} size={24} />
+          <span>Sem prévia</span>
+        </span>
+      ) : !visual ? (
         <Icon name={KIND_ICON[m.kind]} size={26} />
-      )}
+      ) : null}
     </span>
   );
 }
@@ -205,7 +287,14 @@ export function UploadList({ items }: { items: readonly UploadItem[] }) {
             ) : null}
           </div>
           {u.status === 'up' ? (
-            <div class="bar" role="progressbar" aria-label={`Enviando ${u.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(u.progress * 100)}>
+            <div
+              class="bar"
+              role="progressbar"
+              aria-label={`Enviando ${u.name}`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(u.progress * 100)}
+            >
               <i style={{ width: `${Math.round(u.progress * 100)}%` }} />
             </div>
           ) : null}
@@ -231,6 +320,7 @@ export function DropZone({
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop is a mouse shortcut; the "Escolher arquivos" button is the keyboard path.
     <div
       class={`ad-drop${over ? ' over' : ''}${compact ? ' compact' : ''}`}
       onDragOver={(e) => {
@@ -310,7 +400,9 @@ export function MediaPicker({
       onClose={onClose}
       foot={
         <>
-          <span class="xs grow ad-ell">{chosen ? `${mediaName(chosen)} · ${mediaMeta(chosen)}` : 'Nenhum arquivo escolhido'}</span>
+          <span class="xs grow ad-ell">
+            {chosen ? `${mediaName(chosen)} · ${mediaMeta(chosen)}` : 'Nenhum arquivo escolhido'}
+          </span>
           <Button label="Cancelar" kind="light" onClick={onClose} />
           <Button
             label="Usar este arquivo"
@@ -403,8 +495,15 @@ export function MediaField({
         <div class="xs grow">Nenhum arquivo.</div>
       )}
       <div class="row" style={{ '--gap': '6px' }}>
-        <Button label={value ? 'Trocar' : 'Escolher'} icon={KIND_ICON[kind]} kind="light" onClick={() => setOpen(true)} />
-        {value ? <Button ariaLabel="Remover o arquivo" icon="close" kind="light" onClick={() => onChange(null)} /> : null}
+        <Button
+          label={value ? 'Trocar' : 'Escolher'}
+          icon={KIND_ICON[kind]}
+          kind="light"
+          onClick={() => setOpen(true)}
+        />
+        {value ? (
+          <Button ariaLabel="Remover o arquivo" icon="close" kind="light" onClick={() => onChange(null)} />
+        ) : null}
       </div>
       {open ? (
         <MediaPicker

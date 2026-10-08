@@ -10,6 +10,7 @@ import {
   IdParams,
   KaraokeGapBody,
   type KaraokeGapRes,
+  newId,
   PLAN_FEATURES,
 } from '@tie/shared';
 import {
@@ -29,7 +30,7 @@ import {
   vParam,
 } from '@tie/worker-core';
 import { Hono } from 'hono';
-import { attemptMatches } from '../ai/attempt';
+import { ATTEMPT_CLAIMED, attemptMatches, attemptSig, claimAttempt } from '../ai/attempt';
 import { safeAward } from '../services/srs.impl';
 
 const api = appApi.extras;
@@ -166,22 +167,29 @@ routes.post(api.dub.path, rateLimit('RL_API'), vParam(IdParams), vJson(DubBody),
     throw fail('token_invalid', 'Não deu para confirmar essa gravação. Grave de novo.');
   }
   const t = now();
-  const [rows] = await batch(db, [
-    q<{ dub_avg: number; dub_count: number }>(
-      db,
-      `INSERT INTO user_extras(user_id, extra_id, dub_avg, dub_count) VALUES(?, ?, ?, 1)
+  // An 'ia' token is single use (attempt_uses): a replayed or reused token leaves the average and
+  // the count alone. The claim runs first in the same transaction.
+  const token = source === 'ia' ? (attempt ?? '') : null;
+  const claim = newId(t);
+  const fresh = token ? ATTEMPT_CLAIMED : '1';
+  const freshBinds = token ? [attemptSig(token), claim] : [];
+  const upsert = db
+    .prepare(
+      `INSERT INTO user_extras(user_id, extra_id, dub_avg, dub_count) SELECT ?, ?, ?, 1 WHERE ${fresh}
        ON CONFLICT(user_id, extra_id) DO UPDATE SET
          dub_avg = CASE WHEN user_extras.dub_avg IS NULL OR user_extras.dub_avg = 0 THEN excluded.dub_avg
                         ELSE ROUND((user_extras.dub_avg + excluded.dub_avg) / 2.0) END,
-         dub_count = user_extras.dub_count + 1
-       RETURNING dub_avg, dub_count`,
-      s.userId,
-      id,
-      score,
-    ),
-  ]);
-  const row = rows[0];
-  if (!row) throw fail('internal');
+         dub_count = user_extras.dub_count + 1`,
+    )
+    .bind(s.userId, id, score, ...freshBinds);
+  const current = db
+    .prepare('SELECT COALESCE(dub_avg, 0) AS dub_avg, dub_count FROM user_extras WHERE user_id = ? AND extra_id = ?')
+    .bind(s.userId, id);
+  const results = await db.batch<{ dub_avg: number; dub_count: number }>(
+    token ? [claimAttempt(db, token, s.userId, claim, t), upsert, current] : [upsert, current],
+  );
+  // No row only when a reused token meets a deck reset: nothing was ever counted for it.
+  const row = results[results.length - 1]?.results[0] ?? { dub_avg: 0, dub_count: 0 };
   const award = await safeAward(c.get('services').award, s.userId, 'dub', `dub:${id}`, { now: t });
   return c.json({ avg: row.dub_avg, count: row.dub_count, award } satisfies DubRes);
 });
@@ -241,13 +249,26 @@ routes.post(api.karaokeGap.path, rateLimit('RL_API'), vJson(KaraokeGapBody), asy
   const answer = resolveGap(Array.isArray(lines) ? lines[line] : undefined, episodeLyric).replace(/[.,!?]/g, '');
   if (!answer.trim()) throw fail('not_found');
   const correct = gapWord(choice) === gapWord(answer);
-  // TODO(I1): the prototype locks a line after the first pick (K.picks); doing that here needs a
-  // per-user marker table (e.g. karaoke_picks(user_id, track_id, line) with INSERT OR IGNORE), which
-  // no migration provides yet. Until then a wrong pick can be followed by a right one. The client
-  // already holds every gap word in the catalog, so this only costs the once-per-line award.
-  const award = correct
-    ? await safeAward(c.get('services').award, userId, 'ex_right', `kgap:${trackId}:${line}`)
-    : null;
+  // The first pick of a line is final, as in the prototype (K.picks): it is stored once, and only a
+  // right FIRST pick earns `ex_right`. A later pick is still graded for the screen, never paid.
+  const [picks] = await batch(db, [
+    q<{ correct: number }>(
+      db,
+      `INSERT INTO karaoke_picks(user_id, track_id, line, correct, picked_at) VALUES(?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, track_id, line) DO UPDATE SET picked_at = karaoke_picks.picked_at
+       RETURNING correct`,
+      userId,
+      trackId,
+      line,
+      correct,
+      now(),
+    ),
+  ]);
+  const firstRight = picks[0]?.correct === 1;
+  const award =
+    correct && firstRight
+      ? await safeAward(c.get('services').award, userId, 'ex_right', `kgap:${trackId}:${line}`)
+      : null;
   return c.json({ correct, answer, award } satisfies KaraokeGapRes);
 });
 

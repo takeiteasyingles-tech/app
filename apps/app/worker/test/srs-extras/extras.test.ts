@@ -115,6 +115,16 @@ describe('/api/extras', () => {
     expect(await ok.json()).toMatchObject({ avg: 9, count: 1, award: { awarded: true, kind: 'dub' } });
   });
 
+  it("POST /:id/dub counts an 'ia' token once (a replay or reuse changes nothing)", async () => {
+    const h = await harness();
+    const dub = (body: Record<string, unknown>) => json<DubRes>(h.call('u1', 'POST', '/api/extras/woods/dub', body));
+    const t1 = await signAttempt(MEDIA_TOKEN_KEY, { userId: 'u1', phraseId: 'woods:1', score: 4 });
+    expect(await dub({ score: 4, source: 'ia', line: 1, attempt: t1 })).toMatchObject({ avg: 4, count: 1 });
+    expect(await dub({ score: 4, source: 'ia', line: 1, attempt: t1 })).toMatchObject({ avg: 4, count: 1 });
+    const t2 = await signAttempt(MEDIA_TOKEN_KEY, { userId: 'u1', phraseId: 'woods:1', score: 8 });
+    expect(await dub({ score: 8, source: 'ia', line: 1, attempt: t2 })).toMatchObject({ avg: 6, count: 2 });
+  });
+
   it('premium extras need a plan with premium_extras (no points otherwise)', async () => {
     const h = await harness();
     for (const [path, body] of [
@@ -169,11 +179,28 @@ describe('/api/karaoke/gap', () => {
     const h = await harness();
     const pick = (trackId: string, line: number, choice: string) =>
       json<KaraokeGapRes>(h.call('u1', 'POST', '/api/karaoke/gap', { trackId, line, choice }));
-    expect(await pick('t-own', 0, 'Do')).toEqual({ correct: false, answer: 'Don’t', award: null });
     const right = await pick('t-own', 0, "don't");
     expect(right).toMatchObject({ correct: true, answer: 'Don’t', award: { awarded: true, kind: 'ex_right' } });
     expect((await pick('t-own', 0, 'Don’t')).award?.awarded).toBe(false);
     expect(h.award.calls.map((c) => c.key)).toEqual(['kgap:t-own:0', 'kgap:t-own:0']);
+  });
+
+  it('locks a line after the first pick: a wrong first pick is final for the award (K.picks)', async () => {
+    const h = await harness();
+    const pick = (line: number, choice: string) =>
+      json<KaraokeGapRes>(h.call('u1', 'POST', '/api/karaoke/gap', { trackId: 't-own', line, choice }));
+    expect(await pick(0, 'Do')).toEqual({ correct: false, answer: 'Don’t', award: null });
+    // Still graded for the screen, never paid.
+    expect(await pick(0, "don't")).toEqual({ correct: true, answer: 'Don’t', award: null });
+    expect(h.award.calls).toEqual([]);
+    expect(h.db.sql('SELECT line, correct FROM karaoke_picks WHERE user_id = ?', 'u1')).toEqual([
+      { line: 0, correct: 0 },
+    ]);
+    // Another user starts fresh.
+    const other = await json<KaraokeGapRes>(
+      h.call('u2', 'POST', '/api/karaoke/gap', { trackId: 't-own', line: 0, choice: "don't" }),
+    );
+    expect(other.award?.awarded).toBe(true);
   });
 
   it('reads the episode lyrics for tracks that point at an episode', async () => {

@@ -23,6 +23,7 @@ export function resetProgressQueries(db: D1Database, userId: string): Query<neve
     del('daily_stats'),
     del('point_ledger'),
     del('user_badges'),
+    del('karaoke_picks'),
     q<never>(db, 'DELETE FROM mic_sessions WHERE user_id = ? AND flagged = 0', userId),
     q<never>(
       db,

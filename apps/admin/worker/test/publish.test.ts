@@ -131,6 +131,55 @@ describe('preview and publish', () => {
     expect(await one('SELECT 1 FROM content_releases')).toBeNull();
   });
 
+  it('refuses a blank title on save, and never publishes a row that already has one', async () => {
+    const blank = await editor.client.json(buildPath(C.episodes.update.path, { id: 1 }), {
+      method: 'PUT',
+      json: { title: '   ' },
+    });
+    expect(blank.status).toBe(400);
+    expect(blank.body.error.code).toBe('validation_failed');
+    expect((await one<{ title: string }>('SELECT title FROM episodes WHERE num = 1'))?.title).not.toBe('');
+    const extra = await editor.client.json(buildPath(C.extras.update.path, { id: 'woods-and-beans' }), {
+      method: 'PUT',
+      json: { title: '' },
+    });
+    expect(extra.status).toBe(400);
+
+    // A row saved blank before the rule (or by manual SQL) blocks the preview and the publish.
+    await exec("UPDATE episodes SET title = '' WHERE num = 1");
+    const pv = await editor.client.json(C.preview.path, { method: 'POST' });
+    expect(pv.body.version).toBe('');
+    expect(pv.body.errors).toEqual([expect.objectContaining({ file: 'episodes', path: '1.title' })]);
+    const pub = await editor.client.json(C.publish.path, { json: {} });
+    expect(pub.status).toBe(400);
+    expect(pub.body.error.code).toBe('validation_failed');
+    expect(await one('SELECT 1 FROM content_releases')).toBeNull();
+  });
+
+  it('lets an e-book with no published episode stay untitled (the seed leaves e-books 4-10 so)', async () => {
+    await ins('ebooks', {
+      num: 4,
+      title: '',
+      eps_label: '7–8',
+      scope: '',
+      five: [],
+      real: [],
+      lead: [],
+      chat: [],
+      extras_cards: [],
+      pdf_media: null,
+      pass_score: 14,
+      updated_at: Date.now(),
+    });
+    const pv = await editor.client.json(C.preview.path, { method: 'POST' });
+    expect(pv.body.errors).toEqual([]);
+    expect((await editor.client.json(C.publish.path, { json: {} })).status).toBe(200);
+    // E-book 1 has a published episode: learners open its hub, so it needs its title.
+    await exec("UPDATE ebooks SET title = '' WHERE num = 1");
+    const pv2 = await editor.client.json(C.preview.path, { method: 'POST' });
+    expect(pv2.body.errors).toEqual([expect.objectContaining({ file: 'ebooks', path: '1.title' })]);
+  });
+
   it('lists releases and rolls back (admin); the app manifest follows the rollback', async () => {
     const v1 = (await editor.client.json(C.publish.path, { json: { notes: 'v1' } })).body.release;
     await editor.client.json(buildPath(C.episodes.update.path, { id: 1 }), {

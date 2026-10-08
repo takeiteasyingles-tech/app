@@ -87,6 +87,17 @@ describe('admin session', () => {
     expect((await t.client.json(A.me.path)).body.error.code).toBe('session_expired');
   });
 
+  it('answers the start-up probe without a cookie with 204; a cookie or a plain call keeps the guards', async () => {
+    const probe = { headers: { 'X-Tie-Probe': '1' } };
+    expect((await new Client().send(A.me.path, probe)).status).toBe(204);
+    expect((await new Client().send(A.me.path)).status).toBe(401);
+    const s = await staff(['editor']);
+    expect((await s.client.send(A.me.path, probe)).status).toBe(200);
+    const stale = new Client();
+    stale.cookies.set('tie_adm', 'x'.repeat(43));
+    expect((await stale.send(A.me.path, probe)).status).toBe(401);
+  });
+
   it('is not an app session: a student cookie does not open the admin API', async () => {
     const l = await learner();
     const c = new Client();
@@ -183,6 +194,38 @@ describe('invites', () => {
     });
     expect(ok.body.user).toMatchObject({ id: l.id, roles: ['moderator'] });
     expect(await one("SELECT 1 FROM sessions WHERE user_id = ? AND audience = 'app'", l.id)).toBeNull();
+  });
+
+  it('two accepts of one invite in the same millisecond: exactly one wins, the loser writes nothing', async () => {
+    const admin = await staff(['admin']);
+    const l = await learner();
+    const inv = await admin.client.json(adminApi.users.invite.path, { json: { email: l.email, role: 'moderator' } });
+    const token = tokenOf(inv.body.url);
+    const passwords = ['senha-nova-um-1', 'senha-nova-dois-2'];
+    const realNow = Date.now;
+    const frozen = realNow();
+    Date.now = () => frozen;
+    let results: { status: number }[];
+    try {
+      results = await Promise.all(
+        passwords.map((password) =>
+          new Client().json(A.inviteAccept.path, { json: { token, password, turnstileToken: TS } }),
+        ),
+      );
+    } finally {
+      Date.now = realNow;
+    }
+    const winner = results.findIndex((r) => r.status === 200);
+    expect(results.filter((r) => r.status === 200)).toHaveLength(1);
+    expect((await login(new Client(), l.email, passwords[1 - winner] as string)).status).toBe(401);
+    expect((await login(new Client(), l.email, passwords[winner] as string)).status).toBe(200);
+  });
+
+  it('staff failures older than the decay window stop counting', async () => {
+    const s = await staff(['admin']);
+    await exec('UPDATE users SET failed_logins = 9, failed_at = 1 WHERE id = ?', s.id);
+    expect((await login(new Client(), s.email, 'errada-123456')).body.error.code).toBe('invalid_credentials');
+    expect(await one('SELECT failed_logins FROM users WHERE id = ?', s.id)).toEqual({ failed_logins: 1 });
   });
 
   const accept = (token: string) =>

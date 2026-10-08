@@ -38,17 +38,22 @@ test.use({ trace: 'off' });
 
 type Kind = 'main' | 'done';
 const USERS: { key: string; kind: Kind }[] = [];
+// The e-book test's endpoints answer 409 `gated` until every episode of the e-book is done (spec 06
+// "E-book test endpoints ignore the trilha unlock"; the prototype only links the test from the
+// unlocked extras node and episode 2's Concluído), so the users that save or submit test answers
+// have episodes 1 and 2 done ('done').
 for (const vp of VPS) {
-  for (const t of ['trilha', 'ebook', 'parts', 'lead', 'teste', 'a11y', 'cmp-main', 'cmp-lead', 'cmp-teste']) {
+  for (const t of ['trilha', 'ebook', 'parts', 'lead', 'cmp-main', 'cmp-lead']) {
     USERS.push({ key: `u3-${t}-${vp}`, kind: 'main' });
   }
-  for (const t of ['done', 'cmp-done']) USERS.push({ key: `u3-${t}-${vp}`, kind: 'done' });
+  for (const t of ['done', 'cmp-done', 'teste', 'a11y', 'cmp-teste'])
+    USERS.push({ key: `u3-${t}-${vp}`, kind: 'done' });
 }
-USERS.push({ key: 'u3-race-mobile', kind: 'main' });
+USERS.push({ key: 'u3-race-mobile', kind: 'done' });
 USERS.push({ key: 'u3-pts-mobile', kind: 'main' });
 USERS.push({ key: 'u3-extra-mobile', kind: 'main' });
-USERS.push({ key: 'u3-err-mobile', kind: 'main' });
-USERS.push({ key: 'u3-order-mobile', kind: 'main' });
+USERS.push({ key: 'u3-err-mobile', kind: 'done' });
+USERS.push({ key: 'u3-order-mobile', kind: 'done' });
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 function stateOf(kind: Kind): Any {
@@ -228,16 +233,16 @@ for (const vp of VPS) {
       }
       await expect(v).toContainText('0 de 20');
       await expect(v).toContainText('A família, a viagem de Robert ao Brasil');
-      // production extra: one bar segment per episode; the current one fills with its steps (step 6 → 50%)
+      // production extra (05 "U3 · Trilha"): one bar segment per episode; the current one is an empty
+      // ringed segment, never partly filled, and no separate "Agora" strip (the current card says it).
       const sbar = v.locator('.seasonbar[role="progressbar"]');
       await expect(sbar).toHaveAttribute('aria-valuenow', '0');
       await expect(sbar).toHaveAttribute('aria-valuemax', '20');
       await expect(sbar.locator(':scope > span')).toHaveCount(20);
-      await expect(sbar.locator(':scope > span.now i')).toHaveAttribute('style', /width:\s*50%/);
-      // phone: a "now" strip under the bar (desktop: the current card right below says it)
-      const nowLink = v.locator('a.sm', { hasText: 'Agora: 01 Good Morning · etapa 6 de 10' });
-      if (vp === 'mobile') await expect(nowLink).toHaveAttribute('href', '#/episodio/1');
-      else await expect(nowLink).toHaveCount(0);
+      await expect(sbar.locator(':scope > span.now')).toHaveCount(1);
+      await expect(sbar.locator(':scope > span').first()).toHaveClass('now');
+      await expect(sbar.locator(':scope > span.now i')).toHaveCount(0);
+      await expect(v.locator('a.sm', { hasText: /^Agora:/ })).toHaveCount(0);
       // <details> with the 8 seasons
       const det = v.locator('details');
       await expect(det.locator('summary')).toHaveText('Ver as 8 temporadas');
@@ -355,9 +360,9 @@ for (const vp of VPS) {
       await expect(out).toContainText('Em produção');
       await expect(v.locator('a.card').filter({ hasText: 'Take It Out' })).toHaveCount(0);
       const test1 = v.locator('.card.navy').filter({ hasText: 'Take the episode test' });
-      await expect(test1).toContainText(
-        '20 questões sobre as Lições 1 e 2. Nota de corte: 70%, ou 14 acertos. Recomenda, não bloqueia.',
-      );
+      // Desktop: "Recomenda, não bloqueia." is its own line (05 "U3 · E-book hub").
+      await expect(test1).toContainText('20 questões sobre as Lições 1 e 2. Nota de corte: 70%, ou 14 acertos.');
+      await expect(test1).toContainText('Recomenda, não bloqueia.');
       await expect(test1).not.toContainText('Última tentativa');
       await expect(test1.getByRole('button', { name: 'Fazer o teste · +50 pontos' })).toBeVisible();
       await expect(v.locator('.card.dash').filter({ hasText: 'Na próxima' })).toContainText('Sunday Lunch');
@@ -517,7 +522,14 @@ for (const vp of VPS) {
         .filter({ has: page.locator('.bar') })
         .first();
       await expect(progress).toContainText('0 de 20', { timeout: 20_000 });
-      expect(await progress.evaluate((e) => getComputedStyle(e).position)).toBe('sticky');
+      // The progress row sits on a sticky strip (05 "U3 · Teste"): the row or one of its parents sticks.
+      expect(
+        await progress.evaluate((e) => {
+          for (let el: Element | null = e; el && !el.classList.contains('scroll'); el = el.parentElement)
+            if (getComputedStyle(el).position === 'sticky') return 'sticky';
+          return 'static';
+        }),
+      ).toBe('sticky');
       await expect(v.locator('.lbl.or')).toHaveText([
         'PARTE A · ESCOLHA A ALTERNATIVA CORRETA',
         'PARTE B · COMPLETE',
@@ -1380,7 +1392,7 @@ test.describe('U3 parity with the prototype', () => {
         ['ebook-lead', `u3-cmp-main-${vp}`, 'main', 'ebook/1/lead'],
         ['ebook-lead-end', `u3-cmp-lead-${vp}`, 'main', 'ebook/1/lead', leadSteps],
         ['ebook-teste', `u3-cmp-main-${vp}`, 'main', 'ebook/1/teste'],
-        ['ebook-teste-result', `u3-cmp-teste-${vp}`, 'main', 'ebook/1/teste', testSteps],
+        ['ebook-teste-result', `u3-cmp-teste-${vp}`, 'done', 'ebook/1/teste', testSteps],
       ];
       const summary: Record<string, number> = {};
       for (const [name, user, kind, route, steps] of cases) {

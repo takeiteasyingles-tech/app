@@ -21,6 +21,8 @@ export interface CallOptions<E extends EndpointDef> {
   query?: QueryIn<E>;
   body?: BodyIn<E>;
   signal?: AbortSignal;
+  /** Extra request headers (e.g. the start-up probe of auth/me). */
+  headers?: Record<string, string>;
 }
 
 /** No response reached the client (offline, DNS, aborted). */
@@ -76,7 +78,7 @@ function notifyAuth(err: ApiError): void {
 }
 
 export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = {}): Promise<ResOf<E>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { ...opts.headers, Accept: 'application/json' };
   let body: string | undefined;
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -170,7 +172,12 @@ export function issuesOf(err: unknown): Issue[] {
   return details.issues.flatMap((i: unknown) => {
     if (!i || typeof i !== 'object') return [];
     const o = i as { path?: unknown; message?: unknown };
-    return [{ path: typeof o.path === 'string' ? o.path : '', message: typeof o.message === 'string' ? o.message : err.message }];
+    return [
+      {
+        path: typeof o.path === 'string' ? o.path : '',
+        message: typeof o.message === 'string' ? o.message : err.message,
+      },
+    ];
   });
 }
 

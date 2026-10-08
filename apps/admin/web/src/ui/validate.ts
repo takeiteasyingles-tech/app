@@ -20,7 +20,8 @@ export function ptMessage(i: ZIssue): string {
     case 'too_small': {
       const min = n(i.minimum);
       if (i.origin === 'string') return min <= 1 ? 'Obrigatório.' : `Pelo menos ${min} caracteres.`;
-      if (i.origin === 'array' || i.origin === 'set') return min === 1 ? 'Inclua pelo menos 1 item.' : `Inclua pelo menos ${min} itens.`;
+      if (i.origin === 'array' || i.origin === 'set')
+        return min === 1 ? 'Inclua pelo menos 1 item.' : `Inclua pelo menos ${min} itens.`;
       return `O mínimo é ${min}.`;
     }
     case 'too_big': {

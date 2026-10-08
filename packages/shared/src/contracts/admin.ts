@@ -503,17 +503,25 @@ function crud<Item extends z.ZodType, Create extends z.ZodType, Update extends z
   };
 }
 
-export const EpisodeEdit = editable(EpisodeRow.omit({ updatedAt: true, updatedBy: true }));
+/**
+ * The title of what learners see in a list (episode, e-book, Extra, album, track, Mic mission): a
+ * write never leaves it blank (the row schemas stay loose so older rows still read back).
+ */
+const RequiredTitle = z.string().trim().min(1);
+
+export const EpisodeEdit = editable(
+  EpisodeRow.omit({ updatedAt: true, updatedBy: true }).extend({ title: RequiredTitle }),
+);
 export const MicPhraseEdit = editable(MicPhraseRow);
 export const ExerciseEdit = editable(ExerciseRow);
 export const ExerciseItemEdit = editable(ExerciseItemRow);
-export const EbookEdit = editable(EbookRow.omit({ updatedAt: true }));
+export const EbookEdit = editable(EbookRow.omit({ updatedAt: true }).extend({ title: RequiredTitle }));
 export const TestQuestionEdit = editable(TestQuestionRow);
-export const ExtraEdit = editable(ExtraRow);
-export const AlbumEdit = editable(AlbumRow);
-export const TrackEdit = editable(TrackRow);
+export const ExtraEdit = editable(ExtraRow.extend({ title: RequiredTitle }));
+export const AlbumEdit = editable(AlbumRow.extend({ title: RequiredTitle }));
+export const TrackEdit = editable(TrackRow.extend({ title: RequiredTitle }));
 export const AssistantEdit = editable(AssistantRow);
-export const MissionEdit = editable(MissionRow);
+export const MissionEdit = editable(MissionRow.extend({ title: RequiredTitle }));
 /**
  * Assistant create also takes an optional persona (spec 05 note #1): the column is NOT NULL, so it
  * is stored as '' when absent. Sending it needs ai.persona; afterwards it is edited only through

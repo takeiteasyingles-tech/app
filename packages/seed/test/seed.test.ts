@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { bootstrapSql } from '../src/bootstrapAdmin';
 import { insertStatements, MAX_STATEMENT_BYTES, seedStatements, sqlLiteral } from '../src/emitSql';
 import { fixtureStatements } from '../src/fixtureToSql';
-import { buildSeed } from '../src/index';
+import { buildSeed, seedPlan } from '../src/index';
 import type { Any } from '../src/loadPrototype';
 import { releaseSql } from '../src/publish';
 import { BADGE_RULES } from '../src/transform/config';
@@ -116,6 +116,22 @@ describe('SQL', () => {
     expect(stmts.find((s) => s.startsWith('INSERT INTO episodes'))).toMatch(/ON CONFLICT\(num\) DO UPDATE SET/);
     expect(stmts.find((s) => s.startsWith('INSERT INTO plans'))).toMatch(/ON CONFLICT\(id\) DO NOTHING;$/);
     expect(stmts.some((s) => /REPLACE/i.test(s.split('VALUES')[0] ?? ''))).toBe(false);
+  });
+
+  it('a remote seed without --force only inserts missing content rows and does not republish', () => {
+    expect(seedPlan({ mode: 'remote' })).toEqual({ contentMode: 'ignore', publish: 'if-unpublished' });
+    expect(seedPlan({ mode: 'remote' }, true)).toEqual({ contentMode: 'upsert', publish: 'always' });
+    expect(seedPlan({ mode: 'local', persistTo: 'x' })).toEqual({ contentMode: 'upsert', publish: 'always' });
+    const stmts = seedStatements(S.content, S.config, { contentMode: 'ignore' });
+    for (const s of stmts.filter((x) => /^INSERT INTO (episodes|extras|mic_phrases|ebooks) ?\(/.test(x))) {
+      expect(s).toMatch(/ON CONFLICT\([^)]+\) DO NOTHING;$/);
+    }
+    expect(stmts.some((s) => /DO UPDATE SET/.test(s))).toBe(false);
+  });
+
+  it('seeds daily caps for the repeatable server-verified kinds (spec 06)', () => {
+    const caps = Object.fromEntries(S.config.point_rules.map((r) => [r.kind, r.daily_cap]));
+    expect(caps).toMatchObject({ maggie_turn: 100, maggie_session: 8, card: 100, word: 20 });
   });
 
   it('splits big tables into several statements', () => {

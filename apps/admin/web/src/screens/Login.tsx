@@ -13,7 +13,7 @@ import { Icon } from '../ui/icons';
 import { Button, Field, Skeleton, TextIn } from '../ui/kit';
 import { setTitle } from '../ui/layout';
 
-function PasswordIn({
+export function PasswordIn({
   id,
   value,
   onValue,
@@ -29,34 +29,67 @@ function PasswordIn({
   const [show, setShow] = useState(false);
   return (
     <div class="input-wrap">
-      <TextIn id={id} type={show ? 'text' : 'password'} value={value} onValue={onValue} autoComplete={autoComplete} err={err} required />
-      <button type="button" class="iconbtn" aria-label={show ? 'Esconder a senha' : 'Mostrar a senha'} aria-pressed={show ? 'true' : 'false'} onClick={() => setShow(!show)}>
+      <TextIn
+        id={id}
+        type={show ? 'text' : 'password'}
+        value={value}
+        onValue={onValue}
+        autoComplete={autoComplete}
+        err={err}
+        required
+      />
+      <button
+        type="button"
+        class="iconbtn"
+        aria-label={show ? 'Esconder a senha' : 'Mostrar a senha'}
+        aria-pressed={show ? 'true' : 'false'}
+        onClick={() => setShow(!show)}
+      >
         <Icon name={show ? 'eyeoff' : 'eye'} size={20} />
       </button>
     </div>
   );
 }
 
+/** The brand's three slanted stripes (blue, orange, white), drawn whole inside the hero. */
+function Stripes() {
+  return (
+    <svg class="ad-hero-art" viewBox="0 0 220 132" aria-hidden="true" focusable="false">
+      <g transform="skewX(-22)">
+        <rect x="64" y="0" width="150" height="30" rx="10" style={{ fill: 'var(--blue)' }} />
+        <rect x="64" y="51" width="150" height="30" rx="10" style={{ fill: 'var(--orange)' }} />
+        <rect x="64" y="102" width="150" height="30" rx="10" style={{ fill: '#fff' }} />
+      </g>
+    </svg>
+  );
+}
+
 function Hero() {
   return (
     <div class="hero ad-hero">
-      <Logo size={24} white />
-      <div class="stack mt24" style={{ '--gap': '10px' }}>
-        <span class="lbl">Painel administrativo</span>
-        <h1 class="h1">O bastidor do Take It Easy.</h1>
-        <p class="p ad-hero-p">Conteúdo, alunos, moderação e publicações num só lugar, com cada ação registrada.</p>
+      <Stripes />
+      <div class="ad-hero-in">
+        <Logo size={24} white />
+        <div class="stack mt24" style={{ '--gap': '10px' }}>
+          <span class="ad-hero-kicker">Painel administrativo</span>
+          <h1 class="h1">O bastidor do Take It Easy.</h1>
+          <p class="p ad-hero-p">Conteúdo, alunos, moderação e publicações num só lugar, com cada ação registrada.</p>
+        </div>
+        <ul class="ad-hero-list" aria-label="O que dá para fazer aqui">
+          <li>
+            <Icon name="trail" size={20} />
+            <span>Episódios, e-books e Extras</span>
+          </li>
+          <li>
+            <Icon name="users" size={20} />
+            <span>Alunos, planos e papéis da equipe</span>
+          </li>
+          <li>
+            <Icon name="shield" size={20} />
+            <span>Moderação e auditoria</span>
+          </li>
+        </ul>
       </div>
-      <ul class="ad-hero-list" aria-label="O que dá para fazer aqui">
-        <li>
-          <Icon name="trail" size={18} /> Episódios, e-books e Extras
-        </li>
-        <li>
-          <Icon name="users" size={18} /> Alunos, planos e papéis da equipe
-        </li>
-        <li>
-          <Icon name="shield" size={18} /> Moderação e auditoria
-        </li>
-      </ul>
     </div>
   );
 }
@@ -78,7 +111,9 @@ function LoginForm() {
     setBusy(true);
     try {
       const token = await ts.token();
-      const res = await call(adminAuthApi.login, { body: { email: email.trim(), password: pass, turnstileToken: token } });
+      const res = await call(adminAuthApi.login, {
+        body: { email: email.trim(), password: pass, turnstileToken: token },
+      });
       signedIn(res);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : errorMessage(ex));
@@ -89,13 +124,27 @@ function LoginForm() {
     }
   };
   return (
-    <form class="card formcard stack ad-formcard" style={{ '--gap': '16px' }} onSubmit={submit} onFocusIn={ts.warm} noValidate>
+    <form
+      class="card formcard stack ad-formcard"
+      style={{ '--gap': '16px' }}
+      onSubmit={submit}
+      onFocusIn={ts.warm}
+      noValidate
+    >
       <div class="stack" style={{ '--gap': '4px' }}>
         <h2 class="h2">Entrar no painel</h2>
         <p class="sm">Use o e-mail da equipe. Alunos entram pelo app.</p>
       </div>
       <Field id="login-email" label="E-mail">
-        <TextIn id="login-email" type="email" value={email} onValue={setEmail} autoComplete="username" inputMode="email" required />
+        <TextIn
+          id="login-email"
+          type="email"
+          value={email}
+          onValue={setEmail}
+          autoComplete="username"
+          inputMode="email"
+          required
+        />
       </Field>
       <Field id="login-pass" label="Senha">
         <PasswordIn id="login-pass" value={pass} onValue={setPass} autoComplete="current-password" />
@@ -128,7 +177,8 @@ function InviteForm({ token }: { token: string }) {
     e.preventDefault();
     if (busy) return;
     setErr(null);
-    if (pass.length < STAFF_PASSWORD_MIN) return setErr(`A senha precisa de pelo menos ${STAFF_PASSWORD_MIN} caracteres.`);
+    if (pass.length < STAFF_PASSWORD_MIN)
+      return setErr(`A senha precisa de pelo menos ${STAFF_PASSWORD_MIN} caracteres.`);
     if (pass !== pass2) return setErr('As duas senhas precisam ser iguais.');
     setBusy(true);
     try {
@@ -164,7 +214,13 @@ function InviteForm({ token }: { token: string }) {
   }
   const d = info.data;
   return (
-    <form class="card formcard stack ad-formcard" style={{ '--gap': '16px' }} onSubmit={submit} onFocusIn={ts.warm} noValidate>
+    <form
+      class="card formcard stack ad-formcard"
+      style={{ '--gap': '16px' }}
+      onSubmit={submit}
+      onFocusIn={ts.warm}
+      noValidate
+    >
       <div class="stack" style={{ '--gap': '6px' }}>
         <span class="pill gr">Convite para {ROLE_LABEL[d.role]}</span>
         <h2 class="h2">Crie sua senha</h2>
@@ -172,11 +228,22 @@ function InviteForm({ token }: { token: string }) {
           Conta <b>{d.email}</b>. O convite vale até {fmtLong(d.expiresAt)}.
         </p>
       </div>
-      <Field id="inv-pass" label="Senha nova" hint={`Pelo menos ${STAFF_PASSWORD_MIN} caracteres.`} err={short ? `Faltam ${STAFF_PASSWORD_MIN - pass.length} caracteres.` : null}>
+      <Field
+        id="inv-pass"
+        label="Senha nova"
+        hint={`Pelo menos ${STAFF_PASSWORD_MIN} caracteres.`}
+        err={short ? `Faltam ${STAFF_PASSWORD_MIN - pass.length} caracteres.` : null}
+      >
         <PasswordIn id="inv-pass" value={pass} onValue={setPass} autoComplete="new-password" err={short ? 'x' : null} />
       </Field>
       <Field id="inv-pass2" label="Repita a senha" err={mismatch ? 'As senhas não são iguais.' : null}>
-        <PasswordIn id="inv-pass2" value={pass2} onValue={setPass2} autoComplete="new-password" err={mismatch ? 'x' : null} />
+        <PasswordIn
+          id="inv-pass2"
+          value={pass2}
+          onValue={setPass2}
+          autoComplete="new-password"
+          err={mismatch ? 'x' : null}
+        />
       </Field>
       <div ref={ts.ref} style={{ display: 'contents' }} />
       {err ? (

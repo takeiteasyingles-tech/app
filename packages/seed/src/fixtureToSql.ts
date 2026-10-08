@@ -50,6 +50,45 @@ function srsSource(scene: string): string {
   return 'manual';
 }
 
+/**
+ * The prototype's game.log never records the daily-mission bonuses (game.js adds them to the day and
+ * the total only), so a ledger built from the log alone sums short of game.points (the parity
+ * fixture: 265 vs 340). Each day's completed missions become `mission:{date}:{k}` rows (the engine's
+ * key) sharing that day's missing points, so the ledger adds up to the daily totals.
+ */
+function missionRows(uid: string, g: Any, ledger: readonly Row[]): Row[] {
+  const logged = new Map<string, number>();
+  const lastAt = new Map<string, number>();
+  for (const r of ledger) {
+    const d = String(r.local_date);
+    logged.set(d, (logged.get(d) ?? 0) + Number(r.points));
+    lastAt.set(d, Math.max(lastAt.get(d) ?? 0, Number(r.created_at)));
+  }
+  const out: Row[] = [];
+  for (const [date, d] of Object.entries((g.daily ?? {}) as Record<string, Any>)) {
+    const done = Object.entries((d.missions ?? {}) as Record<string, unknown>)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    const missing = (Number(d.points) || 0) - (logged.get(date) ?? 0);
+    if (!done.length || missing <= 0) continue;
+    const each = Math.floor(missing / done.length);
+    done.forEach((k, i) => {
+      out.push({
+        user_id: uid,
+        award_key: `mission:${date}:${k}`,
+        kind: 'mission',
+        // The last one takes the remainder, so the day adds up exactly.
+        points: i === done.length - 1 ? missing - each * (done.length - 1) : each,
+        local_date: date,
+        maggie_sec: 0,
+        meta: null,
+        created_at: (lastAt.get(date) ?? Date.parse(`${date}T12:00:00Z`)) + 1000 * (i + 1),
+      });
+    });
+  }
+  return out;
+}
+
 /** Statements (in FK order) that recreate the fixture user. */
 export function fixtureStatements(state: Any, opts: FixtureOptions): string[] {
   if (state?.v !== 6) throw new Error('fixtureToSql expects a prototype v6 state ({v: 6, ...})');
@@ -302,6 +341,7 @@ export function fixtureStatements(state: Any, opts: FixtureOptions): string[] {
       meta: null,
       created_at: Number(l.t) || now,
     }));
+  ledger.push(...missionRows(uid, g, ledger));
   ins('point_ledger', ledger, ['user_id', 'award_key']);
   out.push(`INSERT OR IGNORE INTO user_stats(user_id) VALUES(${sqlLiteral(uid)});`);
   out.push(

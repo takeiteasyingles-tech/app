@@ -5,6 +5,12 @@
   --adErr: #b4372c;
   --adErrT: #fbe9e7;
   --adHover: #fbf9f2;
+  /* Ids, slugs, flag keys and JSON: sans-serif monospaced faces that sit well next to Figtree, in the
+     order each system ships them. It never falls back to the browser's generic `monospace` (Courier
+     on Windows, a serif face); the last resort is the UI font itself. */
+  --adMono:
+    "Cascadia Mono", "Cascadia Code", "SF Mono", ui-monospace, Menlo, "JetBrains Mono", "Roboto Mono", Consolas,
+    "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", var(--f);
 }
 
 /* ---------- Skip link, splash ---------- */
@@ -16,8 +22,11 @@
   background: var(--navy);
   color: #fff;
   padding: 10px 14px;
+  border: 0;
   border-radius: 10px;
+  font: inherit;
   font-weight: 800;
+  cursor: pointer;
 }
 .ad-skip:focus {
   top: 12px;
@@ -49,6 +58,14 @@
 }
 .ad-side .ad-brand .logo {
   margin: 0;
+  min-width: 0;
+}
+.ad-brand .logo .wm {
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}
+.ad-brand-tag {
+  flex: none;
 }
 .ad-brand-tag {
   font-size: 0.66rem;
@@ -194,11 +211,13 @@
 .app[data-layout="desktop"] .ad-bar {
   padding: 10px 32px;
 }
-.app[data-layout="mobile"] .ad-top .ad-actions .btn span {
+/* Telefone: as ações do topo ficam só com o ícone (o nome segue no aria-label do botão). */
+.app[data-layout="mobile"] .ad-top .ad-actions .btn > span:not(.ad-spin) {
   display: none;
 }
 .app[data-layout="mobile"] .ad-top .ad-actions .btn {
-  padding: 0 12px;
+  padding: 0;
+  width: 44px;
 }
 .ad-view .scroll:focus {
   outline: none;
@@ -213,8 +232,15 @@
 }
 .ad-card-h {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px 12px;
+}
+/* The title column never shrinks below a readable width: when the actions do not fit beside it
+   (phones), they drop to their own line under the title instead of squeezing it. */
+.ad-card-h > .grow {
+  flex: 1 1 150px;
+  min-width: 0;
 }
 .ad-cols {
   display: grid;
@@ -251,6 +277,40 @@
   padding: 0;
   width: 44px;
 }
+/* Desativado tem cara de desativado em todas as variantes (tie.css só troca o fundo). */
+.ad-app .btn[disabled]:not([aria-busy="true"]) {
+  --bg: #e7e1d1;
+  --fg: #8d877a;
+  border-color: transparent;
+  box-shadow: none;
+  filter: none;
+}
+/* Light buttons, disabled: the same outline as enabled, just faded (a dashed edge read as a drop zone). */
+.ad-app .btn.light[disabled]:not([aria-busy="true"]),
+.ad-app .btn.ad-danger-l[disabled]:not([aria-busy="true"]) {
+  --bg: #fff;
+  --fg: #a39d90;
+  border: 1.5px solid var(--line);
+  opacity: 0.75;
+}
+.ad-app .btn.link[disabled]:not([aria-busy="true"]) {
+  --bg: transparent;
+  --fg: #a39d90;
+  border: 0;
+}
+/* Ocupado (pedido em andamento): mantém a cor da variante. */
+.ad-app .btn.navy[aria-busy="true"] {
+  --bg: var(--navy);
+}
+.ad-app .btn.green[aria-busy="true"] {
+  --bg: var(--green);
+}
+.ad-app .btn.light[aria-busy="true"] {
+  --bg: #fff;
+}
+.ad-app .btn[aria-busy="true"] {
+  cursor: progress;
+}
 .btn .ad-spin {
   border-color: rgba(255, 255, 255, 0.35);
   border-top-color: currentColor;
@@ -284,6 +344,53 @@
   font-weight: 800;
   text-decoration: underline;
   text-underline-offset: 2px;
+  /* Inline padding widens the tap area (~40px tall) without moving the line. */
+  padding: 11px 0;
+}
+.ad-countlink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0 12px;
+  margin: -6px 0;
+  border-radius: 10px;
+  color: var(--blueD);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ad-countlink:hover {
+  background: var(--blueT);
+}
+/* No cartão do telefone o número fica alinhado à esquerda, como os outros valores. */
+.ad-rcard-b .ad-countlink {
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0 12px 0 0;
+  margin: -8px 0;
+}
+.ad-rcard-b .ad-countlink:hover {
+  background: none;
+}
+/* Texto longo de uma linha (e-mail na tabela): reticências, com o valor inteiro no title. */
+.ad-trunc {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.ad-linkbtn.ad-trunc {
+  padding: 2px 0;
+}
+.ad-table .ad-who-cell {
+  max-width: 230px;
+}
+.ad-untitled {
+  color: var(--muted);
+  font-weight: 700;
 }
 .ad-spin {
   display: inline-block;
@@ -354,10 +461,24 @@ textarea.input.ad-in {
   color: var(--muted);
 }
 .ad-mono,
+.input.ad-mono,
+.ad-app code {
+  font-family: var(--adMono);
+  font-size: 0.86em;
+  font-weight: 500;
+  letter-spacing: 0;
+  font-variant-ligatures: none;
+}
 .input.ad-mono {
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+}
+/* Ids and keys shown inline: a quiet tag, so they read as data and not as prose. */
+code.ad-mono,
+.ad-fact dd code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--cream);
+  color: var(--navy);
 }
 .ad-sel {
   appearance: none;
@@ -439,6 +560,57 @@ textarea.input.ad-in {
   width: auto;
   min-width: 150px;
 }
+/* Telefone: a busca ocupa a linha inteira; os filtros ficam dois por linha (o valor escolhido
+   sempre cabe), e o que sobra ocupa a linha toda. */
+@media (max-width: 599px) {
+  .ad-filters .ad-search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .ad-filters .ad-sel,
+  .ad-filters .ad-dl {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
+  }
+  .ad-filters .ad-sel {
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+  }
+  .ad-filters .ad-sel.ad-full {
+    flex-basis: 100%;
+  }
+  .ad-filters .ad-dl {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    font-size: 0.78rem;
+  }
+  .ad-filters .ad-dl .input {
+    padding: 0 10px;
+  }
+}
+/* Data com rótulo visível (De / Até). */
+.ad-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 0.86rem;
+  color: var(--navy);
+}
+.ad-dl > span {
+  flex: none;
+}
+.ad-dl .input {
+  width: auto;
+  min-width: 0;
+  flex: 1;
+}
+textarea.input.ad-area {
+  resize: vertical;
+  overflow-y: auto;
+  max-height: 70vh;
+}
 .ad-fchips {
   display: flex;
   flex-wrap: wrap;
@@ -463,11 +635,66 @@ textarea.input.ad-in {
   border-radius: 999px;
   background: var(--orange);
   color: #fff;
+  font-variant-numeric: tabular-nums;
 }
+.ad-fchip b.zero {
+  background: var(--cream);
+  color: var(--muted);
+}
+/* Um só estilo de selecionado em todos os grupos de filtros. */
 .ad-fchip.on {
   background: var(--navy);
   border-color: var(--navy);
   color: #fff;
+}
+.ad-fchip.on b.zero {
+  background: var(--navy3);
+  color: #fff;
+}
+/* Telefone: os filtros contados viram uma grade de dois por linha (nenhum chip sobra sozinho). */
+@media (max-width: 599px) {
+  .ad-filters > .ad-fchips {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: repeat(var(--fcols, 2), minmax(0, 1fr));
+  }
+  .ad-filters > .ad-fchips .ad-fchip {
+    justify-content: center;
+    padding: 0 8px;
+    min-width: 0;
+    white-space: nowrap;
+  }
+}
+.ad-fchips-l {
+  align-self: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.ad-fgroups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+.ad-fgroups > .ad-fchips + .ad-fchips {
+  padding-left: 18px;
+  border-left: 1.5px solid var(--line);
+}
+@media (max-width: 899px) {
+  .ad-fgroups {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ad-fgroups > .ad-fchips + .ad-fchips {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 10px;
+    border-top: 1.5px solid var(--line);
+  }
 }
 .ad-seg {
   background: #fff;
@@ -688,6 +915,12 @@ textarea.input.ad-in {
   align-items: center;
   flex: none;
 }
+/* Nos cartões que abrem e fecham, as ações (mover, duplicar, remover) ficam separadas do "Editar". */
+.ad-item-h > .ad-item-a {
+  padding-left: 6px;
+  margin-left: 2px;
+  border-left: 1.5px solid var(--line);
+}
 .ad-item-b {
   padding: 6px 14px 16px;
   border-top: 1.5px solid var(--line);
@@ -787,6 +1020,79 @@ textarea.input.ad-in {
 }
 .app[data-layout="desktop"] .ad-kpis {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+/* Telefone: um número sozinho na última linha ocupa a linha toda (sem meia linha vazia). */
+.app[data-layout="mobile"] .ad-kpis:not(.lead):not(.three) > :last-child:nth-child(odd),
+.app[data-layout="mobile"] .ad-quick > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+/* Grade com destaque (painel): o primeiro número ocupa a linha toda e os outros fecham pares. */
+.app[data-layout="mobile"] .ad-kpis.lead > :first-child {
+  grid-column: 1 / -1;
+}
+.app[data-layout="mobile"] .ad-kpis.lead > :last-child:nth-child(even) {
+  grid-column: 1 / -1;
+}
+/* Telefone: sem o ícone, o rótulo usa a largura do cartão e não quebra em pedaços desiguais. */
+.app[data-layout="mobile"] .ad-kpis .ad-kpi:not(.navy) .ad-kpi-ic {
+  display: none;
+}
+.app[data-layout="mobile"] .ad-kpi {
+  padding: 14px;
+}
+.app[data-layout="mobile"] .ad-kpi-v {
+  font-size: 1.9rem;
+}
+/* Três números lado a lado em qualquer largura (cartão Progresso). */
+.ad-kpis.three,
+.app[data-layout="desktop"] .ad-kpis.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.ad-kpis.three .ad-kpi {
+  padding: 12px;
+  border-radius: 14px;
+}
+.ad-kpis.three .ad-kpi-v {
+  font-size: 1.7rem;
+}
+.ad-kpis.three .lbl {
+  font-size: 0.68rem;
+}
+/* Telefone: três colunas estreitas; rótulo sem espaçamento largo, para caber inteiro. */
+.app[data-layout="mobile"] .ad-kpis.three {
+  gap: 8px;
+}
+.app[data-layout="mobile"] .ad-kpis.three .ad-kpi {
+  padding: 10px 8px 10px 10px;
+}
+.app[data-layout="mobile"] .ad-kpis.three .lbl {
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+}
+.app[data-layout="mobile"] .ad-kpis.three .ad-kpi-v {
+  font-size: 1.5rem;
+}
+.ad-nw {
+  white-space: nowrap;
+}
+/* Números de um mesmo cartão: um por coluna, no mesmo tamanho, alinhados pelo topo. */
+.ad-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 14px 18px;
+  align-items: start;
+}
+.ad-stat-v {
+  font-size: 1.85rem;
+  line-height: 1.1;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.app[data-layout="mobile"] .ad-stat-v {
+  font-size: 1.55rem;
 }
 .ad-kpi {
   display: flex;
@@ -951,7 +1257,7 @@ a.ad-kpi:hover {
 }
 .ad-code {
   display: block;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-family: var(--adMono);
   font-size: 0.84rem;
   padding: 10px 12px;
   border-radius: 10px;
@@ -967,7 +1273,7 @@ a.ad-kpi:hover {
   margin: 0;
   max-height: 420px;
   overflow: auto;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-family: var(--adMono);
   font-size: 0.8rem;
   line-height: 1.5;
   padding: 12px 14px;
@@ -1165,8 +1471,10 @@ a.ad-kpi:hover {
 .ad-table tr.click:hover td {
   background: var(--adHover);
 }
-.ad-table tr.hi td {
-  background: var(--greenT);
+/* Linha em destaque (plano padrão, versão em uso): uma faixa verde na borda, sem pintar a linha (um
+   fundo verde apagava as pílulas verdes de dentro dela). */
+.ad-table tr.hi td:first-child {
+  box-shadow: inset 4px 0 0 var(--green);
 }
 .ad-table .num,
 .ad-table th.num {
@@ -1222,6 +1530,13 @@ a.ad-kpi:hover {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px 12px;
 }
+/* A field left alone on the card's last row takes the whole row (actions get room for their labels). */
+.ad-rcard-b > div:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.ad-rcard-b .btn {
+  white-space: nowrap;
+}
 .ad-rcard-b dt {
   font-size: 0.7rem;
   font-weight: 800;
@@ -1276,10 +1591,82 @@ img.ad-mprev {
   background: var(--cream);
   color: var(--navy);
 }
-.ad-mtile img {
+.ad-mtile {
+  position: relative;
+}
+.ad-mtile img,
+.ad-mtile video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+.ad-mtile.loading {
+  background: linear-gradient(90deg, #efeadb 0%, #f7f3e8 40%, #efeadb 80%);
+  background-size: 300% 100%;
+  animation: adskel 1.3s ease-in-out infinite;
+}
+.ad-mtile.loading img,
+.ad-mtile.loading video {
+  opacity: 0;
+}
+.ad-mtile.ready img,
+.ad-mtile.ready video {
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+/* Placeholder icon: faint under the shimmer while loading; with a label when the preview fails. */
+.ad-mtile-ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--navy);
+  opacity: 0.28;
+  pointer-events: none;
+}
+.k-video .ad-mtile-ph {
+  color: #fff;
+}
+.ad-mtile-ph.broken {
+  opacity: 1;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.ad-mtile.broken {
+  background: repeating-linear-gradient(-45deg, var(--cream) 0 8px, #f3eee1 8px 16px);
+}
+.ad-mtile.k-video.broken .ad-mtile-ph.broken {
+  color: #fff;
+}
+.ad-mfield .ad-mtile-ph span {
+  display: none;
+}
+.ad-mtile.k-video.loading {
+  background: linear-gradient(90deg, #1b3a6b 0%, #2a4d86 40%, #1b3a6b 80%);
+  background-size: 300% 100%;
+}
+.ad-mtile-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(10, 26, 54, 0.78);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ad-mfield .ad-mtile-badge {
+  display: none;
 }
 .ad-mtile.k-audio {
   background: var(--orangeT);
@@ -1459,57 +1846,99 @@ img.ad-mprev {
 .auth .hero.ad-hero::before {
   background: none;
 }
-.ad-hero::after {
-  content: "";
+/* The brand stripes: drawn whole (an SVG, never cut by the panel edge), in a corner the text never
+   reaches — top right on phones, bottom right on desktop. */
+.auth .ad-hero > .ad-hero-art {
   position: absolute;
-  right: -60px;
-  bottom: -40px;
-  width: 260px;
-  height: 200px;
-  background:
-    linear-gradient(var(--blue), var(--blue)) 0 0 / 100% 22% no-repeat,
-    linear-gradient(var(--orange), var(--orange)) 0 50% / 100% 22% no-repeat,
-    linear-gradient(#fff, #fff) 0 100% / 100% 22% no-repeat;
-  transform: skewX(-22deg);
-  opacity: 0.12;
-  border-radius: 24px;
+  top: 18px;
+  right: 18px;
+  width: 92px;
+  height: auto;
+  opacity: 0.9;
   pointer-events: none;
+}
+.ad-hero-in {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 .ad-hero .h1 {
   font-size: 1.7rem;
 }
+/* Phone: room between the subtitle and the form card that overlaps the hero's bottom edge. */
+.app[data-layout="mobile"] .auth .hero.ad-hero {
+  padding-top: 28px;
+  padding-bottom: 42px;
+}
+/* Eyebrow on navy: light orange (≈7:1), not the grey .lbl. */
+.ad-hero-kicker {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: #ffc2a6;
+}
 .ad-hero-p {
-  color: var(--onNavy) !important;
-  max-width: 40ch;
+  color: #dbe3f2 !important;
+  max-width: 44ch;
 }
 .ad-hero-list {
   display: none;
 }
 .app[data-layout="desktop"] .ad-hero {
   justify-content: center;
-  padding: 56px 64px;
+  padding: 56px clamp(48px, 6vw, 88px);
+}
+.app[data-layout="desktop"] .ad-hero-in {
+  max-width: 680px;
+}
+.app[data-layout="desktop"] .auth .ad-hero > .ad-hero-art {
+  top: auto;
+  bottom: 48px;
+  right: clamp(48px, 6vw, 88px);
+  width: 200px;
+  opacity: 1;
 }
 .app[data-layout="desktop"] .ad-hero .h1 {
-  font-size: 2.4rem;
-  max-width: 14ch;
+  font-size: clamp(2.4rem, 3.4vw, 3.2rem);
+  max-width: 16ch;
+}
+.app[data-layout="desktop"] .ad-hero-p {
+  font-size: 1.12rem;
+  max-width: 48ch;
 }
 .app[data-layout="desktop"] .ad-hero-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   list-style: none;
-  margin: 34px 0 0;
+  margin: 40px 0 0;
   padding: 0;
   color: #fff;
   font-weight: 700;
 }
 .ad-hero-list li {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.95rem;
+  line-height: 1.35;
 }
 .ad-hero-list svg {
   color: var(--orange);
+}
+/* Short desktop windows: the stripes would meet the feature tiles, so they step aside. */
+@media (max-height: 760px) {
+  .app[data-layout="desktop"] .auth .ad-hero > .ad-hero-art {
+    display: none;
+  }
 }
 .app[data-layout="desktop"] .ad-auth .formwrap {
   width: 480px;
@@ -1524,11 +1953,44 @@ img.ad-mprev {
 }
 
 /* ---------- Tabs (sections of an editor) ---------- */
+.ad-tabsw {
+  position: relative;
+  min-width: 0;
+}
+.ad-tabsw::before,
+.ad-tabsw::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+.ad-tabsw::before {
+  left: 0;
+  background: linear-gradient(90deg, #fff 20%, rgba(255, 255, 255, 0));
+}
+.ad-tabsw::after {
+  right: 0;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230F2A55' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E")
+    right 2px center no-repeat,
+    linear-gradient(270deg, #fff 35%, rgba(255, 255, 255, 0));
+}
+.ad-tabsw.fl::before,
+.ad-tabsw.fr::after {
+  opacity: 1;
+}
 .ad-tabs {
+  position: relative;
   display: flex;
   gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
+  scroll-behavior: smooth;
 }
 .ad-tabs::-webkit-scrollbar {
   display: none;
@@ -1565,21 +2027,45 @@ img.ad-mprev {
 }
 
 /* ---------- Save bar ---------- */
+/* A floating card the width of the form column (same edges and radius as the cards above it), so it
+   reads as the editor's own toolbar and not as a strip of the page. */
 .ad-savebar {
   position: sticky;
-  bottom: 0;
+  bottom: calc(12px + var(--safe-b));
   z-index: 5;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 12px 16px calc(12px + var(--safe-b));
-  background: rgba(255, 255, 255, 0.96);
-  border-top: 1.5px solid var(--line);
-  box-shadow: 0 -10px 24px -22px rgba(15, 42, 85, 0.6);
+  padding: 10px 12px 10px 18px;
+  background: #fff;
+  border: 1.5px solid var(--line2);
+  border-radius: var(--r);
+  box-shadow: 0 14px 34px -16px rgba(15, 42, 85, 0.45);
+}
+.ad-savebar.dirty {
+  border-color: #f3b49b;
+  box-shadow:
+    0 0 0 3px var(--orangeT),
+    0 14px 34px -16px rgba(15, 42, 85, 0.45);
+}
+.ad-savebar-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: none;
+}
+@media (max-width: 599px) {
+  .ad-savebar-btns {
+    flex: 1 1 100%;
+  }
+  .ad-savebar-btns .btn {
+    flex: 1 1 0;
+  }
 }
 .app[data-layout="desktop"] .ad-savebar {
-  padding: 12px 32px;
+  padding: 10px 12px 10px 20px;
 }
 .ad-dirty {
   display: inline-flex;
@@ -1616,6 +2102,10 @@ img.ad-mprev {
   .app[data-layout="desktop"] .ad-split.with-preview .ad-preview {
     position: sticky;
     top: 0;
+  }
+  /* The save bar lines up with the form card, not with the preview column beside it. */
+  .app[data-layout="desktop"] .ad-split.with-preview ~ .ad-savebar {
+    margin-right: 422px;
   }
 }
 .ad-preview {
@@ -1658,6 +2148,37 @@ img.ad-mprev {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+/* The kind's name is never squeezed by the pills: they move to the next line when both do not fit. */
+.ad-mod-h > .h3 {
+  flex: 1 0 auto;
+}
+/* Quando · quem · denunciado por: under the title, each part kept whole, the dot ending a line. */
+.ad-meta {
+  flex: 1 1 100%;
+  list-style: none;
+  margin: -6px 0 0 50px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ad-meta li {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ad-meta li:not(:last-child)::after {
+  content: "·";
+  margin: 0 6px;
+}
+.ad-meta .ad-linkbtn {
+  padding: 0;
+}
+.app[data-layout="mobile"] .ad-meta {
+  margin-left: 0;
+  margin-top: -2px;
 }
 .ad-mod-kind {
   width: 40px;
@@ -1728,7 +2249,7 @@ img.ad-mprev {
   gap: 6px;
 }
 .ad-files li {
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-family: var(--adMono);
   font-size: 0.8rem;
   font-weight: 600;
   padding: 4px 10px;
@@ -1849,4 +2370,307 @@ img.ad-mprev {
   color: var(--orange);
   width: 36px;
   flex: none;
+}
+
+/* ---------- Minha conta: permissões ---------- */
+.ad-perms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px 18px;
+}
+.ad-perms li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1.5px solid var(--line);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.ad-perms li.on svg {
+  color: var(--green);
+  flex: none;
+}
+.ad-perms li.off {
+  color: var(--muted);
+  font-weight: 500;
+}
+.ad-perms li.off svg {
+  flex: none;
+}
+
+/* Seg e FilterChips são fieldsets (grupo com legenda): sem a borda e a margem do navegador. */
+fieldset.ad-seg,
+fieldset.ad-fchips {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+}
+fieldset.ad-fchips {
+  padding: 0;
+}
+
+/* ---------- Auditoria ---------- */
+/* Chave da ação: quebra só depois dos pontos, nunca no meio de uma palavra. */
+.ad-cell2 .ad-akey {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.ad-wrap {
+  overflow-wrap: anywhere;
+}
+.ad-more {
+  padding: 0;
+  gap: 0;
+}
+.ad-more > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: inherit;
+}
+.ad-more > summary::-webkit-details-marker {
+  display: none;
+}
+.ad-more > summary:hover {
+  background: var(--adHover);
+}
+.ad-more > summary .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ad-more-ic {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream);
+  color: var(--navy);
+}
+.ad-more-chev {
+  display: inline-flex;
+  color: var(--navy);
+  transition: transform 0.15s;
+}
+.ad-more[open] > .ad-more-chev,
+.ad-more[open] > summary .ad-more-chev {
+  transform: rotate(180deg);
+}
+.ad-more > form {
+  padding: 4px 16px 16px;
+}
+
+/* ---------- Configurações: flags ---------- */
+.ad-flags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ad-flag {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 12px 0;
+  border-top: 1.5px solid var(--line);
+}
+.ad-flag:first-child {
+  border-top: 0;
+}
+.ad-flag-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  cursor: pointer;
+}
+.ad-flag-t .ad-mono {
+  overflow-wrap: anywhere;
+}
+/* Telefone: o botão Regras desce para baixo do texto, alinhado com ele. */
+.app[data-layout="mobile"] .ad-flag {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+.app[data-layout="mobile"] .ad-flag .toggle {
+  margin-top: 2px;
+}
+.app[data-layout="mobile"] .ad-flag-a {
+  grid-column: 2;
+}
+/* Campo + botão na mesma linha, alinhados pela base (telefone: um embaixo do outro). */
+.ad-inlineform {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px 10px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--line);
+}
+.ad-inlineform > .field {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.app[data-layout="mobile"] .ad-inlineform {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* ---------- Episódio: personagens na prévia ---------- */
+.ad-castpill {
+  background: var(--navy2);
+  color: #fff;
+}
+.ad-castpill i,
+.ad-who i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+  flex: none;
+}
+.ad-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ad-who i {
+  box-shadow: none;
+}
+
+/* ---------- Listas de itens: abrir/fechar com texto ---------- */
+.ad-item-tg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--navy);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+/* ---------- Assistentes ---------- */
+.ad-agrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+.app[data-layout="mobile"] .ad-agrid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+}
+.ad-acard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  color: var(--navy);
+  min-width: 0;
+}
+.ad-acard:hover {
+  border-color: var(--line2);
+  box-shadow: 0 14px 30px -24px rgba(15, 42, 85, 0.7);
+}
+.ad-acard-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(160deg, #17396f, var(--navy) 60%, var(--navyD));
+  overflow: hidden;
+}
+.ad-acard-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+}
+.ad-acard-ini {
+  font-family: var(--fd);
+  font-style: italic;
+  font-weight: 900;
+  font-size: 2.6rem;
+  color: #fff;
+  opacity: 0.85;
+}
+.ad-acard-st {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+.ad-acard-st .pill {
+  box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.5);
+}
+.ad-acard-st .pill:not(.gr) {
+  background: #fff;
+}
+.ad-acard-b {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  flex: 1;
+}
+.ad-acard-tag {
+  color: var(--muted);
+}
+.ad-acard-facts {
+  margin: auto 0 0;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.ad-acard-facts dt {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ad-acard-facts dd {
+  margin: 2px 0 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+/* ---------- Menu no telefone: a folha inteira é navy (sem cartão dentro de folha) ---------- */
+.overlay .sheet.ad-navsheet {
+  background: var(--navy);
+  color: #fff;
+}
+.overlay .sheet.ad-navsheet .grab {
+  background: var(--navy3);
+}
+.ad-navsheet .ad-sheet-h .iconbtn {
+  background: var(--navy2);
+  color: #fff;
+  border-color: var(--navy3);
+}
+.ad-navsheet .ad-mnav {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+.ad-navsheet .ad-navlbl {
+  color: var(--onNavy);
+}
+.ad-navsheet .ad-me {
+  margin-top: 6px;
 }

@@ -8,7 +8,7 @@ import { errorMessage, issuesOf } from '../../api';
 import { go, setLeaveGuard, setQuery } from '../../router';
 import { useLoad } from '../../ui/async';
 import { ErrorSummary, Form, type Spec } from '../../ui/form';
-import { Button, ErrorBox, Page, Seg, Skeleton } from '../../ui/kit';
+import { Button, ErrorBox, Page, Seg, Skeleton, TabsNav } from '../../ui/kit';
 import { wide } from '../../ui/layout';
 import { confirmAction } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -145,7 +145,7 @@ export function DocEditor<D extends Record<string, unknown>>(p: DocEditorProps<D
       actions={draft && remove ? <Button label="Excluir" icon="trash" kind="ad-danger-l" onClick={remove} /> : null}
       bar={
         tabs.length ? (
-          <nav class="ad-tabs" aria-label={`Partes: ${p.noun}`}>
+          <TabsNav label={`Partes: ${p.noun}`}>
             {tabs.map(([t, l]) => (
               <a
                 key={t}
@@ -158,10 +158,14 @@ export function DocEditor<D extends Record<string, unknown>>(p: DocEditorProps<D
                 }}
               >
                 {l}
-                {tabErrors[t] ? <span class="dot" aria-label={`${tabErrors[t]} erros`} /> : null}
+                {tabErrors[t] ? (
+                  <span class="dot">
+                    <span class="sr">{`${tabErrors[t]} erros`}</span>
+                  </span>
+                ) : null}
               </a>
             ))}
-          </nav>
+          </TabsNav>
         ) : undefined
       }
     >
@@ -193,7 +197,13 @@ export function DocEditor<D extends Record<string, unknown>>(p: DocEditorProps<D
           <div class={`ad-split${hasPreview ? ' with-preview' : ''}`}>
             {showEditor ? (
               <section class="card ad-card">
-                <Form specs={p.specs[tab] ?? p.specs[''] ?? []} value={draft} set={(fn) => setDraft((x) => (x ? fn(x) : x))} errors={errors} idp={p.idp} />
+                <Form
+                  specs={p.specs[tab] ?? p.specs[''] ?? []}
+                  value={draft}
+                  set={(fn) => setDraft((x) => (x ? fn(x) : x))}
+                  errors={errors}
+                  idp={p.idp}
+                />
               </section>
             ) : null}
             {showPreview ? p.preview?.(draft, tab) : null}

@@ -2,7 +2,13 @@
 // Worker reads (retention, terms version, Workers AI model ids, the student app origin) and the AI
 // prompt templates (versioned: a save over a newer edit is refused).
 import { FLAGS, SETTINGS } from '@tie/shared/constants';
-import { adminAiApi, adminOpsApi, type AppSetting, type FeatureFlag, type PromptRow } from '@tie/shared/contracts/admin';
+import {
+  type AppSetting,
+  adminAiApi,
+  adminOpsApi,
+  type FeatureFlag,
+  type PromptRow,
+} from '@tie/shared/contracts/admin';
 import { useEffect, useState } from 'preact/hooks';
 import { call, errorMessage, isCode } from '../api';
 import { fmtAgo, fmtDateTime } from '../format';
@@ -11,7 +17,7 @@ import { setQuery } from '../router';
 import { can } from '../session';
 import { useLoad } from '../ui/async';
 import { Icon } from '../ui/icons';
-import { Area, Async, Button, Card, Empty, Field, Page, Pill, Sel, Switch, TextIn } from '../ui/kit';
+import { Area, Async, Button, Card, Empty, Field, Page, Pill, Sel, Switch, TabsNav, TextIn } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { toast } from '../ui/toast';
 import type { ScreenProps } from './registry';
@@ -40,7 +46,15 @@ const PROMPT_INFO: Record<string, string> = {
 
 // ---------- Flags ----------
 
-function RulesModal({ flag, onClose, onSaved }: { flag: FeatureFlag; onClose: () => void; onSaved: (f: FeatureFlag) => void }) {
+function RulesModal({
+  flag,
+  onClose,
+  onSaved,
+}: {
+  flag: FeatureFlag;
+  onClose: () => void;
+  onSaved: (f: FeatureFlag) => void;
+}) {
   const r = (flag.rules ?? {}) as { users?: string[]; plans?: string[]; roles?: string[] };
   const [users, setUsers] = useState((r.users ?? []).join('\n'));
   const [plans, setPlans] = useState((r.plans ?? []).join('\n'));
@@ -59,7 +73,11 @@ function RulesModal({ flag, onClose, onSaved }: { flag: FeatureFlag; onClose: ()
       const empty = !rules.users.length && !rules.plans.length && !rules.roles.length;
       const res = await call(adminOpsApi.setFlag, {
         params: { key: flag.key },
-        body: { enabled: flag.enabled, rolloutPct: Math.max(0, Math.min(100, Number.parseInt(pct || '0', 10))), rules: empty ? null : rules },
+        body: {
+          enabled: flag.enabled,
+          rolloutPct: Math.max(0, Math.min(100, Number.parseInt(pct || '0', 10))),
+          rules: empty ? null : rules,
+        },
       });
       onSaved(res.item);
       toast('Flag salva.');
@@ -81,7 +99,11 @@ function RulesModal({ flag, onClose, onSaved }: { flag: FeatureFlag; onClose: ()
         </>
       }
     >
-      <Field id="fl-pct" label="Liberação gradual (%)" hint="Percentual de alunos que recebem a flag ligada. As listas abaixo recebem sempre.">
+      <Field
+        id="fl-pct"
+        label="Liberação gradual (%)"
+        hint="Percentual de alunos que recebem a flag ligada. As listas abaixo recebem sempre."
+      >
         <TextIn id="fl-pct" type="number" min={0} max={100} value={pct} onValue={setPct} />
       </Field>
       <Field id="fl-users" label="Ids de usuários" opt hint="Um por linha.">
@@ -103,7 +125,10 @@ function Flags() {
   const [rules, setRules] = useState<FeatureFlag | null>(null);
   const [newKey, setNewKey] = useState('');
   const email = useEmails(load.data?.items.map((f) => f.updatedBy) ?? []);
-  const put = (f: FeatureFlag) => load.setData((p) => ({ items: [...(p?.items ?? []).filter((x) => x.key !== f.key), f].sort((a, b) => a.key.localeCompare(b.key)) }));
+  const put = (f: FeatureFlag) =>
+    load.setData((p) => ({
+      items: [...(p?.items ?? []).filter((x) => x.key !== f.key), f].sort((a, b) => a.key.localeCompare(b.key)),
+    }));
   const toggle = async (key: string, enabled: boolean) => {
     setBusy(key);
     try {
@@ -117,27 +142,42 @@ function Flags() {
   };
   const known = Object.values(FLAGS) as string[];
   return (
-    <Card title="Flags" sub="Mudam o comportamento do app sem nova versão. Cada isolate do Worker vê a mudança em até 30 s.">
+    <Card
+      title="Flags"
+      sub="Mudam o comportamento do app sem nova versão. Cada isolate do Worker vê a mudança em até 30 s."
+    >
       <Async load={load}>
         {(d) => {
           const keys = [...new Set([...known, ...d.items.map((f) => f.key)])];
           return (
-            <ul class="ad-feed">
+            <ul class="ad-flags">
               {keys.map((key) => {
                 const f = d.items.find((x) => x.key === key);
                 const r = (f?.rules ?? null) as { users?: string[]; plans?: string[]; roles?: string[] } | null;
                 const nRules = (r?.users?.length ?? 0) + (r?.plans?.length ?? 0) + (r?.roles?.length ?? 0);
                 return (
-                  <li key={key} style={{ alignItems: 'center' }}>
-                    <Switch id={`flag-${key}`} on={!!f?.enabled} label={key} disabled={busy === key} onChange={(v) => void toggle(key, v)} />
-                    <label for={`flag-${key}`} class="grow" style={{ minWidth: '0', cursor: 'pointer' }}>
+                  <li key={key} class="ad-flag">
+                    <Switch
+                      id={`flag-${key}`}
+                      on={!!f?.enabled}
+                      label={key}
+                      disabled={busy === key}
+                      onChange={(v) => void toggle(key, v)}
+                    />
+                    <label for={`flag-${key}`} class="ad-flag-t">
                       <span class="ad-bool-l ad-mono">{key}</span>
-                      <span class="xs" style={{ display: 'block' }}>
-                        {FLAG_INFO[key] ?? 'Flag personalizada.'}
-                        {f ? ` · ${f.rolloutPct}% dos alunos${nRules ? ` + ${nRules} na lista` : ''} · ${fmtAgo(f.updatedAt)}${f.updatedBy ? ` por ${email(f.updatedBy) ?? 'alguém'}` : ''}` : ' · ainda não criada (desligada)'}
+                      <span class="sm">{FLAG_INFO[key] ?? 'Flag personalizada.'}</span>
+                      <span class="xs">
+                        {f
+                          ? `${f.rolloutPct}% dos alunos${nRules ? ` + ${nRules} na lista` : ''} · mudou ${fmtAgo(f.updatedAt)}${f.updatedBy ? ` por ${email(f.updatedBy) ?? 'alguém'}` : ''}`
+                          : 'Ainda não criada (desligada)'}
                       </span>
                     </label>
-                    {f ? <Button label="Regras" icon="sliders" kind="light" onClick={() => setRules(f)} /> : null}
+                    {f ? (
+                      <span class="ad-flag-a">
+                        <Button label="Regras" icon="sliders" kind="light" onClick={() => setRules(f)} />
+                      </span>
+                    ) : null}
                   </li>
                 );
               })}
@@ -146,8 +186,7 @@ function Flags() {
         }}
       </Async>
       <form
-        class="row wrapx"
-        style={{ '--gap': '8px' }}
+        class="ad-inlineform"
         onSubmit={(e) => {
           e.preventDefault();
           if (/^[a-z][a-z0-9_.-]{0,79}$/.test(newKey)) {
@@ -156,9 +195,27 @@ function Flags() {
           }
         }}
       >
-        <TextIn id="flag-new" class="ad-mono" value={newKey} onValue={(v) => setNewKey(v.toLowerCase())} placeholder="nova.flag" aria-label="Chave da nova flag" style={{ maxWidth: '280px' }} />
-        <Button label="Criar flag (desligada)" icon="plus" kind="light" type="submit" disabled={!/^[a-z][a-z0-9_.-]{0,79}$/.test(newKey)} />
+        <Field id="flag-new" label="Nova flag">
+          <TextIn
+            id="flag-new"
+            class="ad-mono"
+            value={newKey}
+            onValue={(v) => setNewKey(v.toLowerCase())}
+            placeholder="ex.: mic.novo_modo"
+            aria-describedby="flag-new-hint"
+          />
+        </Field>
+        <Button
+          label="Criar flag"
+          icon="plus"
+          kind="light"
+          type="submit"
+          disabled={!/^[a-z][a-z0-9_.-]{0,79}$/.test(newKey)}
+        />
       </form>
+      <p class="xs" id="flag-new-hint">
+        Minúsculas, números, ponto, hífen ou _. A flag nova nasce desligada.
+      </p>
       {rules ? (
         <RulesModal
           flag={rules}
@@ -175,7 +232,19 @@ function Flags() {
 
 // ---------- Settings ----------
 
-function SettingRow({ k, label, hint, s, onSaved }: { k: string; label: string; hint: string; s?: AppSetting; onSaved: (s: AppSetting) => void }) {
+function SettingRow({
+  k,
+  label,
+  hint,
+  s,
+  onSaved,
+}: {
+  k: string;
+  label: string;
+  hint: string;
+  s?: AppSetting;
+  onSaved: (s: AppSetting) => void;
+}) {
   const [v, setV] = useState(s?.value ?? '');
   const [busy, setBusy] = useState(false);
   useEffect(() => setV(s?.value ?? ''), [s?.value]);
@@ -204,7 +273,14 @@ function SettingRow({ k, label, hint, s, onSaved }: { k: string; label: string; 
         <TextIn id={id} class="ad-mono" value={v} onValue={setV} placeholder="(padrão)" />
       </Field>
       <div class="row" style={{ '--gap': '8px', paddingBottom: '22px' }}>
-        <Button label="Salvar" icon="check" kind="light" type="submit" busy={busy} disabled={!v.trim() || v.trim() === (s?.value ?? '')} />
+        <Button
+          label="Salvar"
+          icon="check"
+          kind="light"
+          type="submit"
+          busy={busy}
+          disabled={!v.trim() || v.trim() === (s?.value ?? '')}
+        />
         <span class="xs ad-mono">{k}</span>
       </div>
     </form>
@@ -215,10 +291,11 @@ function AppSettings() {
   const load = useLoad((signal) => call(adminOpsApi.settings, { signal }), []);
   const current = load.data?.items.find((s) => s.key === SETTINGS.contentCurrent);
   return (
-    <Card title="Configurações do app" sub="Valores que o Worker lê a cada pedido. Vazio = o padrão do código.">
+    <Card title="Valores do app" sub="O que o Worker lê a cada pedido. Vazio = o padrão do código.">
       {current ? (
         <div class="ad-note bl">
-          <Icon name="rocket" size={18} /> Versão publicada: <code class="ad-mono">{current.value.slice(0, 12)}</code> desde {fmtDateTime(current.updatedAt)}. Ela só muda por Publicações.
+          <Icon name="rocket" size={18} /> Versão publicada: <code class="ad-mono">{current.value.slice(0, 12)}</code>{' '}
+          desde {fmtDateTime(current.updatedAt)}. Ela só muda por Publicações.
         </div>
       ) : null}
       <Async load={load}>
@@ -231,7 +308,9 @@ function AppSettings() {
                 label={label}
                 hint={hint}
                 s={d.items.find((x) => x.key === k)}
-                onSaved={(s) => load.setData((p) => ({ items: [...(p?.items ?? []).filter((x) => x.key !== s.key), s] }))}
+                onSaved={(s) =>
+                  load.setData((p) => ({ items: [...(p?.items ?? []).filter((x) => x.key !== s.key), s] }))
+                }
               />
             ))}
           </div>
@@ -261,11 +340,17 @@ function Prompts() {
     if (!cur) return;
     setBusy(true);
     try {
-      const res = await call(adminAiApi.setPrompt, { params: { key: cur.key }, body: { template: text, expectedVersion: cur.version } });
+      const res = await call(adminAiApi.setPrompt, {
+        params: { key: cur.key },
+        body: { template: text, expectedVersion: cur.version },
+      });
       load.setData((p) => ({ items: (p?.items ?? []).map((x) => (x.key === res.item.key ? res.item : x)) }));
       toast(`Prompt salvo (versão ${res.item.version}).`);
     } catch (e) {
-      toast(isCode(e, 'conflict') ? 'Alguém salvou este prompt antes. Recarregue para ver a versão nova.' : errorMessage(e), 'err');
+      toast(
+        isCode(e, 'conflict') ? 'Alguém salvou este prompt antes. Recarregue para ver a versão nova.' : errorMessage(e),
+        'err',
+      );
     } finally {
       setBusy(false);
     }
@@ -279,19 +364,40 @@ function Prompts() {
           ) : (
             <>
               <div class="row wrapx" style={{ '--gap': '10px' }}>
-                <Sel ariaLabel="Prompt" value={cur.key} onValue={setSel} options={items.map((p) => [p.key, PROMPT_INFO[p.key] ?? p.key] as const)} cls="ad-grow" />
+                <Sel
+                  ariaLabel="Prompt"
+                  value={cur.key}
+                  onValue={setSel}
+                  options={items.map((p) => [p.key, PROMPT_INFO[p.key] ?? p.key] as const)}
+                  cls="ad-grow"
+                />
                 <Pill label={`versão ${cur.version}`} tone="navy" />
                 <span class="xs">
                   {fmtAgo(cur.updatedAt)}
                   {cur.updatedBy ? ` por ${email(cur.updatedBy) ?? 'alguém'}` : ''}
                 </span>
               </div>
-              <Field id="prompt-t" label="Modelo" hint={`${text.length} caracteres. As variáveis entre chaves são preenchidas pelo servidor.`}>
+              <Field
+                id="prompt-t"
+                label="Modelo"
+                hint={`${text.length} caracteres. As variáveis entre chaves são preenchidas pelo servidor.`}
+              >
                 <Area id="prompt-t" value={text} onValue={setText} rows={16} mono maxLength={20000} />
               </Field>
               <div class="row" style={{ '--gap': '8px' }}>
-                <Button label="Salvar nova versão" icon="check" busy={busy} disabled={text === cur.template || !text.trim()} onClick={() => void save()} />
-                <Button label="Descartar" kind="light" disabled={text === cur.template || busy} onClick={() => setText(cur.template)} />
+                <Button
+                  label="Salvar nova versão"
+                  icon="check"
+                  busy={busy}
+                  disabled={text === cur.template || !text.trim()}
+                  onClick={() => void save()}
+                />
+                <Button
+                  label="Descartar"
+                  kind="light"
+                  disabled={text === cur.template || busy}
+                  onClick={() => setText(cur.template)}
+                />
                 <Button label="Recarregar" kind="link" onClick={load.reload} />
               </div>
             </>
@@ -305,7 +411,7 @@ function Prompts() {
 export function Settings({ q }: ScreenProps) {
   const tabs = [
     ...(can('flags.manage') ? ([['flags', 'Flags']] as const) : []),
-    ...(can('settings.manage') ? ([['app', 'Configurações']] as const) : []),
+    ...(can('settings.manage') ? ([['app', 'Valores do app']] as const) : []),
     ...(can('ai.prompts') ? ([['prompts', 'Prompts da IA']] as const) : []),
   ];
   const tab = tabs.some(([t]) => t === q.aba) ? (q.aba as string) : (tabs[0]?.[0] ?? 'flags');
@@ -313,14 +419,13 @@ export function Settings({ q }: ScreenProps) {
     <Page
       title="Configurações"
       kicker="Operação"
-      width={980}
       bar={
         tabs.length > 1 ? (
-          <nav class="ad-tabs" aria-label="Partes">
+          <TabsNav label="Partes das configurações">
             {tabs.map(([t, l]) => (
               <a
                 key={t}
-                href="#/config"
+                href={`#/config?aba=${t}`}
                 class={`ad-tab${t === tab ? ' on' : ''}`}
                 aria-current={t === tab ? 'page' : undefined}
                 onClick={(e) => {
@@ -331,7 +436,7 @@ export function Settings({ q }: ScreenProps) {
                 {l}
               </a>
             ))}
-          </nav>
+          </TabsNav>
         ) : undefined
       }
     >

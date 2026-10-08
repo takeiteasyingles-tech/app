@@ -16,7 +16,7 @@ export {
   summaryLevel,
 } from './engine';
 export { softAwardKey } from './keys';
-export { DEFAULT_DAILY_CAPS, MAGGIE_TURNS_PER_SESSION } from './rules';
+export { DEFAULT_DAILY_CAPS, MAGGIE_TURNS_PER_SESSION, SERVER_DAILY_CAPS } from './rules';
 
 export const awardFactory: ServiceFactory<'award'> = (env) => createGameEngine(env.DB);
 

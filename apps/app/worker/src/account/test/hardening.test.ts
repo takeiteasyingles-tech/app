@@ -1,9 +1,24 @@
 /// <reference types="@cloudflare/vitest-plugin/types" />
 // Regression tests for the S1 review: atomic lockout, reset limiter, profile rules, idempotent
 // onboarding completion, new-account streak, concurrent photo uploads and account route limits.
+import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { appApi, type PhotoRes, ProfileCompleteRes, type ProfileRes, type SettingsRes, TieState } from '@tie/shared';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { all, Client, freshIp, one, photoForm, pngBytes, resetDb, signup, testEnv } from './helpers';
+import { type Env, FAILED_LOGIN_DECAY_MS, hashToken } from '@tie/worker-core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  all,
+  buildApp,
+  Client,
+  freshIp,
+  ORIGIN,
+  one,
+  photoForm,
+  pngBytes,
+  resetDb,
+  signup,
+  signupBody,
+  testEnv,
+} from './helpers';
 
 const A = appApi.auth;
 const M = appApi.me;
@@ -154,6 +169,119 @@ describe('concurrent photo uploads', () => {
     expect(
       await all("SELECT id FROM moderation_items WHERE subject_user_id = ? AND status = 'pending'", id),
     ).toHaveLength(1);
+  });
+});
+
+describe('spec 06 auth minors', () => {
+  it('signup checks Turnstile before the duplicate email (no enumeration without Turnstile)', async () => {
+    await signup('taken@example.com');
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => Response.json({ success: false, 'error-codes': ['invalid-input-response'] }));
+    try {
+      const failing = { ...testEnv, TURNSTILE_SECRET: '2x0000000000000000000000000000000AA' } as Env;
+      const ctx = createExecutionContext();
+      const res = await buildApp().fetch(
+        new Request(`${ORIGIN}${A.signup.path}`, {
+          method: 'POST',
+          headers: {
+            Origin: ORIGIN,
+            'Sec-Fetch-Site': 'same-origin',
+            'Content-Type': 'application/json',
+            'CF-Connecting-IP': freshIp(),
+          },
+          body: JSON.stringify(signupBody('taken@example.com')),
+        }),
+        failing,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+      expect(((await res.json()) as ErrBody).error?.code).toBe('turnstile_failed');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('failed logins older than the decay window stop counting', async () => {
+    const { id } = await signup('decay@example.com');
+    await testEnv.DB.prepare('UPDATE users SET failed_logins = 9, failed_at = ? WHERE id = ?')
+      .bind(Date.now() - FAILED_LOGIN_DECAY_MS - 1000, id)
+      .run();
+    const wrong = { email: 'decay@example.com', password: 'wrong-pass', turnstileToken: 't' };
+    const r = await new Client().json<ErrBody>(A.login.path, { json: wrong });
+    expect(r.body.error?.code).toBe('invalid_credentials');
+    expect(await one('SELECT failed_logins, locked_until FROM users WHERE id = ?', id)).toEqual({
+      failed_logins: 1,
+      locked_until: null,
+    });
+    // Recent failures still add up to the lock.
+    await testEnv.DB.prepare('UPDATE users SET failed_logins = 9, failed_at = ? WHERE id = ?')
+      .bind(Date.now(), id)
+      .run();
+    expect((await new Client().json<ErrBody>(A.login.path, { json: wrong })).body.error?.code).toBe('account_locked');
+  });
+
+  it('two consumers of one reset token in the same millisecond: exactly one wins', async () => {
+    const { id } = await signup('twin-reset@example.com');
+    const token = 'reset-token-0123456789abcdefghijklmnopqrstuvwxyz';
+    await testEnv.DB.prepare(
+      "INSERT INTO one_time_tokens(token_hash, user_id, kind, expires_at) VALUES(?, ?, 'reset', ?)",
+    )
+      .bind(await hashToken(token), id, Date.now() + 60_000)
+      .run();
+    const realNow = Date.now;
+    const frozen = realNow();
+    Date.now = () => frozen;
+    const passwords = ['senha-um-111', 'senha-dois-222'];
+    let winner = -1;
+    try {
+      const results = await Promise.all(
+        passwords.map((password) =>
+          new Client().json<ErrBody & { ok?: boolean }>(A.resetConsume.path, {
+            json: { token, password, turnstileToken: 't' },
+          }),
+        ),
+      );
+      expect(results.map((r) => r.body.ok === true).filter(Boolean)).toHaveLength(1);
+      expect(results.map((r) => r.body.error?.code).filter(Boolean)).toEqual(['token_invalid']);
+      expect(await all("SELECT id FROM audit_log WHERE action = 'auth.reset_consume'")).toHaveLength(1);
+      winner = results.findIndex((r) => r.body.ok === true);
+    } finally {
+      Date.now = realNow;
+    }
+    // The loser wrote nothing: the password is the winner's.
+    const login = (password: string) =>
+      new Client().json<ErrBody>(A.login.path, {
+        json: { email: 'twin-reset@example.com', password, turnstileToken: 't' },
+      });
+    expect((await login(passwords[1 - winner] as string)).body.error?.code).toBe('invalid_credentials');
+    expect((await login(passwords[winner] as string)).status).toBe(200);
+  });
+
+  it('"Zerar progresso" keeps Mic sessions with a pending moderation item', async () => {
+    const { client, id } = await signup('evidence@example.com');
+    const now = Date.now();
+    const db = testEnv.DB;
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO mic_sessions(id, user_id, assistant_key, mode, started_at, billed_until, status, flagged)
+           VALUES ('E-pending', ?1, 'margaret', 'livre', ?2, ?2, 'ended', 1),
+                  ('E-decided', ?1, 'margaret', 'livre', ?2, ?2, 'ended', 1),
+                  ('E-plain', ?1, 'margaret', 'livre', ?2, ?2, 'ended', 0)`,
+        )
+        .bind(id, now),
+      db
+        .prepare(
+          `INSERT INTO moderation_items(id, kind, subject_user_id, ref_type, ref_id, status, created_at)
+           VALUES ('MP', 'transcript', ?1, 'mic_turn', 'E-pending:0', 'pending', ?2),
+                  ('MD', 'transcript', ?1, 'mic_turn', 'E-decided:0', 'dismissed', ?2)`,
+        )
+        .bind(id, now),
+    ]);
+    const r = await client.send(M.resetProgress.path, { method: 'POST', json: { confirm: true } });
+    expect(r.status).toBe(200);
+    expect(await all('SELECT id FROM mic_sessions WHERE user_id = ? ORDER BY id', id)).toEqual([{ id: 'E-pending' }]);
   });
 });
 

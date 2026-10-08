@@ -22,6 +22,18 @@ export const ENGINE_ONLY_KINDS: ReadonlySet<PointKind> = new Set<PointKind>(['mi
  */
 export const DEFAULT_DAILY_CAPS: Readonly<Record<SoftEventKind, number>> = { song: 20, quiz_hit: 60, word: 40 };
 
+/**
+ * Daily caps for server-verified kinds that can still repeat many times a day (spec 06 "Game
+ * engine"): Mic turns and sessions (S7's own rolling-24 h bounds stay on top), and reviewed cards
+ * (new manual cards are due at once, so without a cap they would be a points farm). The seed
+ * writes the same numbers into point_rules; like the soft caps, they apply only to a missing row.
+ */
+export const SERVER_DAILY_CAPS: Readonly<Partial<Record<PointKind, number>>> = {
+  maggie_turn: 100,
+  maggie_session: 8,
+  card: 100,
+};
+
 /** Mic turns that earn maggie_turn points per session (spec 04 §2 award keys). */
 export const MAGGIE_TURNS_PER_SESSION = 20;
 
@@ -60,7 +72,7 @@ export function pointRuleFor(kind: PointKind, rows: readonly PointRuleRow[]): Po
   const softCap = (SOFT_EVENT_KINDS as readonly string[]).includes(kind)
     ? DEFAULT_DAILY_CAPS[kind as SoftEventKind]
     : null;
-  return { points: POINTS[kind], dailyCap: softCap };
+  return { points: POINTS[kind], dailyCap: softCap ?? SERVER_DAILY_CAPS[kind] ?? null };
 }
 
 interface LevelRow {

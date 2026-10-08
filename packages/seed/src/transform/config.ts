@@ -78,6 +78,12 @@ export const BADGE_RULES: Record<string, BadgeRule> = {
  */
 export const SOFT_CAPS: Record<string, number> = { song: 10, quiz_hit: 30, word: 20 };
 
+/**
+ * Server-verified kinds that still repeat many times a day get a cap too (spec 06): Mic turns and
+ * sessions, and reviewed cards. Same numbers as the engine's SERVER_DAILY_CAPS (game/rules.ts).
+ */
+export const SERVER_CAPS: Record<string, number> = { maggie_turn: 100, maggie_session: 8, card: 100 };
+
 export const PLAN_DEFS = [
   { slug: 'gratis', name: 'Grátis', minutes: 60, features: {}, isDefault: true },
   {
@@ -115,7 +121,7 @@ export function buildConfig(X: Extracted, now: number): SeedConfig {
   const point_rules: PointRuleRowDb[] = Object.entries(X.POINTS).map(([kind, points]) => ({
     kind,
     points,
-    daily_cap: SOFT_CAPS[kind] ?? null,
+    daily_cap: SOFT_CAPS[kind] ?? SERVER_CAPS[kind] ?? null,
     verifiable: kind in SOFT_CAPS ? 0 : 1,
   }));
   const levels: LevelRowDb[] = X.LEVELS.map(([min, name], i) => ({ n: i + 1, min_points: min, name }));

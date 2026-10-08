@@ -1,7 +1,12 @@
 // Assistentes do Mic: public profile (name, tag, greeting), voice (server TTS speaker and browser
 // voice), poster, thumbnail and the four video clips. The persona (the AI's instructions) is a separate,
 // admin-only field (ai.persona): editors never see it.
-import { adminAiApi, AssistantEdit as AssistantSchema, type AssistantRow, adminContentApi } from '@tie/shared/contracts/admin';
+import {
+  type AssistantRow,
+  AssistantEdit as AssistantSchema,
+  adminAiApi,
+  adminContentApi,
+} from '@tie/shared/contracts/admin';
 import { useEffect, useState } from 'preact/hooks';
 import { call, errorMessage } from '../../api';
 import { go } from '../../router';
@@ -14,14 +19,34 @@ import { useMedia } from '../../ui/media';
 import { toast } from '../../ui/toast';
 import { zodErrors } from '../../ui/validate';
 import type { ScreenProps } from '../registry';
-import { type CrudApi, CreateModal, crud, DraftNote, keysOf, patchOf, pick, slugify } from './common';
+import { CreateModal, type CrudApi, crud, DraftNote, keysOf, patchOf, pick, slugify } from './common';
 import { DocEditor, tabFinder } from './DocEditor';
 
 const C = adminContentApi;
 const KEYS = keysOf(AssistantSchema.create);
 
 /** Deepgram Aura voices the Worker accepts (apps/admin/worker lib/entities AURA_SPEAKERS). */
-const SPEAKERS = ['asteria', 'luna', 'stella', 'athena', 'hera', 'orion', 'arcas', 'perseus', 'angus', 'orpheus', 'helios', 'zeus'];
+const SPEAKERS: readonly (readonly [string, 'f' | 'm'])[] = [
+  ['asteria', 'f'],
+  ['luna', 'f'],
+  ['stella', 'f'],
+  ['athena', 'f'],
+  ['hera', 'f'],
+  ['orion', 'm'],
+  ['arcas', 'm'],
+  ['perseus', 'm'],
+  ['angus', 'm'],
+  ['orpheus', 'm'],
+  ['helios', 'm'],
+  ['zeus', 'm'],
+];
+
+/** "asteria" → "Asteria (feminina)". */
+export function voiceLabel(key: string): string {
+  const g = SPEAKERS.find(([k]) => k === key)?.[1];
+  const name = key.charAt(0).toUpperCase() + key.slice(1);
+  return g ? `${name} (${g === 'f' ? 'feminina' : 'masculina'})` : name;
+}
 
 const SPECS: Record<string, readonly Spec[]> = {
   perfil: [
@@ -54,7 +79,7 @@ const SPECS: Record<string, readonly Spec[]> = {
       k: 'ttsSpeaker',
       label: 'Voz do servidor (TTS)',
       hint: 'Voz Deepgram Aura usada com a IA ligada.',
-      options: SPEAKERS.map((s) => [s, s] as const),
+      options: SPEAKERS.map(([s]) => [s, voiceLabel(s)] as const),
     },
     {
       t: 'obj',
@@ -140,8 +165,19 @@ function Persona({ k }: { k: string }) {
             <Area id="persona" value={text} onValue={setText} rows={10} maxLength={4000} />
           </Field>
           <div class="row" style={{ '--gap': '8px' }}>
-            <Button label="Salvar persona" icon="check" busy={busy} disabled={!dirty || !text.trim()} onClick={() => void save()} />
-            <Button label="Descartar" kind="light" disabled={!dirty || busy} onClick={() => setText(load.data?.persona ?? '')} />
+            <Button
+              label="Salvar persona"
+              icon="check"
+              busy={busy}
+              disabled={!dirty || !text.trim()}
+              onClick={() => void save()}
+            />
+            <Button
+              label="Descartar"
+              kind="light"
+              disabled={!dirty || busy}
+              onClick={() => setText(load.data?.persona ?? '')}
+            />
           </div>
         </>
       )}
@@ -158,7 +194,13 @@ function Preview({ d }: { d: AssistantRow }) {
         <div class="ad-phone-in navy on-navy">
           <div class="assist-row">
             <div class="assist on">
-              {thumb ? <img src={thumb.url} alt="" /> : <span class="av-ini" style={{ '--s': '60px' }}>{d.name.slice(0, 2).toUpperCase()}</span>}
+              {thumb ? (
+                <img src={thumb.url} alt="" />
+              ) : (
+                <span class="av-ini" style={{ '--s': '60px' }}>
+                  {d.name.slice(0, 2).toUpperCase()}
+                </span>
+              )}
               <b>{d.name}</b>
               <span>{d.tag ?? ''}</span>
             </div>
@@ -221,14 +263,47 @@ export function AssistantEdit({ params, q }: ScreenProps) {
   );
 }
 
-function Face({ id, name }: { id: string | null; name: string }) {
+function Poster({ id, name }: { id: string | null; name: string }) {
   const m = useMedia(id);
-  return m ? (
-    <img class="ad-thumb sq" style={{ borderRadius: '50%' }} src={m.url} alt="" loading="lazy" />
-  ) : (
-    <span class="av-ini" style={{ '--s': '40px' }} aria-hidden="true">
-      {name.slice(0, 2).toUpperCase()}
+  return (
+    <span class="ad-acard-art">
+      {m ? (
+        <img class="ad-acard-img" src={m.url} alt="" loading="lazy" decoding="async" />
+      ) : m === undefined ? null : (
+        <span class="ad-acard-ini" aria-hidden="true">
+          {name.slice(0, 2).toUpperCase()}
+        </span>
+      )}
     </span>
+  );
+}
+
+function AssistantCard({ a }: { a: AssistantRow }) {
+  const clips = Object.keys(a.clips).length;
+  return (
+    <a class="ad-acard" href={`#/conteudo/assistentes/${a.key}`}>
+      <Poster id={a.posterMedia ?? a.thumbMedia} name={a.name} />
+      <span class="ad-acard-st">
+        <Pill label={a.active ? 'Disponível' : 'Fora da escolha'} tone={a.active ? 'gr' : ''} />
+      </span>
+      <span class="ad-acard-b">
+        <span class="ad-cell2">
+          <b class="h3">{a.name}</b>
+          <span class="xs">{a.fullName}</span>
+        </span>
+        <span class="sm ad-acard-tag">{a.tag || a.role || 'Sem descrição curta'}</span>
+        <dl class="ad-acard-facts">
+          <div>
+            <dt>Voz</dt>
+            <dd>{voiceLabel(a.ttsSpeaker)}</dd>
+          </div>
+          <div>
+            <dt>Vídeos</dt>
+            <dd class={clips < 4 ? 'ad-err-t' : ''}>{clips} de 4</dd>
+          </div>
+        </dl>
+      </span>
+    </a>
   );
 }
 
@@ -237,28 +312,18 @@ export function Assistants(_: ScreenProps) {
   const [creating, setCreating] = useState(false);
   const all = load.data?.items ?? [];
   return (
-    <Page title="Assistentes" kicker="Conteúdo · Mic" actions={<Button label="Nova assistente" icon="plus" onClick={() => setCreating(true)} />}>
+    <Page
+      title="Assistentes"
+      kicker="Conteúdo · Mic"
+      actions={<Button label="Nova assistente" icon="plus" onClick={() => setCreating(true)} />}
+    >
       <DraftNote />
       <Async load={load}>
         {(d) =>
           d.items.length ? (
-            <div class="ad-mgrid">
+            <div class="ad-agrid">
               {d.items.map((a) => (
-                <a key={a.key} class="ad-mcard" href={`#/conteudo/assistentes/${a.key}`} style={{ padding: '14px' }}>
-                  <div class="row" style={{ '--gap': '10px' }}>
-                    <Face id={a.thumbMedia} name={a.name} />
-                    <span class="ad-cell2">
-                      <b>{a.name}</b>
-                      <span class="xs">{a.fullName}</span>
-                    </span>
-                  </div>
-                  <div class="row wrapx" style={{ '--gap': '6px' }}>
-                    {a.tag ? <Pill label={a.tag} tone="gold" /> : null}
-                    <Pill label={a.active ? 'Disponível' : 'Fora da escolha'} tone={a.active ? 'gr' : ''} />
-                    <Pill label={`voz ${a.ttsSpeaker}`} />
-                  </div>
-                  <span class="xs">{Object.keys(a.clips).length} de 4 vídeos</span>
-                </a>
+                <AssistantCard key={a.key} a={a} />
               ))}
             </div>
           ) : (

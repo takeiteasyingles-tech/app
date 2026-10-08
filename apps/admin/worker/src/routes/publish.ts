@@ -18,6 +18,7 @@ import {
 import {
   CONTENT_TABLES,
   type CompiledContent,
+  type CompileIssue,
   ContentCompileError,
   type ContentRows,
   compileContent,
@@ -75,10 +76,49 @@ const currentVersion = async (db: D1Database): Promise<string | null> =>
   (await one<{ value: string }>(db, 'SELECT value FROM app_settings WHERE key = ?', SETTINGS.contentCurrent))?.value ??
   null;
 
+/** Tables whose rows show a title to learners, with how each row is named in an issue. */
+const TITLED: readonly (readonly [keyof ContentRows, string, (r: Record<string, unknown>) => string])[] = [
+  ['episodes', 'Episódio', (r) => String(r.num)],
+  ['ebooks', 'E-book', (r) => String(r.num)],
+  ['extras', 'Extra', (r) => String(r.id)],
+  ['albums', 'Álbum', (r) => String(r.id)],
+  ['album_tracks', 'Faixa', (r) => String(r.id)],
+  ['mic_missions', 'Missão do Mic', (r) => String(r.key)],
+];
+
+/**
+ * Rows saved with a blank title before the edit bodies required one: they never reach a release
+ * (the compile schemas accept any string, so this check runs first).
+ * An e-book none of whose episodes is published may stay untitled: the seed creates e-books 4-10
+ * that way (the prototype names only 1-3), learners never open its hub, and the Trilha labels it
+ * with its first episode's title. It needs a title once one of its episodes is published.
+ */
+export function blankTitleIssues(rows: ContentRows): CompileIssue[] {
+  const out: CompileIssue[] = [];
+  const liveEbooks = new Set(rows.episodes.filter((e) => e.status === 'published').map((e) => e.ebook_num));
+  for (const [table, noun, name] of TITLED) {
+    for (const r of rows[table] as unknown as Record<string, unknown>[]) {
+      if (typeof r.title === 'string' && r.title.trim() !== '') continue;
+      if (table === 'ebooks' && !liveEbooks.has(r.num as number)) continue;
+      out.push({ file: table, path: `${name(r)}.title`, message: `${noun} ${name(r)} está sem título.` });
+    }
+  }
+  return out;
+}
+
 /** Compiles the D1 content; an unchanged set keeps its earlier release's publishedAt (stable manifest/ETag). */
 async function compileNow(db: D1Database, now: number): Promise<CompiledContent> {
   const rows = await readContentRows(db);
-  let compiled = await compileContent(rows, { publishedAt: now });
+  const blank = blankTitleIssues(rows);
+  let compiled: CompiledContent;
+  try {
+    compiled = await compileContent(rows, { publishedAt: now });
+  } catch (err) {
+    // One list with every problem, blank titles first.
+    if (blank.length && err instanceof ContentCompileError) throw new ContentCompileError([...blank, ...err.issues]);
+    throw err;
+  }
+  if (blank.length) throw new ContentCompileError(blank);
   const prior = await one<{ published_at: number }>(
     db,
     'SELECT published_at FROM content_releases WHERE version = ?',

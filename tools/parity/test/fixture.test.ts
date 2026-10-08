@@ -18,8 +18,8 @@ describe('fixture isolation', () => {
     expect(main?.state.maggie.sessions.map((s: { id: string }) => s.id)).toEqual(['56xdhnp', '3dekeaw']);
     const ids = new Set<string>();
     for (const u of users) for (const s of u.state.maggie?.sessions ?? []) ids.add(`${s.id}`);
-    // main 2 + ep1-s7..s10 2 each (fresh has none), all distinct
-    expect(ids.size).toBe(10);
+    // main 2 + ep1-s7..s10 and ep1-done 2 each (fresh has none), all distinct
+    expect(ids.size).toBe(12);
   });
 
   it('isolateState renames session ids deterministically and sets the email', () => {
@@ -97,7 +97,9 @@ describe('fixture isolation', () => {
         Number(
           (
             db
-              .prepare("SELECT COUNT(*) AS n FROM users WHERE id LIKE 'U_PARITY%' AND id <> 'U_PARITY_ADMIN'")
+              .prepare(
+                "SELECT COUNT(*) AS n FROM users WHERE id LIKE 'U_PARITY%' AND id NOT IN ('U_PARITY_ADMIN', 'U_PARITY_EDITOR')",
+              )
               .get() as { n: number }
           ).n,
         );

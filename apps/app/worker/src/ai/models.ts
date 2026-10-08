@@ -1,7 +1,7 @@
 // Workers AI model ids and the thin wrappers around env.AI.run (spec 04 §3.1).
 // Model ids live in app_settings (SETTINGS.model*) so an admin can swap them without a deploy;
-// DEFAULT_MODELS is the fallback. Ids could not be checked against the account catalog from this
-// workspace (no API token), so verify them at deploy time with `wrangler ai models list`.
+// DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
+// them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
 import { DEFAULT_MODELS, FLAGS, SETTINGS } from '@tie/shared';
 import { all, type Env, type FlagSubject, isEnabled } from '@tie/worker-core';
 

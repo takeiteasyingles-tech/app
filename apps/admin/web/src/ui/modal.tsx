@@ -22,9 +22,11 @@ export interface ModalProps {
   size?: 'md' | 'lg' | 'xl';
   /** Escape / scrim do nothing (a request is running). */
   locked?: boolean;
+  /** Extra class on the sheet (e.g. the navy menu sheet). */
+  cls?: string;
 }
 
-export function Modal({ title, onClose, children, foot, size = 'md', locked }: ModalProps) {
+export function Modal({ title, onClose, children, foot, size = 'md', locked, cls = '' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const closeRef = useRef(onClose);
@@ -36,7 +38,10 @@ export function Modal({ title, onClose, children, foot, size = 'md', locked }: M
     const opener = document.activeElement as HTMLElement | null;
     const el = ref.current;
     if (el) {
-      const first = el.querySelector<HTMLElement>('[data-autofocus]') ?? el.querySelector<HTMLElement>(`.ad-sheet-body ${FOCUSABLE}`) ?? el.querySelector<HTMLElement>(FOCUSABLE);
+      const first =
+        el.querySelector<HTMLElement>('[data-autofocus]') ??
+        el.querySelector<HTMLElement>(`.ad-sheet-body ${FOCUSABLE}`) ??
+        el.querySelector<HTMLElement>(FOCUSABLE);
       (first ?? el).focus();
     }
     return () => {
@@ -68,22 +73,31 @@ export function Modal({ title, onClose, children, foot, size = 'md', locked }: M
 
   const host = document.getElementById('overlayroot') ?? document.body;
   return createPortal(
-    <div class="overlay ad-overlay" onKeyDown={onKeyDown}>
+    <div class="overlay ad-overlay">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only shortcut; Esc and the Fechar button cover the keyboard. */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: same as above. */}
       <div class="scrim" onClick={() => !lockedRef.current && closeRef.current()} />
       <div
         ref={ref}
-        class={`sheet ad-sheet ad-${size}`}
+        class={`sheet ad-sheet ad-${size} ${cls}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        onKeyDown={onKeyDown}
       >
         <div class="grab" aria-hidden="true" />
         <div class="ad-sheet-h">
           <h2 class="h2 grow" id={titleId}>
             {title}
           </h2>
-          <button type="button" class="iconbtn" aria-label="Fechar" disabled={locked} onClick={() => closeRef.current()}>
+          <button
+            type="button"
+            class="iconbtn"
+            aria-label="Fechar"
+            disabled={locked}
+            onClick={() => closeRef.current()}
+          >
             <Icon name="close" size={18} />
           </button>
         </div>
@@ -169,7 +183,14 @@ function ConfirmDialog({ p }: { p: Pending }) {
       {p.body ? <div class="p">{p.body}</div> : null}
       {p.reason ? (
         <Field id={`${id}-r`} label={p.reason.label} opt={!p.reason.required}>
-          <Area id={`${id}-r`} value={reason} onValue={setReason} rows={3} maxLength={500} placeholder={p.reason.placeholder} />
+          <Area
+            id={`${id}-r`}
+            value={reason}
+            onValue={setReason}
+            rows={3}
+            maxLength={500}
+            placeholder={p.reason.placeholder}
+          />
         </Field>
       ) : null}
       {p.typeToConfirm ? (

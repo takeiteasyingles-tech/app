@@ -107,10 +107,57 @@ describe('typed answer grading (TEST acc lists, shared norm())', () => {
   });
 });
 
+/** Every episode of e-book `n` done for the user: what opens its test on the trilha. */
+function finishEbook(w: World, user: string, n = 1): void {
+  w.db.exec(
+    `INSERT INTO episode_progress(user_id, episode_num, furthest_step, done_at, updated_at)
+     SELECT ?, num, 10, 1, 1 FROM episodes WHERE ebook_num = ?
+     ON CONFLICT(user_id, episode_num) DO UPDATE SET done_at = 1`,
+    user,
+    n,
+  );
+}
+
+describe('e-book test unlock (trilha)', () => {
+  let w: World;
+  beforeEach(() => {
+    w = world();
+  });
+
+  it('refuses answers and submits until every published episode of the e-book is done', async () => {
+    expect(await code(saveAnswers(w.deps(), 1, { answers: { 'eb1-t1': 0 } }))).toBe('gated');
+    expect(await code(submitTest(w.deps(), 1, { answers: ALL_RIGHT }))).toBe('gated');
+    w.db.exec(
+      'INSERT INTO episode_progress(user_id, episode_num, furthest_step, done_at, updated_at) VALUES(?, 1, 10, 1, 1)',
+      USER,
+    );
+    // Episode 2 (also e-book 1) is still open.
+    expect(await code(submitTest(w.deps(), 1, { answers: ALL_RIGHT }))).toBe('gated');
+    expect(w.award.calls).toEqual([]);
+    expect(w.db.rows('SELECT * FROM ebook_test_answers')).toEqual([]);
+    finishEbook(w, USER);
+    expect((await submitTest(w.deps(), 1, { answers: ALL_RIGHT })).passed).toBe(true);
+  });
+
+  it('shows the expected answers on the first submit only', async () => {
+    finishEbook(w, USER);
+    const first = await submitTest(w.deps(), 1, { answers: { 'eb1-t1': 1 } });
+    expect(first.results.every((r) => r.show !== '')).toBe(true);
+    const second = await submitTest(w.deps(), 1, { answers: { 'eb1-t1': 0 } });
+    expect(second.results.map((r) => r.show)).toEqual(second.results.map(() => ''));
+    // A redo keeps the result row, so it does not reopen the key either.
+    await saveAnswers(w.deps(), 1, { answers: {}, reset: true });
+    const third = await submitTest(w.deps(), 1, {});
+    expect(third.results.every((r) => r.show === '')).toBe(true);
+  });
+});
+
 describe('e-book test', () => {
   let w: World;
   beforeEach(() => {
     w = world();
+    finishEbook(w, USER);
+    finishEbook(w, OTHER);
   });
 
   const saved = () =>
@@ -158,10 +205,8 @@ describe('e-book test', () => {
     const pass = await submitTest(w.deps(), 1, { answers: ALL_RIGHT });
     expect(pass).toMatchObject({ score: 6, passed: true, award: { kind: 'test_pass', awarded: true } });
     expect(pass.results.map((r) => r.n)).toEqual([1, 2, 9, 13, 14, 16]);
-    expect(pass.results.find((r) => r.n === 14)).toMatchObject({
-      given: 'Good morning! I am Ana.',
-      show: 'Good morning. I’m Ana.',
-    });
+    // Second submit: graded, but the key is no longer sent (the client falls back to its file).
+    expect(pass.results.find((r) => r.n === 14)).toMatchObject({ given: 'Good morning! I am Ana.', show: '' });
 
     const again = await submitTest(w.deps(), 1, {});
     expect(again).toMatchObject({ score: 6, passed: true });

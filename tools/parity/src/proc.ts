@@ -146,9 +146,53 @@ export async function portFree(port: number): Promise<boolean> {
   return (await tryHost('127.0.0.1')) && (await tryHost('::1'));
 }
 
+/** True when the lock's owner is dead or the lock is older than staleMs; false if it vanished. */
+function lockIsStale(file: string, staleMs = 30 * 60_000): boolean {
+  try {
+    const pid = Number(readFileSync(file, 'utf8'));
+    const age = Date.now() - statSync(file).mtimeMs;
+    return !pid || !pidAlive(pid) || age > staleMs;
+  } catch {
+    return false; // vanished between calls: retry
+  }
+}
+
+/** A takeover side lock older than this was left by a crash and is cleared. */
+export const TAKEOVER_STALE_MS = 30_000;
+
+/**
+ * Removes a stale lock, serialized through a short-lived side lock (`<file>.takeover`) and re-checking
+ * staleness while holding it. Without it, two waiters that both saw the dead owner could both delete
+ * and recreate the lock: the second delete would remove the first one's fresh lock, and both would
+ * believe they hold it. True when this call held the side lock (the caller retries its O_EXCL create
+ * at once); false while another process is taking over (the caller waits).
+ */
+function takeOver(file: string, stillStale: () => boolean): boolean {
+  const side = `${file}.takeover`;
+  let fd: number;
+  try {
+    fd = openSync(side, 'wx');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    try {
+      if (Date.now() - statSync(side).mtimeMs > TAKEOVER_STALE_MS) rmSync(side, { force: true });
+    } catch {
+      // gone already
+    }
+    return false;
+  }
+  try {
+    closeSync(fd);
+    if (stillStale()) rmSync(file, { force: true });
+  } finally {
+    rmSync(side, { force: true });
+  }
+  return true;
+}
+
 /**
  * Exclusive lock through an O_EXCL file holding the owner pid. A lock whose owner is dead (or older
- * than staleMs) is taken over. Returns the release function.
+ * than staleMs) is taken over (takeOver). Returns the release function.
  */
 export async function acquireLock(
   file: string,
@@ -179,18 +223,8 @@ export async function acquireLock(
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
     }
-    let stale = false;
-    try {
-      const pid = Number(readFileSync(file, 'utf8'));
-      const age = Date.now() - statSync(file).mtimeMs;
-      stale = !pid || !pidAlive(pid) || age > (opts.staleMs ?? 30 * 60_000);
-    } catch {
-      stale = false; // vanished between calls: retry
-    }
-    if (stale) {
-      rmSync(file, { force: true });
-      continue;
-    }
+    // Retry at once after our own takeover; while someone else's runs, wait like for a live lock.
+    if (lockIsStale(file, opts.staleMs) && takeOver(file, () => lockIsStale(file, opts.staleMs))) continue;
     if (Date.now() > deadline) throw new Error(`timed out waiting for lock ${file}`);
     if (!warned) {
       opts.onWait?.();

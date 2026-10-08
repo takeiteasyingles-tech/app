@@ -25,8 +25,16 @@ export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
   users: { load: m(() => import('./Users'), 'Users'), perm: 'users.read', nav: 'usuarios' },
   user: { load: m(() => import('./UserDetail'), 'UserDetail'), perm: 'users.read', nav: 'usuarios' },
   plans: { load: m(() => import('./Plans'), 'Plans'), perm: 'plans.manage', nav: 'planos' },
-  episodes: { load: m(() => import('./content/Episodes'), 'Episodes'), perm: 'content.edit', nav: 'conteudo/episodios' },
-  episode: { load: m(() => import('./content/EpisodeEdit'), 'EpisodeEdit'), perm: 'content.edit', nav: 'conteudo/episodios' },
+  episodes: {
+    load: m(() => import('./content/Episodes'), 'Episodes'),
+    perm: 'content.edit',
+    nav: 'conteudo/episodios',
+  },
+  episode: {
+    load: m(() => import('./content/EpisodeEdit'), 'EpisodeEdit'),
+    perm: 'content.edit',
+    nav: 'conteudo/episodios',
+  },
   ebooks: { load: m(() => import('./content/Ebooks'), 'Ebooks'), perm: 'content.edit', nav: 'conteudo/ebooks' },
   ebook: { load: m(() => import('./content/Ebooks'), 'EbookEdit'), perm: 'content.edit', nav: 'conteudo/ebooks' },
   extras: { load: m(() => import('./content/Extras'), 'Extras'), perm: 'content.edit', nav: 'conteudo/extras' },
@@ -44,7 +52,11 @@ export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
     nav: 'conteudo/assistentes',
   },
   missions: { load: m(() => import('./content/Missions'), 'Missions'), perm: 'content.edit', nav: 'conteudo/missoes' },
-  mission: { load: m(() => import('./content/Missions'), 'MissionEdit'), perm: 'content.edit', nav: 'conteudo/missoes' },
+  mission: {
+    load: m(() => import('./content/Missions'), 'MissionEdit'),
+    perm: 'content.edit',
+    nav: 'conteudo/missoes',
+  },
   onboarding: {
     load: m(() => import('./content/Onboarding'), 'Onboarding'),
     perm: 'content.edit',

@@ -35,6 +35,9 @@ export function passHash(password: string, saltSeed = 'tie-parity'): string {
 }
 
 export const ADMIN_USER_ID = 'U_PARITY_ADMIN';
+/** A staff member with only the editor role, for role-aware admin shots. */
+export const EDITOR_USER_ID = 'U_PARITY_EDITOR';
+export const EDITOR_EMAIL = 'editor@parity.test';
 
 export interface FixtureSqlUser {
   key: string;
@@ -56,6 +59,8 @@ export interface FixtureSql {
   /** One user per capture job, by job tag. */
   jobs: Record<string, FixtureJobUser>;
   admin: { email: string; token: string };
+  /** The fixture editor (admin audience). Optional: hand-built fixtures (tools/e2e) leave it out. */
+  editor?: { email: string; token: string };
 }
 
 /**
@@ -123,11 +128,17 @@ export function buildFixtureSql(
   }
   const adminToken = sessionToken('super_admin', 'admin');
   statements.push(...adminStatements(adminToken, now, pass));
+  const editorToken = sessionToken('editor', 'admin');
+  statements.push(...editorStatements(editorToken, now, pass));
   return {
-    sql: toSqlFile(statements, `parity fixtures: ${users.length} users + ${jobs.length} per-route users + super_admin`),
+    sql: toSqlFile(
+      statements,
+      `parity fixtures: ${users.length} users + ${jobs.length} per-route users + super_admin + editor`,
+    ),
     users,
     jobs: jobUsers,
     admin: { email: SUPER_ADMIN_EMAIL, token: adminToken },
+    editor: { email: EDITOR_EMAIL, token: editorToken },
   };
 }
 
@@ -144,5 +155,18 @@ function adminStatements(token: string, now: number, pass: string): string[] {
     `INSERT INTO user_roles(user_id, role, granted_by, granted_at) SELECT id, 'super_admin', NULL, ${now} FROM users WHERE email = ${e} ON CONFLICT(user_id, role) DO NOTHING;`,
     `DELETE FROM sessions WHERE token_hash = ${th};`,
     `INSERT INTO sessions(token_hash, user_id, audience, created_at, last_seen_at, expires_at, ip_hash, ua) SELECT ${th}, id, 'admin', ${now}, ${now}, ${now + 8 * 3600_000}, NULL, 'parity-fixture' FROM users WHERE email = ${e};`,
+  ];
+}
+
+/** The fixture editor (editor role only) with an admin-audience session; reset on every apply. */
+function editorStatements(token: string, now: number, pass: string): string[] {
+  const id = sqlLiteral(EDITOR_USER_ID);
+  const th = sqlLiteral(tokenHash(token));
+  return [
+    `INSERT INTO users(id, email, pass_hash, status, tz, created_at) VALUES(${id}, ${sqlLiteral(EDITOR_EMAIL)}, ${sqlLiteral(pass)}, 'active', 'America/Sao_Paulo', ${now}) ON CONFLICT(id) DO UPDATE SET status = 'active', pass_hash = excluded.pass_hash;`,
+    `DELETE FROM user_roles WHERE user_id = ${id} AND role <> 'editor';`,
+    `INSERT INTO user_roles(user_id, role, granted_by, granted_at) VALUES(${id}, 'editor', NULL, ${now}) ON CONFLICT(user_id, role) DO NOTHING;`,
+    `DELETE FROM sessions WHERE token_hash = ${th};`,
+    `INSERT INTO sessions(token_hash, user_id, audience, created_at, last_seen_at, expires_at, ip_hash, ua) VALUES(${th}, ${id}, 'admin', ${now}, ${now}, ${now + 8 * 3600_000}, NULL, 'parity-fixture');`,
   ];
 }

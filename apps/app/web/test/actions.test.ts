@@ -50,6 +50,8 @@ describe('store actions', () => {
     expect(res?.prog).toBe(2);
     expect(state.value.game.points).toBe(25);
     expect(seen[0]?.headers.get('Idempotency-Key')).toBeTruthy();
+    // The account the write is for: a replay after someone else signs in is refused by the server.
+    expect(seen[0]?.headers.get('X-Tie-User')).toBe('u');
     expect(await seen[0]?.json()).toEqual({ ep: 1, step: 2 });
   });
 

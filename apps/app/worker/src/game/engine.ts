@@ -8,6 +8,7 @@ import {
   type BadgeStats,
   current,
   type DailyStats,
+  DEFAULT_TZ,
   dailyMissions,
   emptyDaily,
   type GameSummary,
@@ -22,10 +23,12 @@ import {
   type AwardMeta,
   type AwardService,
   addDays,
+  type Bind,
   batch,
   bool,
   fromJson,
   localDate,
+  type Query,
   q,
   safeTimeZone,
   toJson,
@@ -151,81 +154,165 @@ function levelUp(before: number, after: number, levels: LevelTable): AwardResult
   return a.n > level(before, levels).n ? { n: a.n, name: a.name } : null;
 }
 
+/**
+ * Last known users.tz per user id, per isolate. award() guesses the timezone from it (else the
+ * default) so the whole award is one D1 batch; every write in that batch is guarded by the guess,
+ * so a wrong or stale guess writes nothing and the award simply runs again with the real timezone.
+ */
+const tzSeen = new Map<string, string>();
+const TZ_SEEN_MAX = 10_000;
+
+function rememberTz(userId: string, tz: string): void {
+  if (tzSeen.get(userId) === tz) return;
+  if (tzSeen.size >= TZ_SEEN_MAX) {
+    const oldest = tzSeen.keys().next().value;
+    if (oldest !== undefined) tzSeen.delete(oldest);
+  }
+  tzSeen.set(userId, tz);
+}
+
+/** The smallest string greater than every string starting with `prefix` (range scans on award_key). */
+export function prefixEnd(prefix: string): string {
+  const last = prefix.charCodeAt(prefix.length - 1);
+  return prefix.slice(0, -1) + String.fromCharCode(last + 1);
+}
+
+/** q() binding only the parameters the SQL uses (?1..?N): D1 refuses extra bindings. */
+function qn<Row>(db: D1Database, sql: string, params: readonly Bind[]): Query<Row> {
+  let max = 0;
+  for (const m of sql.matchAll(/\?(\d+)/g)) max = Math.max(max, Number(m[1]));
+  return q<Row>(db, sql, ...params.slice(0, max));
+}
+
+// Award SQL. Parameters (one array for every statement, see qn):
+//   ?1 user  ?2 key  ?3 kind  ?4 default daily cap  ?5 today  ?6 Mic turn prefix  ?7 turns per session
+//   ?8 yesterday  ?9 default points  ?10 guessed tz  ?11 end of the turn prefix range
+//   ?12 maggie_sec  ?13 meta  ?14 now
+/** The guessed timezone is still the user's: every write below is void otherwise. */
+const TZ_OK = 'EXISTS (SELECT 1 FROM users WHERE id = ?1 AND tz = ?10)';
+/** point_rules row for the kind, else the code defaults (?4 cap, ?9 points). */
+const RULE_CAP = `(CASE WHEN EXISTS (SELECT 1 FROM point_rules WHERE kind = ?3)
+  THEN (SELECT daily_cap FROM point_rules WHERE kind = ?3) ELSE ?4 END)`;
+const RULE_POINTS = 'COALESCE((SELECT MAX(0, points) FROM point_rules WHERE kind = ?3), ?9)';
+/**
+ * The ledger insert's own condition (key unused, daily cap, Mic turns per session), so the streak
+ * only moves when points land. Every count is an index range: ix_ledger_day for the cap, the
+ * UNIQUE(user_id, award_key) index for the per-session prefix.
+ */
+const WILL_INSERT = `${TZ_OK}
+  AND NOT EXISTS (SELECT 1 FROM point_ledger WHERE user_id = ?1 AND award_key = ?2)
+  AND (${RULE_CAP} IS NULL OR (SELECT COUNT(*) FROM point_ledger
+         WHERE user_id = ?1 AND local_date = ?5 AND kind = ?3) < ${RULE_CAP})
+  AND (?6 IS NULL OR (SELECT COUNT(*) FROM point_ledger
+         WHERE user_id = ?1 AND award_key >= ?6 AND award_key < ?11) < ?7)`;
+const STATS_INIT_SQL = `INSERT OR IGNORE INTO user_stats(user_id) SELECT ?1 WHERE ${TZ_OK}`;
+const STREAK_SQL = `UPDATE user_stats SET streak = CASE WHEN last_day = ?8 THEN streak + 1 ELSE 1 END, last_day = ?5
+  WHERE user_id = ?1 AND (last_day IS NULL OR last_day < ?5) AND ${WILL_INSERT}`;
+const LEDGER_SQL = `INSERT OR IGNORE INTO point_ledger(user_id, award_key, kind, points, local_date, maggie_sec, meta, created_at)
+  SELECT ?1, ?2, ?3, ${RULE_POINTS}, ?5, ?12, ?13, ?14 WHERE ${WILL_INSERT} RETURNING points`;
+/** goalTarget() in SQL: max(50, (minutes || 20) * 5). */
+const GOAL_IN_TX_SQL = `UPDATE daily_stats SET goal_hit = 1
+  WHERE user_id = ?1 AND local_date = ?5 AND goal_hit = 0 AND ${TZ_OK}
+    AND points >= MAX(50, COALESCE(NULLIF((SELECT minutes FROM profiles WHERE user_id = ?1), 0), 20) * 5)
+  RETURNING local_date`;
+const AWARD_STATS_SQL = 'SELECT points, streak, last_day, goal_days FROM user_stats WHERE user_id = ?';
+const KIND_COUNTS_SQL = 'SELECT kind, n FROM user_kind_counts WHERE user_id = ?';
+
 export function createGameEngine(db: D1Database): GameEngine {
   async function award(userId: string, kind: PointKind, key: string, meta: AwardMeta = {}): Promise<AwardResult> {
     if (!PointKind.safeParse(kind).success) throw new Error(`unknown point kind "${kind}"`);
     if (ENGINE_ONLY_KINDS.has(kind)) throw new Error(`"${kind}" points are awarded by the game engine only`);
     if (!key || key.length > MAX_AWARD_KEY) throw new Error(`invalid award key "${key}"`);
+    let tz = tzSeen.get(userId) ?? DEFAULT_TZ;
+    // A wrong guess costs one more round trip; a timezone that keeps changing under us is a bug.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const out = await awardOnce(userId, kind, key, meta, tz);
+      if ('result' in out) return out.result;
+      tz = out.tz;
+    }
+    throw new Error('award: the user timezone kept changing');
+  }
+
+  /**
+   * One D1 batch (one transaction): streak touch, ledger row (triggers → user_stats, daily_stats,
+   * user_kind_counts), goal, and the snapshot missions and badges are judged on. A second batch
+   * runs only when a mission bonus or a badge is due.
+   */
+  async function awardOnce(
+    userId: string,
+    kind: PointKind,
+    key: string,
+    meta: AwardMeta,
+    rawTz: string,
+  ): Promise<{ result: AwardResult } | { tz: string }> {
     const { maggieSec, now: nowOverride, ...extra } = meta;
     const now = nowOverride ?? Date.now();
     const turnPrefix = kind === 'maggie_turn' ? maggieTurnPrefix(key) : null;
-
-    // 1. Who, where (timezone) and under which rules.
-    const [users, ruleRows, levelRows, badgeRows, assistants] = await batch(db, [
+    const today = localDate(now, safeTimeZone(rawTz));
+    const yesterday = addDays(today, -1);
+    const fallback = pointRuleFor(kind, []);
+    const P: Bind[] = [
+      userId,
+      key,
+      kind,
+      fallback.dailyCap,
+      today,
+      turnPrefix,
+      MAGGIE_TURNS_PER_SESSION,
+      yesterday,
+      fallback.points,
+      rawTz,
+      turnPrefix ? prefixEnd(turnPrefix) : null,
+      clampSec(maggieSec),
+      Object.keys(extra).length ? toJson(extra) : null,
+      now,
+    ];
+    const [
+      users,
+      ruleRows,
+      levelRows,
+      badgeRows,
+      assistants,
+      ,
+      ,
+      inserted,
+      goalRows,
+      statsRows,
+      dayRows,
+      kindRows,
+      ownedRows,
+      dueRows,
+      epRows,
+    ] = await batch(db, [
       q<UserRow>(db, USER_SQL, userId),
       pointRulesQuery(db, [kind, 'mission']),
       levelsQuery(db),
       badgesQuery(db),
       assistantQuery(db, userId),
+      qn<never>(db, STATS_INIT_SQL, P),
+      qn<never>(db, STREAK_SQL, P),
+      qn<{ points: number }>(db, LEDGER_SQL, P),
+      qn<{ local_date: string }>(db, GOAL_IN_TX_SQL, P),
+      q<StatsRow & { goal_days: number }>(db, AWARD_STATS_SQL, userId),
+      q<DailyRow>(db, `SELECT ${DAILY_COLS} FROM daily_stats WHERE user_id = ? AND local_date = ?`, userId, today),
+      q<{ kind: string; n: number }>(db, KIND_COUNTS_SQL, userId),
+      q<{ badge_id: string }>(db, OWNED_SQL, userId),
+      q<{ n: number }>(db, DUE_SQL, userId, now),
+      q<EpisodeRow>(db, EPISODES_SQL, userId),
     ]);
     const user = users[0];
     if (!user) throw new ApiError('not_found');
-    const today = localDate(now, safeTimeZone(user.tz));
-    const yesterday = addDays(today, -1);
-    const rule = pointRuleFor(kind, ruleRows);
+    rememberTz(userId, user.tz);
+    if (user.tz !== rawTz) return { tz: user.tz };
+
     const missionPts = pointRuleFor('mission', ruleRows).points;
     const levels = levelTable(levelRows);
     const catalog = badgeCatalog(badgeRows);
     const target = goalTarget(minutesOf(user));
-
-    // 2. One transaction: streak touch, ledger row (trigger → user_stats/daily_stats), goal, then a
-    //    snapshot for missions and badges. `willInsert` is the ledger insert's own condition (key not
-    //    used yet, daily cap, Mic turns per session), so the streak only moves when points land.
-    //    ?1 user ?2 key ?3 kind ?4 daily cap ?5 today ?6 turn prefix ?7 turns per session
-    const willInsert = `NOT EXISTS (SELECT 1 FROM point_ledger WHERE user_id = ?1 AND award_key = ?2)
-      AND (?4 IS NULL OR (SELECT COUNT(*) FROM point_ledger WHERE user_id = ?1 AND kind = ?3 AND local_date = ?5) < ?4)
-      AND (?6 IS NULL OR (SELECT COUNT(*) FROM point_ledger
-             WHERE user_id = ?1 AND kind = ?3 AND substr(award_key, 1, length(?6)) = ?6) < ?7)`;
-    const condParams = [userId, key, kind, rule.dailyCap, today, turnPrefix, MAGGIE_TURNS_PER_SESSION] as const;
-    const [, , inserted, goalRows, statsRows, dayRows, kindRows, goalDayRows, ownedRows, dueRows, epRows] = await batch(
-      db,
-      [
-        q<never>(db, 'INSERT OR IGNORE INTO user_stats(user_id) VALUES (?)', userId),
-        q(
-          db,
-          `UPDATE user_stats SET streak = CASE WHEN last_day = ?8 THEN streak + 1 ELSE 1 END, last_day = ?5
-           WHERE user_id = ?1 AND (last_day IS NULL OR last_day < ?5) AND ${willInsert}`,
-          ...condParams,
-          yesterday,
-        ),
-        q<{ points: number }>(
-          db,
-          `INSERT OR IGNORE INTO point_ledger(user_id, award_key, kind, points, local_date, maggie_sec, meta, created_at)
-           SELECT ?1, ?2, ?3, ?8, ?5, ?9, ?10, ?11 WHERE ${willInsert} RETURNING points`,
-          ...condParams,
-          rule.points,
-          clampSec(maggieSec),
-          Object.keys(extra).length ? toJson(extra) : null,
-          now,
-        ),
-        q<{ local_date: string }>(db, GOAL_SQL, userId, today, target),
-        q<StatsRow>(db, STATS_SQL, userId),
-        q<DailyRow>(db, `SELECT ${DAILY_COLS} FROM daily_stats WHERE user_id = ? AND local_date = ?`, userId, today),
-        q<{ kind: string; n: number }>(
-          db,
-          'SELECT kind, COUNT(*) AS n FROM point_ledger WHERE user_id = ? GROUP BY kind',
-          userId,
-        ),
-        q<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM daily_stats WHERE user_id = ? AND goal_hit = 1', userId),
-        q<{ badge_id: string }>(db, OWNED_SQL, userId),
-        q<{ n: number }>(db, DUE_SQL, userId, now),
-        q<EpisodeRow>(db, EPISODES_SQL, userId),
-      ],
-    );
     const awarded = inserted.length > 0;
-    const points = awarded ? rule.points : 0;
+    const points = inserted[0]?.points ?? 0;
     let goalHit = goalRows.length > 0;
-    const stats = statsRows[0] ?? { points: 0, streak: 0, last_day: null };
+    const stats = statsRows[0] ?? { points: 0, streak: 0, last_day: null, goal_days: 0 };
     const daily = toDaily(dayRows[0]);
 
     // 3. Missions completed now (bonus once a day, keyed mission:{date}:{k}) and badges earned now,
@@ -252,7 +339,7 @@ export function createGameEngine(db: D1Database): GameEngine {
             counts,
             streak: stats.streak,
             points: stats.points + bonus,
-            goalDays: (goalDayRows[0]?.n ?? 0) + (bonusHitsGoal ? 1 : 0),
+            goalDays: stats.goal_days + (bonusHitsGoal ? 1 : 0),
           },
         )
       : [];
@@ -315,15 +402,17 @@ export function createGameEngine(db: D1Database): GameEngine {
 
     const gained = points + missionsDone.length * missionPts;
     return {
-      awarded,
-      kind,
-      points,
-      total,
-      dayPoints,
-      levelUp: gained > 0 ? levelUp(total - gained, total, levels) : null,
-      goalHit,
-      newBadges: freshBadges,
-      missionsDone,
+      result: {
+        awarded,
+        kind,
+        points,
+        total,
+        dayPoints,
+        levelUp: gained > 0 ? levelUp(total - gained, total, levels) : null,
+        goalHit,
+        newBadges: freshBadges,
+        missionsDone,
+      },
     };
   }
 

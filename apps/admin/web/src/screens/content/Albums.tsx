@@ -1,6 +1,12 @@
 // Álbuns da Música (Extras): album data plus its tracks (child rows). A track that points at an
 // episode gets that episode's lyrics and gaps at publish; any other track carries its own lines.
-import { AlbumEdit as AlbumSchema, type AlbumRow, adminContentApi, TrackEdit, type TrackRow } from '@tie/shared/contracts/admin';
+import {
+  type AlbumRow,
+  AlbumEdit as AlbumSchema,
+  adminContentApi,
+  TrackEdit,
+  type TrackRow,
+} from '@tie/shared/contracts/admin';
 import { useMemo, useState } from 'preact/hooks';
 import { call } from '../../api';
 import { go } from '../../router';
@@ -11,7 +17,19 @@ import { useMedia } from '../../ui/media';
 import { type Col, Table } from '../../ui/table';
 import { prefixErrors, zodErrors } from '../../ui/validate';
 import type { ScreenProps } from '../registry';
-import { applyRows, applyToBase, type CrudApi, CreateModal, DraftNote, diffRows, keysOf, nextId, patchOf, pick, slugify } from './common';
+import {
+  applyRows,
+  applyToBase,
+  CreateModal,
+  type CrudApi,
+  DraftNote,
+  diffRows,
+  keysOf,
+  nextId,
+  patchOf,
+  pick,
+  slugify,
+} from './common';
 import { DocEditor, PartialSave, tabFinder } from './DocEditor';
 import { useOptions } from './options';
 
@@ -41,12 +59,27 @@ function specsFor(genres: string[]): Record<string, readonly Spec[]> {
         label: 'Faixas',
         item: 'faixa',
         summary: (v) => `${String(v.title ?? '')}${v.epNum ? ` · episódio ${String(v.epNum)}` : ''}`,
-        make: () => ({ title: '', srcFrom: null, audioMedia: null, epNum: null, bpm: null, musicKey: null, lines: null }),
+        make: () => ({
+          title: '',
+          srcFrom: null,
+          audioMedia: null,
+          epNum: null,
+          bpm: null,
+          musicKey: null,
+          lines: null,
+        }),
         of: [
           { t: 'text', k: 'title', label: 'Título' },
           { t: 'text', k: 'srcFrom', label: 'De onde vem', opt: 'null', hint: 'Ex.: "Episódio 1 · Good Morning".' },
           { t: 'media', k: 'audioMedia', label: 'Áudio', kind: 'audio', opt: 'null' },
-          { t: 'int', k: 'epNum', label: 'Episódio da letra', opt: 'null', min: 1, hint: 'Usa a letra (com lacunas) do episódio.' },
+          {
+            t: 'int',
+            k: 'epNum',
+            label: 'Episódio da letra',
+            opt: 'null',
+            min: 1,
+            hint: 'Usa a letra (com lacunas) do episódio.',
+          },
           { t: 'int', k: 'bpm', label: 'BPM (sintetizador)', opt: 'null', min: 1 },
           {
             t: 'select',
@@ -107,7 +140,9 @@ function normalize(d: Doc): Doc {
 
 function validate(d: Doc): Record<string, string> {
   const out: Record<string, string> = { ...zodErrors(AlbumSchema.create, pick(d, AL_KEYS)) };
-  d.tracks.forEach((t, i) => Object.assign(out, prefixErrors(zodErrors(TrackEdit.create, pick(t as unknown as Obj, TR_KEYS)), `tracks.${i}`)));
+  d.tracks.forEach((t, i) => {
+    Object.assign(out, prefixErrors(zodErrors(TrackEdit.create, pick(t as unknown as Obj, TR_KEYS)), `tracks.${i}`));
+  });
   for (const k of Object.keys(out)) if (/\.(id|albumId|sort)$/.test(k)) delete out[k];
   return out;
 }
@@ -127,7 +162,9 @@ async function persist(base: Doc, d: Doc): Promise<Doc> {
       diffRows(b.tracks as unknown as Obj[], d.tracks as unknown as Obj[], (r) => String(r.id), TR_KEYS),
       TR_KEYS,
       (kind, id, row) => {
-        b.tracks = applyToBase(b.tracks as unknown as Obj[], kind, id, row, (r) => String(r.id)) as unknown as TrackRow[];
+        b.tracks = applyToBase(b.tracks as unknown as Obj[], kind, id, row, (r) =>
+          String(r.id),
+        ) as unknown as TrackRow[];
       },
       (r) => String(r.id),
     );
@@ -174,7 +211,11 @@ export function AlbumEdit({ params, q }: ScreenProps) {
 
 function Art({ id }: { id: string | null }) {
   const m = useMedia(id);
-  return m ? <img class="ad-thumb sq" src={m.url} alt="" loading="lazy" /> : <span class="ad-thumb sq" aria-hidden="true" />;
+  return m ? (
+    <img class="ad-thumb sq" src={m.url} alt="" loading="lazy" />
+  ) : (
+    <span class="ad-thumb sq" aria-hidden="true" />
+  );
 }
 
 export function Albums(_: ScreenProps) {
@@ -200,12 +241,22 @@ export function Albums(_: ScreenProps) {
   ];
   const all = load.data?.items ?? [];
   return (
-    <Page title="Álbuns" kicker="Conteúdo · Música" actions={<Button label="Novo álbum" icon="plus" onClick={() => setCreating(true)} />}>
+    <Page
+      title="Álbuns"
+      kicker="Conteúdo · Música"
+      actions={<Button label="Novo álbum" icon="plus" onClick={() => setCreating(true)} />}
+    >
       <DraftNote />
       <Async load={load}>
         {(d) =>
           d.items.length ? (
-            <Table rows={d.items} cols={cols} rowKey={(a) => a.id} href={(a) => `conteudo/albuns/${a.id}`} caption="Álbuns" />
+            <Table
+              rows={d.items}
+              cols={cols}
+              rowKey={(a) => a.id}
+              href={(a) => `conteudo/albuns/${a.id}`}
+              caption="Álbuns"
+            />
           ) : (
             <Empty icon="music" title="Nenhum álbum ainda." />
           )
@@ -220,7 +271,15 @@ export function Albums(_: ScreenProps) {
           create={async (id, title) => {
             const slug = slugify(id) || id;
             await call(C.albums.create, {
-              body: { id: slug, title, sub: null, level: null, imgMedia: null, genres: [], sort: all.reduce((m, a) => Math.max(m, a.sort), 0) + 1 },
+              body: {
+                id: slug,
+                title,
+                sub: null,
+                level: null,
+                imgMedia: null,
+                genres: [],
+                sort: all.reduce((m, a) => Math.max(m, a.sort), 0) + 1,
+              },
             });
             go(`conteudo/albuns/${slug}`);
           }}

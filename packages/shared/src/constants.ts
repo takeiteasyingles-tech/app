@@ -57,6 +57,32 @@ export const COOKIES = {
 /** Header the offline outbox sends so replayed writes are applied once. */
 export const IDEMPOTENCY_HEADER = 'Idempotency-Key';
 
+/**
+ * The signed-in user id a queueable write was made for. A write the outbox kept while the session
+ * was gone (401) and replays after someone else signs in on the device is refused (409), never
+ * applied to the new account.
+ */
+export const OUTBOX_USER_HEADER = 'X-Tie-User';
+
+/**
+ * Writes the service worker may queue offline and replay later (spec 04 §5). Each one is meaningful
+ * without an immediate answer, and the server applies each Idempotency-Key once (worker-core
+ * idempotency()), so a replay of a write that did land is answered from the stored response.
+ * Auth, AI, uploads, reports and account deletion never queue.
+ */
+export const OUTBOX_PATHS: readonly RegExp[] = [
+  /^\/api\/progress\//,
+  /^\/api\/ebooks\/\d+\/(download|test\/answers|test\/submit)$/,
+  /^\/api\/srs\/cards(\/[\w-]+\/grade)?$/,
+  /^\/api\/extras\/[\w-]+\/(seen|dub)$/,
+  /^\/api\/extras\/challenge$/,
+  /^\/api\/karaoke\/gap$/,
+  /^\/api\/game\/event$/,
+  /^\/api\/me\/(profile|settings)$/,
+];
+
+export const isOutboxPath = (pathname: string): boolean => OUTBOX_PATHS.some((re) => re.test(pathname));
+
 export const PHOTO_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const MEDIA_MIME = [
   'image/jpeg',

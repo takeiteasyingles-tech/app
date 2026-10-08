@@ -906,7 +906,9 @@ async function assertNoHorizontalOverflow(page: Page, what: string) {
           (x) => x.getBoundingClientRect().right > right + 1 && !x.querySelector('*'),
         );
         for (const x of wide.slice(0, 4))
-          out.push(`  ${x.tagName.toLowerCase()}.${String(x.className).split(' ').join('.')} → ${Math.round(x.getBoundingClientRect().right)}px`);
+          out.push(
+            `  ${x.tagName.toLowerCase()}.${String(x.className).split(' ').join('.')} → ${Math.round(x.getBoundingClientRect().right)}px`,
+          );
       }
     }
     return out;
@@ -1345,12 +1347,12 @@ test.describe('round 6', () => {
     expect((await pageFetch(page, `/api/srs/cards/${id0}/grade`, { method: 'POST', body: { grade: -1 } })).status).toBe(
       400,
     );
-    expect((await pageFetch(page, `/api/srs/cards/${id0}/grade`, { method: 'POST', body: { grade: '2' } })).status).toBe(
-      400,
-    );
-    expect((await pageFetch(page, '/api/srs/cards/nope-404/grade', { method: 'POST', body: { grade: 2 } })).status).toBe(
-      404,
-    );
+    expect(
+      (await pageFetch(page, `/api/srs/cards/${id0}/grade`, { method: 'POST', body: { grade: '2' } })).status,
+    ).toBe(400);
+    expect(
+      (await pageFetch(page, '/api/srs/cards/nope-404/grade', { method: 'POST', body: { grade: 2 } })).status,
+    ).toBe(404);
     // Another learner's card (the fixture's main user owns fx-card-001)
     expect(
       (await pageFetch(page, '/api/srs/cards/fx-card-001/grade', { method: 'POST', body: { grade: 2 } })).status,
@@ -1486,7 +1488,9 @@ test.describe('round 6', () => {
       if (a.goalHit) {
         hit = a;
         if (!a.levelUp)
-          await expect(page.locator('#fxroot').getByText(`Meta do dia batida. ${a.dayPoints} pontos hoje.`)).toBeVisible();
+          await expect(
+            page.locator('#fxroot').getByText(`Meta do dia batida. ${a.dayPoints} pontos hoje.`),
+          ).toBeVisible();
       }
     }
     expect(hit, 'goal hit by the server').not.toBeNull();
@@ -1672,7 +1676,9 @@ test.describe('round 9', () => {
     await expect(page.locator('.badges .medal')).toHaveCount(14);
     const ms = await page
       .locator('.badges .medal')
-      .evaluateAll((els) => els.map((e) => [e.classList.contains('locked'), e.getAttribute('aria-label') ?? ''] as const));
+      .evaluateAll((els) =>
+        els.map((e) => [e.classList.contains('locked'), e.getAttribute('aria-label') ?? ''] as const),
+      );
     for (const [locked, label] of ms) {
       expect(label).toMatch(locked ? /\. Bloqueada\.$/ : /\. Conquistada\.$/);
     }
@@ -1722,7 +1728,12 @@ test.describe('round 9', () => {
     const many = await pageFetch(page, '/api/srs/cards', {
       method: 'POST',
       body: {
-        cards: Array.from({ length: 2000 }, (_, i) => ({ en: `bulk ${i}`, pt: `lote ${i}`, scene: 'Extra · x', source: 'extra' })),
+        cards: Array.from({ length: 2000 }, (_, i) => ({
+          en: `bulk ${i}`,
+          pt: `lote ${i}`,
+          scene: 'Extra · x',
+          source: 'extra',
+        })),
       },
     });
     expect(many.status, 'a 2000-card batch').toBeGreaterThanOrEqual(400);
@@ -1746,7 +1757,8 @@ test.describe('round 9', () => {
     const h = r.headers();
     const csp = h['content-security-policy'] ?? '';
     expect(csp, 'CSP header').not.toBe('');
-    const scriptSrc = (csp.split(';').find((d) => /^\s*script-src\s/.test(d)) ?? csp.match(/default-src[^;]*/)?.[0]) || '';
+    const scriptSrc =
+      (csp.split(';').find((d) => /^\s*script-src\s/.test(d)) ?? csp.match(/default-src[^;]*/)?.[0]) || '';
     expect(scriptSrc, 'script-src').not.toMatch(/'unsafe-inline'|'unsafe-eval'|\*/);
     expect(csp).toMatch(/frame-ancestors 'none'|frame-ancestors 'self'/);
     expect(csp).toMatch(/object-src 'none'/);

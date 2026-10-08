@@ -316,8 +316,8 @@ test.describe('mobile', () => {
     expect(await chips.count()).toBe(Object.keys(MAG.MISSIONS).length);
     await expect(chips.first()).toContainText('· seu objetivo');
     await expect(chips.first()).toHaveClass(/\bon\b/);
-    // On mobile the suffix is an icon plus screen-reader text (its own line in innerText).
-    const firstTitle = (await chips.first().innerText()).replace(/\s*·\s*seu objetivo/, '').trim();
+    // On mobile the suffix is an icon, screen-reader " · seu" and a visible "objetivo" (own lines in innerText).
+    const firstTitle = (await chips.first().innerText()).replace(/\s*·\s*seu\s+objetivo/, '').trim();
     const firstKey = Object.keys(MAG.MISSIONS).find((k) => MAG.MISSIONS[k]?.t === firstTitle) as string;
     expect(firstKey, 'first chip is a prototype mission').toBeTruthy();
     const card = page.locator('.wrap .card').filter({ hasText: 'faz o papel de' });
@@ -325,7 +325,7 @@ test.describe('mobile', () => {
     await expect(card.locator('.h3')).toHaveText(MAG.MISSIONS[firstKey]?.goal as string);
     // Pick another mission.
     const other = chips.nth(2);
-    const otherTitle = (await other.innerText()).replace(/\s*·\s*seu objetivo/, '').trim();
+    const otherTitle = (await other.innerText()).replace(/\s*·\s*seu\s+objetivo/, '').trim();
     const otherKey = Object.keys(MAG.MISSIONS).find((k) => MAG.MISSIONS[k]?.t === otherTitle) as string;
     await other.click();
     await expect(other).toHaveClass(/\bon\b/);

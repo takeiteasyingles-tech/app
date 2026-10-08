@@ -34,7 +34,7 @@ export const STATUS_LABEL: Record<AdminUserRow['status'], string> = {
 export const STATUS_TONE: Record<AdminUserRow['status'], string> = { active: 'gr', suspended: 'gold', deleted: '' };
 
 export function RolePills({ roles }: { roles: readonly Role[] }) {
-  if (!roles.length) return <span class="xs">Aluno</span>;
+  if (!roles.length) return <Pill label="Aluno" />;
   return (
     <span class="ad-pills">
       {roles.map((r) => (
@@ -44,19 +44,44 @@ export function RolePills({ roles }: { roles: readonly Role[] }) {
   );
 }
 
-const COLS: Col<AdminUserRow>[] = [
+const KNOWN_PLAN: Record<string, string> = { gratis: 'Grátis', free: 'Grátis', premium: 'Premium' };
+
+/** A plan slug in words: the plan's own name when the list is at hand, else a readable fallback. */
+export function planName(
+  slug: string | null | undefined,
+  plans?: readonly { slug: string; name: string }[] | null,
+): string {
+  if (!slug) return '—';
+  return (
+    plans?.find((p) => p.slug === slug)?.name ??
+    KNOWN_PLAN[slug] ??
+    (slug.charAt(0).toUpperCase() + slug.slice(1)).replace(/[-_]/g, ' ')
+  );
+}
+
+const cols = (plans: readonly { slug: string; name: string }[] | null | undefined): Col<AdminUserRow>[] => [
   {
     key: 'who',
     label: 'Pessoa',
-    cell: (u) => (
-      <span class="ad-cell2">
-        <span>{u.name || u.email.split('@')[0]}</span>
-        <span class="xs">{u.email}</span>
-      </span>
-    ),
+    // No profile name (staff accounts, learners before the onboarding): the e-mail is the name, never
+    // a made-up one from its local part.
+    cell: (u) =>
+      u.name ? (
+        <span class="ad-cell2">
+          <span>{u.name}</span>
+          <span class="xs">{u.email}</span>
+        </span>
+      ) : (
+        <span class="ad-cell2">
+          <span class="ad-break" style={{ wordBreak: 'normal' }}>
+            {u.email}
+          </span>
+          <span class="xs">{u.roles.length ? 'Equipe · sem nome no perfil' : 'Sem nome no perfil'}</span>
+        </span>
+      ),
   },
   { key: 'roles', label: 'Papel', cell: (u) => <RolePills roles={u.roles} /> },
-  { key: 'plan', label: 'Plano', cell: (u) => u.planSlug ?? '—' },
+  { key: 'plan', label: 'Plano', cell: (u) => planName(u.planSlug, plans) },
   { key: 'pts', label: 'Pontos', cls: 'num', cell: (u) => fmtInt(u.points) },
   { key: 'status', label: 'Conta', cell: (u) => <Pill label={STATUS_LABEL[u.status]} tone={STATUS_TONE[u.status]} /> },
   {
@@ -87,7 +112,9 @@ function InviteModal({ onClose }: { onClose: () => void }) {
     setErr(null);
     setBusy(true);
     try {
-      setLink(await call(adminUsersApi.invite, { body: { email: email.trim(), role: role as Exclude<Role, 'super_admin'> } }));
+      setLink(
+        await call(adminUsersApi.invite, { body: { email: email.trim(), role: role as Exclude<Role, 'super_admin'> } }),
+      );
     } catch (ex) {
       const userId =
         ex instanceof ApiError && ex.details && typeof ex.details === 'object' && 'userId' in ex.details
@@ -109,23 +136,50 @@ function InviteModal({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <Button label="Cancelar" kind="light" onClick={onClose} />
-            <Button label="Gerar convite" icon="mail" type="submit" form="invite-form" busy={busy} disabled={!email.trim()} />
+            <Button
+              label="Gerar convite"
+              icon="mail"
+              type="submit"
+              form="invite-form"
+              busy={busy}
+              disabled={!email.trim()}
+            />
           </>
         )
       }
     >
       {link ? (
-        <OneTimeLink url={link.url} expiresAt={link.expiresAt} note="Envie o link só para a pessoa convidada: ele cria a senha dela." />
+        <OneTimeLink
+          url={link.url}
+          expiresAt={link.expiresAt}
+          note="Envie o link só para a pessoa convidada: ele cria a senha dela."
+        />
       ) : (
         <form id="invite-form" class="stack" onSubmit={submit} noValidate>
           <p class="sm">
-            O convite gera um link de uso único, válido por 7 dias. A pessoa cria a própria senha (pelo menos 10 caracteres) e já entra com o papel escolhido.
+            O convite gera um link de uso único, válido por 7 dias. A pessoa cria a própria senha (pelo menos 10
+            caracteres) e já entra com o papel escolhido.
           </p>
           <Field id="inv-email" label="E-mail">
             <TextIn id="inv-email" type="email" value={email} onValue={setEmail} autoComplete="off" data-autofocus />
           </Field>
-          <Field id="inv-role" label="Papel" hint={role === 'editor' ? 'Edita e publica conteúdo e mídia.' : role === 'moderator' ? 'Lê usuários, suspende contas e decide a moderação.' : 'Tudo, menos dar o papel admin.'}>
-            <Sel id="inv-role" value={role} onValue={(v) => setRole(v as Role)} options={roles.map((r) => [r, ROLE_LABEL[r]] as const)} />
+          <Field
+            id="inv-role"
+            label="Papel"
+            hint={
+              role === 'editor'
+                ? 'Edita e publica conteúdo e mídia.'
+                : role === 'moderator'
+                  ? 'Lê usuários, suspende contas e decide a moderação.'
+                  : 'Tudo, menos dar o papel admin.'
+            }
+          >
+            <Sel
+              id="inv-role"
+              value={role}
+              onValue={(v) => setRole(v as Role)}
+              options={roles.map((r) => [r, ROLE_LABEL[r]] as const)}
+            />
           </Field>
           {err ? (
             <div class="fb err" role="alert">
@@ -152,11 +206,21 @@ export function Users({ q }: ScreenProps) {
   const role = (q.role ?? '') as Role | '';
   const plan = q.plan ?? '';
   const [inviting, setInviting] = useState(false);
-  const plans = useLoad(async (signal) => (can('plans.manage') ? (await call(adminPlansApi.list, { signal })).items : []), []);
+  const plans = useLoad(
+    async (signal) => (can('plans.manage') ? (await call(adminPlansApi.list, { signal })).items : []),
+    [],
+  );
   const page = usePaged(
     (cursor, signal) =>
       call(adminUsersApi.list, {
-        query: { q: search || undefined, status: status || undefined, role: role || undefined, plan: plan || undefined, cursor, limit: 50 },
+        query: {
+          q: search || undefined,
+          status: status || undefined,
+          role: role || undefined,
+          plan: plan || undefined,
+          cursor,
+          limit: 50,
+        },
         signal,
       }),
     [search, status, role, plan],
@@ -166,16 +230,25 @@ export function Users({ q }: ScreenProps) {
     <Page
       title="Usuários"
       kicker="Pessoas"
-      actions={can('roles.grant_staff') ? <Button label="Convidar para a equipe" icon="mail" onClick={() => setInviting(true)} /> : null}
+      actions={
+        can('roles.grant_staff') ? (
+          <Button label="Convidar para a equipe" icon="mail" onClick={() => setInviting(true)} />
+        ) : null
+      }
       bar={
-        <div class="ad-filters">
-          <SearchBox value={search} onValue={(v) => setQuery({ q: v })} placeholder="Buscar por e-mail, nome ou id" id="users-q" />
+        <div class="ad-filters ad-filters-sel">
+          <SearchBox
+            value={search}
+            onValue={(v) => setQuery({ q: v })}
+            placeholder="Buscar por e-mail, nome ou id"
+            id="users-q"
+          />
           <Sel
             ariaLabel="Situação da conta"
             value={status}
             onValue={(v) => setQuery({ status: v })}
             options={[
-              ['', 'Toda situação'],
+              ['', 'Todas as contas'],
               ['active', 'Ativas'],
               ['suspended', 'Suspensas'],
             ]}
@@ -185,7 +258,7 @@ export function Users({ q }: ScreenProps) {
             value={role}
             onValue={(v) => setQuery({ role: v })}
             options={[
-              ['', 'Todo papel'],
+              ['', 'Todos os papéis'],
               ['super_admin', 'Super admin'],
               ['admin', 'Admin'],
               ['editor', 'Editor'],
@@ -197,10 +270,12 @@ export function Users({ q }: ScreenProps) {
               ariaLabel="Plano"
               value={plan}
               onValue={(v) => setQuery({ plan: v })}
-              options={[['', 'Todo plano'], ...plans.data.map((p) => [p.slug, p.name] as const)]}
+              options={[['', 'Todos os planos'], ...plans.data.map((p) => [p.slug, p.name] as const)]}
             />
           ) : null}
-          {filtered ? <Button label="Limpar" kind="link" onClick={() => setQuery({ q: '', status: '', role: '', plan: '' })} /> : null}
+          {filtered ? (
+            <Button label="Limpar" kind="link" onClick={() => setQuery({ q: '', status: '', role: '', plan: '' })} />
+          ) : null}
         </div>
       }
     >
@@ -212,11 +287,19 @@ export function Users({ q }: ScreenProps) {
         <Empty
           icon="users"
           title={filtered ? 'Ninguém com esses filtros.' : 'Ainda não há usuários.'}
-          body={filtered ? 'Tente outra busca ou limpe os filtros.' : 'Os alunos aparecem aqui quando criam conta no app.'}
+          body={
+            filtered ? 'Tente outra busca ou limpe os filtros.' : 'Os alunos aparecem aqui quando criam conta no app.'
+          }
         />
       ) : (
         <>
-          <Table rows={page.items} cols={COLS} rowKey={(u) => u.id} href={(u) => `usuarios/${u.id}`} caption="Usuários" />
+          <Table
+            rows={page.items}
+            cols={cols(plans.data)}
+            rowKey={(u) => u.id}
+            href={(u) => `usuarios/${u.id}`}
+            caption="Usuários"
+          />
           {page.hasMore ? <MoreButton loading={page.loadingMore} onClick={page.more} /> : null}
           {page.error ? <ErrorBox error={page.error} retry={page.more} /> : null}
         </>

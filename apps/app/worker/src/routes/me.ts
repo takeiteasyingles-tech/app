@@ -39,7 +39,7 @@ import {
   verifyPassword,
   vJson,
 } from '@tie/worker-core';
-import { type Context, Hono } from 'hono';
+import { type Context, Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 import { evaluateRows, flagQuery, flagSubject } from '../account/common';
 import {
@@ -87,7 +87,27 @@ const settingsQuery = (db: D1Database, userId: string): Query<SettingsRow> =>
     userId,
   );
 
-routes.get(api.state.path, requireUser(), rateLimit('RL_API'), async (c) => {
+/**
+ * GET /api/me/state?probe=1 (the shell's start-up call): signed out, or with an expired session, 204
+ * instead of 401, so a first visit logs no failed request. The session is resolved once: requireUser
+ * caches it on the context for the route's own requireUser.
+ */
+const SIGNED_OUT = new Set(['unauthorized', 'session_expired']);
+const stateProbe: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.req.query('probe') !== '1') return next();
+  try {
+    await requireUser()(c, async () => {});
+  } catch (err) {
+    if (err instanceof ApiError && SIGNED_OUT.has(err.code)) {
+      c.header('Cache-Control', 'no-store');
+      return c.body(null, 204);
+    }
+    throw err;
+  }
+  return next();
+};
+
+routes.get(api.state.path, stateProbe, requireUser(), rateLimit('RL_API'), async (c) => {
   const s = sessionOf(c);
   const now = Date.now();
   const state = await buildState(c.env.DB, s, now);

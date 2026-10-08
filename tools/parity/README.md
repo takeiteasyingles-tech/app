@@ -7,7 +7,7 @@ several runs can go at once.
 ```powershell
 npm run parity -- --slot 9 --routes entrar,inicio --viewports mobile,desktop --seed abc
 npm run parity -- --slot 8 --routes all --seed abc --workers 4
-npm run parity -- --slot 9 --shots-only --app admin --routes "usuarios,conteudo/episodios"
+npm run parity -- --slot 7 --shots-only --app admin --routes login,dashboard,users,user-detail   # or --routes all
 npm run parity:reveal -- --run slot9-abc --votes votes.json     # {"<pairId>": "A" | "B" | "tie"}
 ```
 
@@ -42,7 +42,12 @@ npm run parity:reveal -- --run slot9-abc --votes votes.json     # {"<pairId>": "
      leak into another route, just as each prototype route starts from fresh localStorage. The
      prototype side of the job gets that same state (same email, same session ids; the
      `maggie-relatorio` hash follows the job's session id). Per-route users of earlier runs are deleted;
-   - a super_admin with an admin session.
+   - a super_admin and an editor (`editor@parity.test`, editor role only), each with an admin session.
+
+   Admin shots (`--app admin`) take ids from `ADMIN_ROUTES` in `src/routes.ts`: `login` (signed out),
+   `dashboard`, `users`, `user-detail` (Ana), `plans`, `content-*`, `media`, `moderation`, `audit`,
+   `releases`, `settings`, `account` as the super_admin, and `editor-*` (the same screens as the editor).
+   Anything that is not an id is a raw hash, captured as the super_admin.
 
    No two users share a primary key (an upsert would move the row to the last user applied);
    `npm test -w @tie/parity` checks that on a real SQLite with the D1 schema and the content seed.

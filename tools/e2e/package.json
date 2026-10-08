@@ -6,7 +6,8 @@
   "description": "End-to-end specs (Playwright) against wrangler dev, on an isolated parity slot.",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "e2e": "tsx src/run.ts"
+    "e2e": "tsx src/run.ts",
+    "smoke:full": "tsx src/fullSmoke.ts"
   },
   "dependencies": {
     "@tie/shared": "*"

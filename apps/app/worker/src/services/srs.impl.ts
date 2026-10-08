@@ -244,32 +244,34 @@ export function createSrsService(env: Env, services: Services, opts: SrsServiceO
 
     async grade(userId, cardId, grade): Promise<GradeRes> {
       const now = clock();
-      // Owner check: a card id belonging to someone else is indistinguishable from a missing one.
-      const card = await one<CardRow & { tz: string }>(
-        db,
-        `SELECT c.id, c.en, c.pt, c.scene, c.note, c.due_at, c.reps, u.tz
-         FROM srs_cards c JOIN users u ON u.id = c.user_id WHERE c.id = ? AND c.user_id = ?`,
-        cardId,
-        userId,
-      );
-      if (!card) throw fail('not_found');
-      const next = gradeCard(card, grade, now);
+      // gradeCard() only needs reps for the count; the interval alone decides the next due time.
+      const next = gradeCard({ reps: 0 }, grade, now);
       if (!next) throw fail('validation_failed');
-      const [updated, dueRows] = await batch(db, [
+      // One transaction: the card as it was (owner check + "was it due?"), then the update with
+      // reps = reps + 1, so concurrent grades never lose an increment and the due gate is judged on
+      // the same row the update changes (spec 06 "Spaced repetition"). A card id belonging to
+      // someone else is indistinguishable from a missing one.
+      const [before, updated, dueRows] = await batch(db, [
+        q<{ due_at: number; tz: string }>(
+          db,
+          `SELECT c.due_at, u.tz FROM srs_cards c JOIN users u ON u.id = c.user_id WHERE c.id = ? AND c.user_id = ?`,
+          cardId,
+          userId,
+        ),
         q<CardRow>(
           db,
-          `UPDATE srs_cards SET due_at = ?, reps = ? WHERE id = ? AND user_id = ? RETURNING ${CARD_COLS}`,
+          `UPDATE srs_cards SET due_at = ?, reps = reps + 1 WHERE id = ? AND user_id = ? RETURNING ${CARD_COLS}`,
           next.at,
-          next.reps,
           cardId,
           userId,
         ),
         dueCountQuery(db, userId, now),
       ]);
+      const card = before[0];
       const row = updated[0];
-      if (!row) throw fail('not_found');
+      if (!card || !row) throw fail('not_found');
       // Points only for reviewing a card that was due: grading ahead of schedule still reschedules,
-      // but cannot farm `card` points (at most one per card per local day).
+      // but cannot farm `card` points (at most one per card per local day; `card` has a daily cap).
       const award =
         card.due_at <= now
           ? await safeAward(services.award, userId, 'card', `card:${cardId}:${localDate(now, card.tz)}`, { now })

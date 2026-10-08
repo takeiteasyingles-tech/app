@@ -44,6 +44,15 @@ export function startOutbox(): void {
   });
 }
 
+/**
+ * After a login: writes the outbox kept while the session was gone (401) go out now. Writes made for
+ * another account are refused by the server (409) and dropped.
+ */
+export function flushAfterLogin(): void {
+  if (!started) return;
+  void import('../../sw/register').then(({ flushOutbox }) => flushOutbox());
+}
+
 /** Logout: per-user caches and pending writes must not outlive the session on a shared device. */
 export async function clearOfflineData(): Promise<void> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;

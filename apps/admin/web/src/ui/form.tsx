@@ -186,7 +186,6 @@ export function Form<T>({ specs, value, set, errors = {}, idp, base = [], cls = 
       errors,
       root: specs,
     }),
-    // biome-ignore lint/correctness/useExhaustiveDependencies: base is positional and stable per form.
     [idp, errors, specs],
   );
   return (
@@ -196,11 +195,23 @@ export function Form<T>({ specs, value, set, errors = {}, idp, base = [], cls = 
   );
 }
 
-export function Fields({ specs, value, path, cls = '' }: { specs: readonly Spec[]; value: Obj; path: Path; cls?: string }) {
+export function Fields({
+  specs,
+  value,
+  path,
+  cls = '',
+}: {
+  specs: readonly Spec[];
+  value: Obj;
+  path: Path;
+  cls?: string;
+}) {
   const obj = value && typeof value === 'object' ? value : {};
   return (
     <div class={`ad-grid ${cls}`}>
-      {specs.map((s) => (s.when && !s.when(obj) ? null : <FieldView key={s.k} spec={s} parent={obj} path={[...path, s.k]} />))}
+      {specs.map((s) =>
+        s.when && !s.when(obj) ? null : <FieldView key={s.k} spec={s} parent={obj} path={[...path, s.k]} />,
+      )}
     </div>
   );
 }
@@ -219,7 +230,14 @@ function FieldView({ spec, parent, path }: { spec: Spec; parent: Obj; path: Path
   switch (spec.t) {
     case 'text':
       return (
-        <Field id={id} label={spec.label} hint={spec.hint} err={err} opt={optional} wide={spec.wide || (spec.rows ?? 0) > 1}>
+        <Field
+          id={id}
+          label={spec.label}
+          hint={spec.hint}
+          err={err}
+          opt={optional}
+          wide={spec.wide || (spec.rows ?? 0) > 1}
+        >
           {spec.rows && spec.rows > 1 ? (
             <Area
               id={id}
@@ -315,12 +333,28 @@ function FieldView({ spec, parent, path }: { spec: Spec; parent: Obj; path: Path
     case 'strings':
       return (
         <Field id={id} label={spec.label} hint={spec.hint} err={err} opt={optional} wide={spec.wide}>
-          <Chips id={id} value={Array.isArray(v) ? (v as string[]) : []} ph={spec.ph} suggest={spec.suggest} err={err} errors={ctx.errors} path={path} onChange={(arr) => set(arr.length ? arr : spec.opt ? emptyAs(spec.opt) : [])} />
+          <Chips
+            id={id}
+            value={Array.isArray(v) ? (v as string[]) : []}
+            ph={spec.ph}
+            suggest={spec.suggest}
+            err={err}
+            errors={ctx.errors}
+            path={path}
+            onChange={(arr) => set(arr.length ? arr : spec.opt ? emptyAs(spec.opt) : [])}
+          />
         </Field>
       );
     case 'lines':
       return (
-        <Field id={id} label={spec.label} hint={spec.hint ?? 'Um item por linha.'} err={err ?? childErr(ctx.errors, path)} opt={optional} wide>
+        <Field
+          id={id}
+          label={spec.label}
+          hint={spec.hint ?? 'Um item por linha.'}
+          err={err ?? childErr(ctx.errors, path)}
+          opt={optional}
+          wide
+        >
           <Lines
             id={id}
             value={Array.isArray(v) ? (v as string[]) : []}
@@ -341,7 +375,14 @@ function FieldView({ spec, parent, path }: { spec: Spec; parent: Obj; path: Path
               value={typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : '#000000'}
               onInput={(e) => set((e.currentTarget as HTMLInputElement).value.toUpperCase())}
             />
-            <TextIn id={id} class="ad-mono" value={typeof v === 'string' ? v : ''} err={err} maxLength={7} onValue={(s) => set(s)} />
+            <TextIn
+              id={id}
+              class="ad-mono"
+              value={typeof v === 'string' ? v : ''}
+              err={err}
+              maxLength={7}
+              onValue={(s) => set(s)}
+            />
           </div>
         </Field>
       );
@@ -446,11 +487,22 @@ const splitLines = (t: string) =>
     .map((l) => l.trim())
     .filter(Boolean);
 
-function Lines({ id, value, onChange, rows, ph }: { id: string; value: string[]; onChange: (v: string[]) => void; rows: number; ph?: string }) {
+function Lines({
+  id,
+  value,
+  onChange,
+  rows,
+  ph,
+}: {
+  id: string;
+  value: string[];
+  onChange: (v: string[]) => void;
+  rows: number;
+  ph?: string;
+}) {
   const [text, setText] = useState(value.join('\n'));
   useEffect(() => {
     if (splitLines(text).join('\n') !== value.join('\n')) setText(value.join('\n'));
-    // biome-ignore lint/correctness/useExhaustiveDependencies: re-sync only when the outside value changes.
   }, [value]);
   return (
     <Area
@@ -466,7 +518,17 @@ function Lines({ id, value, onChange, rows, ph }: { id: string; value: string[];
   );
 }
 
-function Choices({ spec, parent, path, id }: { spec: Extract<Spec, { t: 'choices' }>; parent: Obj; path: Path; id: string }) {
+function Choices({
+  spec,
+  parent,
+  path,
+  id,
+}: {
+  spec: Extract<Spec, { t: 'choices' }>;
+  parent: Obj;
+  path: Path;
+  id: string;
+}) {
   const ctx = useForm();
   const raw = parent[spec.k];
   const opts = Array.isArray(raw) ? (raw as string[]) : null;
@@ -558,7 +620,11 @@ function ObjView({ spec, value, path }: { spec: Extract<Spec, { t: 'obj' }>; val
         <span class="ad-flabel">{spec.label}</span>
         <div class="row wrapx">
           <span class="xs grow">{spec.hint ?? 'Não definido.'}</span>
-          <button type="button" class="btn compact light" onClick={() => ctx.set(path, spec.make ? spec.make() : blank(spec.of))}>
+          <button
+            type="button"
+            class="btn compact light"
+            onClick={() => ctx.set(path, spec.make ? spec.make() : blank(spec.of))}
+          >
             <Icon name="plus" size={16} />
             <span>Adicionar</span>
           </button>
@@ -629,7 +695,6 @@ function ListView({ spec, value, path }: { spec: Extract<Spec, { t: 'list' }>; v
       },
       remove: (i) => setArr(live.current.arr.filter((_, j) => j !== i)),
     };
-    // biome-ignore lint/correctness/useExhaustiveDependencies: reads live values through the ref.
   }, []);
   const add = () => {
     setAdded(arr.length);
@@ -654,14 +719,26 @@ function ListView({ spec, value, path }: { spec: Extract<Spec, { t: 'list' }>; v
           <span />
         </div>
       ) : null}
-      <div class={spec.inline ? 'ad-inline-rows' : 'stack'} style={{ '--gap': '8px', '--cols': String(spec.of.length) }}>
+      <div
+        class={spec.inline ? 'ad-inline-rows' : 'stack'}
+        style={{ '--gap': '8px', '--cols': String(spec.of.length) }}
+      >
         {arr.map((item, i) => {
           const p = [...path, i];
           const ek = errorKey(ctx.errors, pathStr(p));
           return spec.inline ? (
             <InlineRow key={i} spec={spec} value={item} path={p} n={arr.length} ek={ek} ops={ops} />
           ) : (
-            <ItemView key={i} spec={spec} value={item} path={p} n={arr.length} ek={ek} ops={ops} initialOpen={spec.open || added === i} />
+            <ItemView
+              key={i}
+              spec={spec}
+              value={item}
+              path={p}
+              n={arr.length}
+              ek={ek}
+              ops={ops}
+              initialOpen={spec.open || added === i}
+            />
           );
         })}
       </div>
@@ -691,8 +768,13 @@ interface ItemProps {
 function ItemActions({ i, n, label, ops }: { i: number; n: number; label: string; ops: ListOps }) {
   return (
     <div class="ad-item-a">
-      <IconButton icon="up" label={`Subir ${label} ${i + 1}`} disabled={i === 0} onClick={() => ops.up(i)} />
-      <IconButton icon="down" label={`Descer ${label} ${i + 1}`} disabled={i === n - 1} onClick={() => ops.down(i)} />
+      <IconButton icon="moveUp" label={`Subir ${label} ${i + 1}`} disabled={i === 0} onClick={() => ops.up(i)} />
+      <IconButton
+        icon="moveDown"
+        label={`Descer ${label} ${i + 1}`}
+        disabled={i === n - 1}
+        onClick={() => ops.down(i)}
+      />
       <IconButton icon="dup" label={`Duplicar ${label} ${i + 1}`} onClick={() => ops.dup(i)} />
       <IconButton icon="trash" cls="danger" label={`Remover ${label} ${i + 1}`} onClick={() => ops.remove(i)} />
     </div>
@@ -700,39 +782,50 @@ function ItemActions({ i, n, label, ops }: { i: number; n: number; label: string
 }
 
 const sameItem = (a: ItemProps, b: ItemProps) =>
-  a.value === b.value && a.ek === b.ek && a.n === b.n && a.ops === b.ops && a.spec === b.spec && pathStr(a.path) === pathStr(b.path);
+  a.value === b.value &&
+  a.ek === b.ek &&
+  a.n === b.n &&
+  a.ops === b.ops &&
+  a.spec === b.spec &&
+  pathStr(a.path) === pathStr(b.path);
 
-const ItemView = memo(
-  function ItemView({ spec, value, path, n, ek, ops, initialOpen }: ItemProps) {
-    const [open, setOpen] = useState(!!initialOpen);
-    const i = path[path.length - 1] as number;
-    useEffect(() => {
-      if (ek) setOpen(true);
-    }, [ek]);
-    const sum = summaryOf(spec, value, i);
-    const ctx = useForm();
-    const bodyId = `${fieldId(ctx.idp, path)}-body`;
-    return (
-      <div class={`ad-item${open ? ' open' : ''}${ek ? ' bad' : ''}`}>
-        <div class="ad-item-h">
-          <button type="button" class="ad-item-t" aria-expanded={open ? 'true' : 'false'} aria-controls={bodyId} onClick={() => setOpen(!open)}>
-            <span class="ad-item-n">{i + 1}</span>
-            <span class="grow ad-ell">{sum || <i class="muted">{`${spec.item} sem texto`}</i>}</span>
-            {ek ? <span class="pill bl">corrigir</span> : null}
-            <Icon name={open ? 'up' : 'down'} size={16} />
-          </button>
-          {spec.fixed ? null : <ItemActions i={i} n={n} label={spec.item} ops={ops} />}
-        </div>
-        {open ? (
-          <div class="ad-item-b" id={bodyId}>
-            <Fields specs={spec.of} value={value} path={path} />
-          </div>
-        ) : null}
+const ItemView = memo(function ItemView({ spec, value, path, n, ek, ops, initialOpen }: ItemProps) {
+  const [open, setOpen] = useState(!!initialOpen);
+  const i = path[path.length - 1] as number;
+  useEffect(() => {
+    if (ek) setOpen(true);
+  }, [ek]);
+  const sum = summaryOf(spec, value, i);
+  const ctx = useForm();
+  const bodyId = `${fieldId(ctx.idp, path)}-body`;
+  return (
+    <div class={`ad-item${open ? ' open' : ''}${ek ? ' bad' : ''}`}>
+      <div class="ad-item-h">
+        <button
+          type="button"
+          class="ad-item-t"
+          aria-expanded={open ? 'true' : 'false'}
+          aria-controls={bodyId}
+          onClick={() => setOpen(!open)}
+        >
+          <span class="ad-item-n">{i + 1}</span>
+          <span class="grow ad-ell">{sum || <i class="muted">{`${spec.item} sem texto`}</i>}</span>
+          {ek ? <span class="pill bl">corrigir</span> : null}
+          <span class="ad-item-tg" aria-hidden="true">
+            {open ? 'Fechar' : 'Editar'}
+            <Icon name={open ? 'up' : 'down'} size={14} />
+          </span>
+        </button>
+        {spec.fixed ? null : <ItemActions i={i} n={n} label={spec.item} ops={ops} />}
       </div>
-    );
-  },
-  sameItem,
-);
+      {open ? (
+        <div class="ad-item-b" id={bodyId}>
+          <Fields specs={spec.of} value={value} path={path} />
+        </div>
+      ) : null}
+    </div>
+  );
+}, sameItem);
 
 const InlineRow = memo(function InlineRow({ spec, value, path, n, ek, ops }: ItemProps) {
   const i = path[path.length - 1] as number;
@@ -747,7 +840,19 @@ const InlineRow = memo(function InlineRow({ spec, value, path, n, ek, ops }: Ite
   );
 }, sameItem);
 
-function InlineCell({ spec, parent, path, listLabel, i }: { spec: Spec; parent: Obj; path: Path; listLabel: string; i: number }) {
+function InlineCell({
+  spec,
+  parent,
+  path,
+  listLabel,
+  i,
+}: {
+  spec: Spec;
+  parent: Obj;
+  path: Path;
+  listLabel: string;
+  i: number;
+}) {
   const ctx = useForm();
   const id = fieldId(ctx.idp, path);
   const v = parent[spec.k];
@@ -758,7 +863,14 @@ function InlineCell({ spec, parent, path, listLabel, i }: { spec: Spec; parent: 
   if (spec.t === 'custom') {
     input = spec.render({ value: v, parent, set, path, id, err });
   } else if (spec.t === 'bool') {
-    input = <Switch id={id} on={!!v} label={label} onChange={(on) => set(on ? true : spec.opt === 'undef' ? undefined : false)} />;
+    input = (
+      <Switch
+        id={id}
+        on={!!v}
+        label={label}
+        onChange={(on) => set(on ? true : spec.opt === 'undef' ? undefined : false)}
+      />
+    );
   } else if (spec.t === 'select') {
     input = (
       <Sel

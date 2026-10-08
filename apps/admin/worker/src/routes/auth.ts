@@ -7,8 +7,6 @@ import {
   adminApi,
   canGrantRole,
   DEFAULT_TZ,
-  DURATIONS,
-  LOCKOUT_FAILED_LOGINS,
   newId,
   type Ok,
   primaryRole,
@@ -22,14 +20,17 @@ import {
   type Bind,
   batch,
   batchRun,
+  CLAIMED_BY,
   checkRateLimit,
   clearSessionCookie,
   clientIp,
   dummyVerify,
+  failedLoginQuery,
   hashIp,
   hashPassword,
   hashToken,
   isTokenShape,
+  newClaim,
   newSession,
   one,
   type Query,
@@ -63,27 +64,8 @@ async function currentTokenHash(c: Ctx): Promise<string | null> {
 
 const ipHashOf = (c: Ctx) => hashIp(clientIp(c), c.env.IP_HASH_SALT);
 
-/** Same atomic failure counter as the student login (10 failures → 15 min lock). */
-function failedLoginQuery(db: D1Database, userId: string, now: number): Query<FailRow> {
-  const next = '(CASE WHEN locked_until IS NULL THEN failed_logins ELSE 0 END) + 1';
-  return q<FailRow>(
-    db,
-    `UPDATE users SET
-       failed_logins = CASE WHEN locked_until > ?1 THEN failed_logins + 1 WHEN ${next} >= ?3 THEN 0 ELSE ${next} END,
-       locked_until = CASE WHEN locked_until > ?1 THEN locked_until WHEN ${next} >= ?3 THEN ?2 ELSE NULL END
-     WHERE id = ?4
-     RETURNING failed_logins, locked_until`,
-    now,
-    now + DURATIONS.lockoutMs,
-    LOCKOUT_FAILED_LOGINS,
-    userId,
-  );
-}
-
-interface FailRow {
-  failed_logins: number;
-  locked_until: number | null;
-}
+// failedLoginQuery (worker-core auth/lockout.ts): the same atomic, decaying failure counter as the
+// student login (10 failures within the decay window → 15 min lock).
 
 interface LoginRow {
   id: string;
@@ -174,6 +156,14 @@ route(routes, api.logout, async (c) => {
   if (hash) await revokeSession(c.env.DB, hash);
   clearSessionCookie(c, 'admin');
   return c.json({ ok: true } satisfies Ok);
+});
+
+// The panel's start-up probe (X-Tie-Probe: 1) without any session cookie: 204 instead of a 401, so a
+// signed-out load does not log a failed request. Any cookie (valid or not) still goes through the
+// normal guards below, and plain calls keep the 401.
+routes.get(api.me.path, async (c, next) => {
+  if (c.req.header('X-Tie-Probe') === '1' && !readSessionCookie(c, 'admin')) return c.body(null, 204);
+  await next();
 });
 
 route(routes, api.me, async (c) => {
@@ -330,7 +320,9 @@ route(routes, api.inviteAccept, async (c) => {
   // The first statement claims the token; every later one applies only if this request's claim won.
   // The claim re-checks the target in SQL, so a change since the lookup (the email registered, a
   // password set, a role the creator cannot manage granted) voids it instead of being overwritten.
-  const claimed = '(SELECT used_at FROM one_time_tokens WHERE token_hash = ?) = ?';
+  // The claim carries a per-request nonce: two accepts in the same millisecond cannot both win.
+  const claimed = CLAIMED_BY;
+  const nonce = newClaim();
   const targetOk: string[] = [];
   const targetBinds: Bind[] = [];
   if (inv.userId) {
@@ -349,8 +341,9 @@ route(routes, api.inviteAccept, async (c) => {
   const stmts: Query<unknown>[] = [
     q(
       db,
-      `UPDATE one_time_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND ${targetOk.join(' AND ')}`,
+      `UPDATE one_time_tokens SET used_at = ?, claim = ? WHERE token_hash = ? AND used_at IS NULL AND ${targetOk.join(' AND ')}`,
       now,
+      nonce,
       tokenHash,
       ...targetBinds,
     ),
@@ -367,7 +360,7 @@ route(routes, api.inviteAccept, async (c) => {
         DEFAULT_TZ,
         now,
         tokenHash,
-        now,
+        nonce,
       ),
     );
   }
@@ -380,7 +373,7 @@ route(routes, api.inviteAccept, async (c) => {
       now,
       userId,
       tokenHash,
-      now,
+      nonce,
     ),
     q(
       db,
@@ -391,10 +384,10 @@ route(routes, api.inviteAccept, async (c) => {
       inv.createdBy,
       now,
       tokenHash,
-      now,
+      nonce,
     ),
     // A password was just set: older sessions of the account (app and admin) end here.
-    q(db, `DELETE FROM sessions WHERE user_id = ? AND ${claimed}`, userId, tokenHash, now),
+    q(db, `DELETE FROM sessions WHERE user_id = ? AND ${claimed}`, userId, tokenHash, nonce),
     q(
       db,
       `INSERT INTO sessions(token_hash, user_id, audience, created_at, last_seen_at, expires_at, ip_hash, ua)
@@ -407,7 +400,7 @@ route(routes, api.inviteAccept, async (c) => {
       await ipHashOf(c),
       (c.req.header('User-Agent') ?? '').slice(0, 256) || null,
       tokenHash,
-      now,
+      nonce,
     ),
     // In the same batch as the claim it records: no committed account or role without its audit row.
     await auditIf(
@@ -420,7 +413,7 @@ route(routes, api.inviteAccept, async (c) => {
       },
       now,
       claimed,
-      [tokenHash, now],
+      [tokenHash, nonce],
       { userId, role: primaryRole([...new Set<Role>([...inv.targetRoles, inv.role])]) },
     ),
   );

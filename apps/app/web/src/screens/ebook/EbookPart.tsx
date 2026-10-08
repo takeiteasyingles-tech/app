@@ -59,7 +59,8 @@ function Real({ eb, desk }: { eb: Ebook; desk: boolean }) {
         style={
           desk
             ? { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px 14px' }
-            : { display: 'grid', gap: '10px' }
+            : // minmax(0, 1fr): an implicit auto column grows to the widest card's min-content.
+              { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '10px' }
         }
       >
         {eb.real.map((r, i) => {
@@ -90,6 +91,8 @@ function Real({ eb, desk }: { eb: Ebook; desk: boolean }) {
                         </span>
                       ) : null}
                       {j ? <span class="sr">{' ou '}</span> : null}
+                      {/* A line may break between alternatives (each one stays whole). */}
+                      {j ? <wbr /> : null}
                       <span style={{ whiteSpace: x.length <= 28 ? 'nowrap' : undefined }}>{x}</span>
                     </span>
                   ))}

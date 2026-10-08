@@ -35,7 +35,8 @@ export function same(a: unknown, b: unknown): boolean {
 /** Keys of `next` whose value differs from `base` (a partial update body). */
 export function patchOf(base: Obj, next: Obj, keys?: readonly string[]): Obj {
   const out: Obj = {};
-  for (const k of keys ?? Object.keys(next)) if (!same(base[k], next[k])) out[k] = next[k] === undefined ? null : next[k];
+  for (const k of keys ?? Object.keys(next))
+    if (!same(base[k], next[k])) out[k] = next[k] === undefined ? null : next[k];
   return out;
 }
 
@@ -118,14 +119,25 @@ export function SaveBar({
   extra?: ComponentChildren;
 }) {
   return (
-    <div class="ad-savebar" role="region" aria-label="Salvar">
-      {dirty ? <span class="ad-dirty">Alterações não salvas</span> : <span class="ad-saved">{savedAt ? `Salvo ${fmtAgo(savedAt)}` : 'Sem alterações'}</span>}
-      {errors ? <Pill label={`${errors} ${errors === 1 ? 'campo para corrigir' : 'campos para corrigir'}`} tone="or" icon="alert" /> : null}
-      <span class="grow" />
-      {extra}
-      <Button label="Descartar" kind="light" disabled={!dirty || busy} onClick={onDiscard} />
-      <Button label="Salvar" icon="check" busy={busy} disabled={!dirty} onClick={onSave} title="Ctrl+S" />
-    </div>
+    <section class={`ad-savebar${dirty ? ' dirty' : ''}`} aria-label="Salvar">
+      {dirty ? (
+        <span class="ad-dirty">Alterações não salvas</span>
+      ) : (
+        <span class="ad-saved">{savedAt ? `Salvo ${fmtAgo(savedAt)}` : 'Sem alterações'}</span>
+      )}
+      {errors ? (
+        <Pill
+          label={`${errors} ${errors === 1 ? 'campo para corrigir' : 'campos para corrigir'}`}
+          tone="or"
+          icon="alert"
+        />
+      ) : null}
+      <div class="ad-savebar-btns">
+        {extra}
+        <Button label="Descartar" kind="light" disabled={!dirty || busy} onClick={onDiscard} />
+        <Button label="Salvar" icon="check" busy={busy} disabled={!dirty} onClick={onSave} title="Ctrl+S" />
+      </div>
+    </section>
   );
 }
 
@@ -143,13 +155,16 @@ export function StatusPill({ status }: { status: string }) {
 }
 
 export function PubPill({ status }: { status: 'draft' | 'published' }) {
-  return <Pill label={status === 'published' ? 'Publicado' : 'Rascunho'} tone={status === 'published' ? 'gr' : 'gold'} />;
+  return (
+    <Pill label={status === 'published' ? 'Publicado' : 'Rascunho'} tone={status === 'published' ? 'gr' : 'gold'} />
+  );
 }
 
 export function DraftNote() {
   return (
     <div class="ad-note bl">
-      <Icon name="rocket" size={18} /> Edições ficam no rascunho. Os alunos só veem depois de uma publicação (Publicações).
+      <Icon name="rocket" size={18} /> Edições ficam no rascunho. Os alunos só veem depois de uma publicação
+      (Publicações).
     </div>
   );
 }
@@ -163,7 +178,12 @@ export interface ChildOps<R> {
 }
 
 /** What changed between the saved rows and the edited ones (by id). */
-export function diffRows<R extends Obj>(base: readonly R[], draft: readonly R[], idOf: (r: R) => string, keys: readonly string[]): ChildOps<R> {
+export function diffRows<R extends Obj>(
+  base: readonly R[],
+  draft: readonly R[],
+  idOf: (r: R) => string,
+  keys: readonly string[],
+): ChildOps<R> {
   const before = new Map(base.map((r) => [idOf(r), r]));
   const after = new Set(draft.map(idOf));
   const out: ChildOps<R> = { create: [], update: [], remove: [] };
@@ -188,17 +208,21 @@ export interface CrudApi {
 }
 
 /** Calls the typed CRUD endpoints with loose bodies (the forms build them from the shared schemas). */
+// biome-ignore lint/suspicious/noExplicitAny: generic over every content entity; bodies are checked by the forms and the server.
+const callLoose = call as (ep: EndpointDef, opts?: any) => Promise<unknown>;
+
 export const crud = {
-  // biome-ignore lint/suspicious/noExplicitAny: generic over every content entity.
-  list: <T,>(api: CrudApi, parent?: string | number, signal?: AbortSignal) => call(api.list as any, { query: { parent: parent === undefined ? undefined : String(parent) }, signal }) as Promise<{ items: T[] }>,
-  // biome-ignore lint/suspicious/noExplicitAny: generic over every content entity.
-  get: <T,>(api: CrudApi, id: string | number, signal?: AbortSignal) => call(api.get as any, { params: { id: String(id) }, signal }) as Promise<{ item: T }>,
-  // biome-ignore lint/suspicious/noExplicitAny: generic over every content entity.
-  create: <T,>(api: CrudApi, body: Obj) => call(api.create as any, { body }) as Promise<{ item: T }>,
-  // biome-ignore lint/suspicious/noExplicitAny: generic over every content entity.
-  update: <T,>(api: CrudApi, id: string | number, body: Obj) => call(api.update as any, { params: { id: String(id) }, body }) as Promise<{ item: T }>,
-  // biome-ignore lint/suspicious/noExplicitAny: generic over every content entity.
-  remove: (api: CrudApi, id: string | number) => call(api.remove as any, { params: { id: String(id) } }) as Promise<{ ok: true }>,
+  list: <T,>(api: CrudApi, parent?: string | number, signal?: AbortSignal) =>
+    callLoose(api.list, { query: { parent: parent === undefined ? undefined : String(parent) }, signal }) as Promise<{
+      items: T[];
+    }>,
+  get: <T,>(api: CrudApi, id: string | number, signal?: AbortSignal) =>
+    callLoose(api.get, { params: { id: String(id) }, signal }) as Promise<{ item: T }>,
+  create: <T,>(api: CrudApi, body: Obj) => callLoose(api.create, { body }) as Promise<{ item: T }>,
+  update: <T,>(api: CrudApi, id: string | number, body: Obj) =>
+    callLoose(api.update, { params: { id: String(id) }, body }) as Promise<{ item: T }>,
+  remove: (api: CrudApi, id: string | number) =>
+    callLoose(api.remove, { params: { id: String(id) } }) as Promise<{ ok: true }>,
 };
 
 /**
@@ -227,17 +251,29 @@ export async function applyRows<R extends Obj>(
 }
 
 /** Replaces/removes one row of a baseline list, keeping the draft's order for new ones. */
-export function applyToBase<R extends Obj>(base: R[], kind: 'create' | 'update' | 'remove', id: string, row: R | null, idOf: (r: R) => string): R[] {
+export function applyToBase<R extends Obj>(
+  base: R[],
+  kind: 'create' | 'update' | 'remove',
+  id: string,
+  row: R | null,
+  idOf: (r: R) => string,
+): R[] {
   if (kind === 'remove') return base.filter((r) => idOf(r) !== id);
   if (kind === 'create') return row ? [...base, row] : base;
   return base.map((r) => (idOf(r) === id && row ? row : r));
 }
 
 /** Errors of each child row, validated with its create schema and keyed under `prefix.i`. */
-export function rowErrors(schema: z.ZodType, rows: readonly Obj[], prefix: string, keys: readonly string[]): Record<string, string> {
+export function rowErrors(
+  schema: z.ZodType,
+  rows: readonly Obj[],
+  prefix: string,
+  keys: readonly string[],
+): Record<string, string> {
   const out: Record<string, string> = {};
   rows.forEach((r, i) => {
-    for (const [k, v] of Object.entries(zodErrors(schema, pick(r, keys)))) out[k ? `${prefix}.${i}.${k}` : `${prefix}.${i}`] = v;
+    for (const [k, v] of Object.entries(zodErrors(schema, pick(r, keys))))
+      out[k ? `${prefix}.${i}.${k}` : `${prefix}.${i}`] = v;
   });
   return out;
 }
@@ -287,13 +323,27 @@ export function CreateModal({
       foot={
         <>
           <Button label="Cancelar" kind="light" onClick={onClose} />
-          <Button label="Criar e editar" icon="plus" type="submit" form="create-form" busy={busy} disabled={!idOk || !title.trim()} />
+          <Button
+            label="Criar e editar"
+            icon="plus"
+            type="submit"
+            form="create-form"
+            busy={busy}
+            disabled={!idOk || !title.trim()}
+          />
         </>
       }
     >
       <form id="create-form" class="stack" onSubmit={submit} noValidate>
         <Field id="new-id" label={idLabel} hint={idHint} err={id && !idOk ? 'Identificador inválido.' : null}>
-          <TextIn id="new-id" class="ad-mono" value={id} onValue={setId} inputMode={numeric ? 'numeric' : undefined} data-autofocus />
+          <TextIn
+            id="new-id"
+            class="ad-mono"
+            value={id}
+            onValue={setId}
+            inputMode={numeric ? 'numeric' : undefined}
+            data-autofocus
+          />
         </Field>
         <Field id="new-title" label="Título">
           <TextIn id="new-title" value={title} onValue={setTitle} maxLength={200} />
