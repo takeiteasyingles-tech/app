@@ -494,9 +494,11 @@ async function mgPronRec(): Promise<void> {
   let rec: Awaited<ReturnType<typeof speech.record>> | null = null;
   let heard = '';
   let lis: { stop(): void } | null = null;
+  // VAD: a silêncio depois da fala encerra a gravação sozinho (ligado ao stopper abaixo).
+  let quiet = () => {};
   if (speech.canRecord) {
     try {
-      rec = await speech.record({ maxMs: 7000 });
+      rec = await speech.record({ maxMs: 7000, onSilence: () => quiet() });
     } catch {
       rec = null;
     }
@@ -561,12 +563,12 @@ async function mgPronRec(): Promise<void> {
       toast('Modo demo: cada frase não pontua sozinha. Os pontos da conversa vêm quando você encerrar.');
     }
   };
-  setTimeout(
-    () => {
-      if (M === m && m.pronState === 'rec') m.stopper?.();
-    },
-    rec ? 5000 : 1500,
-  );
+  const auto = () => {
+    if (M === m && m.pronState === 'rec') m.stopper?.();
+  };
+  // Para no silêncio depois da fala (VAD); o timer é só o limite de uma gravação que nunca silencia.
+  quiet = auto;
+  setTimeout(auto, rec ? 7000 : 1500);
 }
 
 /** Turnos feitos no cliente (modo demo, ajudas) que o /end acrescenta à sessão do servidor. */

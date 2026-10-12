@@ -2,7 +2,7 @@
 // Tuples become objects, positional items get stable ids, EP_GAPS fold into lyrics, asset paths
 // become media ids. All 20 TITLES become episodes; only the scripted ones are published.
 
-import { TTS_SPEAKERS } from '@tie/shared/constants';
+import { STEP_GROUP_STARTS, TTS_SPEAKERS } from '@tie/shared/constants';
 import type {
   AlbumRowDb,
   AssistantClipRowDb,
@@ -42,13 +42,32 @@ const DONE_GO: Record<string, string> = { ep2: 'episodio/2/1', ebook1: 'ebook/1'
 
 export const ebookOfEpisode = (num: number): number => Math.ceil(num / EPISODES_PER_EBOOK);
 
+/**
+ * Production step order (spec 05 "Step order"): the prototype's step at each position. The song's
+ * first pass and the e-book open the episode; the intro moves to 3 and starts "O episódio".
+ */
+export const STEP_ORDER = [2, 3, 1, 4, 5, 6, 7, 8, 9, 10] as const;
+
+/** The prototype's STEPS in production order; each group label goes on its group's new first step. */
+export function orderSteps(P: Any[]): { n: number; name: string; pt: string; group_label: string | null }[] {
+  const groups = P.map((s) => s.group as string | undefined).filter((g): g is string => !!g);
+  const starts = [1, ...STEP_GROUP_STARTS];
+  return STEP_ORDER.map((old, i) => {
+    const s = P.find((x) => x.n === old);
+    if (!s) throw new Error(`STEPS has no step ${old}`);
+    const n = i + 1;
+    const g = starts.indexOf(n);
+    return { n, name: s.name, pt: s.pt, group_label: g >= 0 ? (groups[g] ?? null) : null };
+  });
+}
+
 export interface SeedContent extends ContentRows {}
 
 export function buildContent(D: Any, X: Extracted, media: MediaIndex, now: number): SeedContent {
   const updated_at = now;
 
   // ----- Course structure -----
-  const steps = (D.STEPS as Any[]).map((s) => ({ n: s.n, name: s.name, pt: s.pt, group_label: s.group ?? null }));
+  const steps = orderSteps(D.STEPS as Any[]);
   const seasons = X.SEASONS.map((title, i) => ({
     n: i + 1,
     title,

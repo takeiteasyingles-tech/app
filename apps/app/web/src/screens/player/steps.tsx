@@ -1,5 +1,7 @@
 // The 10 step bodies of the episode player (STEP[1..10] in prototipo/js/screens/player.js), with the
 // prototype's exact markup, classes, inline styles and pt-BR copy so tie.css renders them the same.
+// Steps 1-3 follow the production order (STEP: song, e-book, intro), not the prototype's.
+import { STEP } from '@tie/shared/constants';
 import { need } from '@tie/shared/domain/gating';
 import { Btn, Icon } from '@tie/ui';
 import { type ComponentChildren, Fragment } from 'preact';
@@ -60,7 +62,7 @@ function CastStrip({ Ep, cat, desk, bare = false }: Pick<StepCtx, 'Ep' | 'cat' |
   );
 }
 
-// ---------- 1 · Abertura ----------
+// ---------- 3 · Intro (abre "O episódio") ----------
 
 /**
  * A lesson block's all-caps label in sentence case, for a light read: "O VERBO TO BE NA 1ª E 2ª
@@ -159,7 +161,7 @@ function Intro({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx): StepOut {
   };
 }
 
-// ---------- 2 e 10 · Música (título, tradução, player e instrução fixos; só a letra rola) ----------
+// ---------- 1 e 10 · Música (título, tradução, player e instrução fixos; só a letra rola) ----------
 
 function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
   const len = Ep.lyrics.length || 1;
@@ -174,7 +176,7 @@ function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
         {/* Label and title are one block; the Tradução toggle centres on that block. */}
         <div class="row between" style={{ '--gap': '12px' }}>
           <div class="pl-songh">
-            <div class="lbl">{step === 2 ? 'Música · 1ª passada' : 'Música · cante junto'}</div>
+            <div class="lbl">{step === STEP.SONG ? 'Música · 1ª passada' : 'Música · cante junto'}</div>
             <div class="h2">{Ep.songTitle}</div>
           </div>
           <button
@@ -251,7 +253,7 @@ function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
             </div>
           ))}
         </div>
-        {step === 2 && !need(Ep, s, 2) ? (
+        {step === STEP.SONG && !need(Ep, s, STEP.SONG) ? (
           <NextCard icon="download" onClick={tap(a.next)}>
             <b class="pl-nextt">
               Próximo: baixar o <span class="nw">e-book {Ep.ebook}.</span>
@@ -285,18 +287,19 @@ function NextCard({
   );
 }
 
-// ---------- 3 · E-book ----------
+// ---------- 2 · E-book ----------
 
 function Ebook({ Ep, cat, s, P, a, tap }: StepCtx): StepOut {
   const busy = P.dl === 'busy';
-  const nx = cat.steps[3];
+  // The step after the e-book (cat.steps is 0-based).
+  const nx = cat.steps[STEP.EBOOK];
   return {
     body: (
       <>
         <div class="card stack" style={{ '--gap': '12px' }}>
           <div class="row between">
             <span class="lbl">
-              E-book {pad2(Ep.ebook)} · Episódios {Ep.ebookEps}
+              {Ep.season ? `Temporada ${pad2(Ep.season)} · ` : ''}Episódio {pad2(Ep.num)}
             </span>
             <span class="pill navy pl-pdf">
               <Icon name="book" size={14} />
@@ -550,14 +553,15 @@ function Dialog({ Ep, cat, P, desk, a, tap }: StepCtx): StepOut {
 
 // ---------- 6 · Take the Mic (gravar) ----------
 
-function Mic({ Ep, s, P, desk, training, a, tap }: StepCtx): StepOut {
+function Mic({ Ep, s, P, training, a, tap }: StepCtx): StepOut {
   const m = Ep.mic[P.micIdx];
   if (!m) return { body: <></> };
   const sc = s.scores[m.id];
   const fbObj: MicFeedback | null = P.fb || (sc != null ? { score: sc, praise_pt: m.fb, issues: [] } : null);
-  const status =
-    P.mic === 'rec'
-      ? 'Ouvindo… toque para parar'
+  const status = P.micHear
+    ? 'Ouça a frase…'
+    : P.mic === 'rec'
+      ? 'Fale agora · toque para parar'
       : P.mic === 'busy'
         ? 'Avaliando…'
         : fbObj
@@ -640,26 +644,79 @@ function Mic({ Ep, s, P, desk, training, a, tap }: StepCtx): StepOut {
             <Icon name={P.mic === 'rec' ? 'stop' : 'mic'} size={28} />
           </button>
         </div>
-        {/* Ouvir, then the take's waveform (grey: nothing recorded; orange and moving: recording;
-            blue: a recorded take) and the status. On a phone the status drops under them. */}
-        <div class={`row pl-microw${P.mic === 'rec' ? ' rec' : ''}`} style={{ '--gap': '12px' }}>
-          <button type="button" class="btn light compact" onClick={tap(() => a.say(m.en))}>
-            <Icon name="speaker" size={18} />
-            <span>Ouvir</span>
-          </button>
-          <div
-            class={`waves mini pl-waves${P.mic === 'rec' ? ' rec' : P.mic === 'done' || fbObj ? ' done' : ''}`}
-            aria-hidden="true"
-          >
-            {Array.from({ length: desk ? 16 : 22 }, (_, i) => (
-              <i key={i} style={{ height: `${8 + ((i * 7) % 17)}px`, animationDelay: `${i * 0.05}s` }} />
-            ))}
-          </div>
-          <span class="sm grow pl-mics">{status}</span>
-        </div>
-        {fb}
+        {P.micOpen ? null : fb}
       </div>
     ),
+    // Hear → "Fale agora" → score: a phrase card opens this, plays the phrase and starts recording when it
+    // ends. The score stays on the card once the modal closes.
+    modal: P.micOpen ? (
+      <div class="overlay">
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: the scrim mirrors the close button for pointer users */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: the modal's close button is the keyboard path */}
+        <div class="scrim" onClick={tap(a.micClose)} />
+        <div class="sheet pl-micm" role="dialog" aria-modal="true" aria-label={`Frase ${P.micIdx + 1}: ${m.en}`}>
+          <div class="grab" />
+          <div class="row between top">
+            <div class="lbl">
+              Frase {P.micIdx + 1} de {Ep.mic.length}
+            </div>
+            <button type="button" class="iconbtn pl-micx" onClick={tap(a.micClose)} aria-label="Fechar">
+              <Icon name="close" size={18} />
+            </button>
+          </div>
+          <div class="stack tc" style={{ '--gap': '6px' }}>
+            <div class="h2">{m.en}</div>
+            {m.tip ? (
+              <div class="sm">
+                <b>Dica de boca:</b> {m.tip}
+              </div>
+            ) : null}
+          </div>
+          <div class="stack pl-micc" style={{ '--gap': '12px' }}>
+            <button
+              type="button"
+              class={`mic pl-micbig${P.mic === 'rec' ? ' rec' : ''}${P.micHear ? ' hear' : ''}`}
+              onClick={tap(a.record)}
+              aria-label={P.mic === 'rec' ? 'Parar' : 'Gravar'}
+              aria-pressed={P.mic === 'rec'}
+              disabled={P.mic === 'busy'}
+            >
+              <Icon name={P.micHear ? 'speaker' : P.mic === 'rec' ? 'stop' : 'mic'} size={36} />
+            </button>
+            <div
+              class={`waves mini pl-waves${P.mic === 'rec' ? ' rec' : P.mic === 'done' || fbObj ? ' done' : ''}`}
+              aria-hidden="true"
+            >
+              {Array.from({ length: 22 }, (_, i) => (
+                <i key={i} style={{ height: `${8 + ((i * 7) % 17)}px`, animationDelay: `${i * 0.05}s` }} />
+              ))}
+            </div>
+            <div class={`pl-mics${P.mic === 'rec' ? ' rec' : ''}`} role="status" aria-live="polite">
+              {status}
+            </div>
+          </div>
+          {fb}
+          {P.mic === 'done' ? (
+            <div class="row pl-micact" style={{ '--gap': '10px' }}>
+              <button type="button" class="btn light" onClick={tap(() => a.micPick(P.micIdx))}>
+                <Icon name="speaker" size={18} />
+                <span>Ouvir e repetir</span>
+              </button>
+              {P.micIdx < Ep.mic.length - 1 ? (
+                <button type="button" class="btn" onClick={tap(() => a.micPick(P.micIdx + 1))}>
+                  <span>Próxima frase</span>
+                  <Icon name="next" size={18} />
+                </button>
+              ) : (
+                <button type="button" class="btn" onClick={tap(a.micClose)}>
+                  <span>Concluir</span>
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    ) : undefined,
     body: (
       <>
         <div class="stack" style={{ '--gap': '6px' }}>
@@ -677,8 +734,9 @@ function Mic({ Ep, s, P, desk, training, a, tap }: StepCtx): StepOut {
                   ...(i === P.micIdx ? { borderColor: 'var(--navy)', borderWidth: '2px' } : {}),
                 }}
               >
-                <span class="num" style={{ color: 'var(--orange)', width: '20px' }}>
-                  {i + 1}
+                <span class={`pl-micsp${P.micHear && i === P.micIdx ? ' on' : ''}`}>
+                  <Icon name="speaker" size={18} />
+                  <span class="pl-sr">Ouvir e gravar: </span>
                 </span>
                 <span class="h3 grow" style={{ fontSize: '1rem' }}>
                   {x.en}
@@ -1107,13 +1165,13 @@ function Action({ Ep, cat, s, P, desk, a, tap }: StepCtx): StepOut {
 /** STEP[n](Ep, s): the body (and dock) of step n. */
 export function renderStep(c: StepCtx, onVideoEnd: () => void): StepOut {
   switch (c.step) {
-    case 1:
-      return Intro(c);
-    case 2:
-    case 10:
+    case STEP.SONG:
+    case STEP.LAST:
       return Song(c);
-    case 3:
+    case STEP.EBOOK:
       return Ebook(c);
+    case STEP.INTRO:
+      return Intro(c);
     case 4:
       return Look(c, onVideoEnd);
     case 5:

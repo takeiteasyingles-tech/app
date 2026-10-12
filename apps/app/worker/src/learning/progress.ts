@@ -11,6 +11,7 @@ import {
   type MicScoreRes,
   newId,
   PRONOUNCE_GOOD,
+  STEP,
   type StepOkBody,
   type StepOkRes,
   stepKey,
@@ -32,7 +33,7 @@ import type { LearningDeps } from './deps';
 // need() only, never this lock (as in the prototype, where settings.free only feeds gate()).
 
 /** Steps whose completion the client attests when the media ends (mark(n) in player.js). */
-export const MEDIA_STEPS: ReadonlySet<number> = new Set([1, 2, 4, 5, 10]);
+export const MEDIA_STEPS: ReadonlySet<number> = new Set([STEP.SONG, STEP.INTRO, STEP.LOOK, STEP.DIALOG, STEP.LAST]);
 /** Leaving these steps moves the episode's cards into Revisão (SrsService.unlock). */
 export const CARD_STEPS: ReadonlySet<number> = new Set([4, 8]);
 /** Steps that hold the scored activities: Take the Mic (record) and Take Action. */

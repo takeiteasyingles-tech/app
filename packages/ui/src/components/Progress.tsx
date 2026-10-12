@@ -1,3 +1,4 @@
+import { STEP_GROUP_STARTS } from '@tie/shared/constants';
 import type { ComponentChildren } from 'preact';
 
 export const STEP_COUNT = 10;
@@ -11,12 +12,12 @@ export type SegsProps = {
   total?: number;
 };
 
-/** C.segs: the 10-step bar; separators before steps 4 and 10. */
+/** C.segs: the 10-step bar; a separator before each group ("O episódio" at 3, "Fechamento" at 10). */
 export function Segs({ cur, reached, total = STEP_COUNT }: SegsProps) {
   const bars = [];
   for (let n = 1; n <= total; n++) {
     const state = n < cur || (n <= reached && n !== cur) ? 'done' : n === cur ? 'now' : '';
-    bars.push(<i key={n} class={state + (n === 4 || n === 10 ? ' sep' : '')} />);
+    bars.push(<i key={n} class={state + (STEP_GROUP_STARTS.includes(n) ? ' sep' : '')} />);
   }
   return <div class="segs">{bars}</div>;
 }

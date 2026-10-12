@@ -58,7 +58,7 @@ describe('learning routes', () => {
     const res = await app(world())('POST', '/api/progress/advance', { ep: 1, step: 2 });
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({
-      error: { code: 'gated', message: 'Ouça a abertura até o fim', details: { prog: 1, step: 2 } },
+      error: { code: 'gated', message: 'Ouça a música até o fim', details: { prog: 1, step: 2 } },
     });
   });
 

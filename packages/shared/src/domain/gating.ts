@@ -1,8 +1,10 @@
+import { STEP } from '../constants';
 import type { Episode } from '../content/schema';
 import { stepKey, type TieState } from '../state';
 
 // need() from prototipo/js/screens/player.js, keyed by stable ids instead of list indexes:
-// scores[phraseId] instead of scores['ep-i'], exAns[itemId] instead of exAns['ep-x-j'].
+// scores[phraseId] instead of scores['ep-i'], exAns[itemId] instead of exAns['ep-x-j']. Steps 1-3 follow
+// the production order (STEP: song, e-book, intro), not the prototype's (intro, song, e-book).
 // The server runs the same function before accepting /api/progress/advance.
 
 export type GateEpisode = Pick<Episode, 'num' | 'ebook'> & {
@@ -15,10 +17,10 @@ export type GateState = Pick<TieState, 'ebooks' | 'epsDone' | 'prog' | 'stepOk' 
 
 /** What is still missing before the step lets the student move on ('' = unlocked). */
 export function need(ep: GateEpisode, s: GateState, step: number): string {
-  if (step === 3) return s.ebooks[ep.ebook] ? '' : 'Baixe o e-book para seguir';
+  if (step === STEP.EBOOK) return s.ebooks[ep.ebook] ? '' : 'Baixe o e-book para seguir';
   if (s.epsDone[ep.num] || (s.prog[ep.num] || 1) > step || s.stepOk[stepKey(ep.num, step)]) return '';
-  if (step === 1) return 'Ouça a abertura até o fim';
-  if (step === 2) return 'Ouça a música até o fim';
+  if (step === STEP.INTRO) return 'Ouça a abertura até o fim';
+  if (step === STEP.SONG) return 'Ouça a música até o fim';
   if (step === 4) return ep.sceneVideo ? 'Assista à cena até o fim' : '';
   if (step === 5) return 'Ouça o diálogo até o fim';
   if (step === 6) {

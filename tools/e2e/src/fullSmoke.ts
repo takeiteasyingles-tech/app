@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import type { BrowserContext, Page } from '@playwright/test';
 import { SUPER_ADMIN_EMAIL } from '@tie/shared/authz';
+import { STEP } from '@tie/shared/constants';
 import { buildApp } from '../../parity/src/build';
 import { slot as slotOf } from '../../parity/src/config';
 import { launchBrowser, TSX_HELPERS } from '../../parity/src/determinism';
@@ -131,10 +132,10 @@ async function main() {
     await page.getByRole('heading', { level: 1, name: /Oi, Sofia/ }).waitFor({ timeout: 20_000 });
     step(`signup + onboarding (${email}) → Hoje`);
 
-    // 2. Episode 1, steps 1-5 (server-side gating, e-book download at step 3).
+    // 2. Episode 1, steps 1-5 (server-side gating, e-book download at step 2).
     // step-ok marks the media of step s as played; advance names the step to move to (s + 1).
     for (const s of [1, 2, 3, 4, 5]) {
-      if (s === 3) ok(await api(page, 'POST', '/api/ebooks/1/download', {}), 'ebook download');
+      if (s === STEP.EBOOK) ok(await api(page, 'POST', '/api/ebooks/1/download', {}), 'ebook download');
       else ok(await api(page, 'POST', '/api/progress/step-ok', { ep: 1, step: s }), `step-ok ${s}`);
       ok(await api(page, 'POST', '/api/progress/advance', { ep: 1, step: s + 1 }), `advance ${s} → ${s + 1}`);
     }

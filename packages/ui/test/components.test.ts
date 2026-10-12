@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { STEP_GROUP_STARTS } from '@tie/shared/constants';
 import { h } from 'preact';
 import { describe, expect, it } from 'vitest';
 import {
@@ -79,6 +80,16 @@ const TIE = loadPrototype({ profile: { avatar: 4, photo: null }, due: 3 });
 
 const intentional = (tag: string, attr: string) => (tag === 'button' && attr === 'type') || attr === 'aria-hidden';
 const proto = (html: string): Node[] => without(parseHtml(html), intentional);
+
+/** C.segs with production's group gaps (spec 05 "Step order"): before step 3 and 10, not 4 and 10. */
+const regroup = (html: string): string => {
+  let n = 0;
+  return html.replace(/<i class="([^"]*)"/g, (_m, c: string) => {
+    n++;
+    const base = c.replace(/ ?sep\b/, '');
+    return `<i class="${base}${STEP_GROUP_STARTS.includes(n) ? ' sep' : ''}"`;
+  });
+};
 const mine = (vnode: unknown): Node[] => without(renderVNode(vnode), intentional);
 
 describe('Icon', () => {
@@ -148,7 +159,7 @@ describe('components match the prototype markup', () => {
       [3, 6],
       [10, 10],
     ] as const) {
-      expect(mine(h(Segs, { cur, reached }))).toEqual(proto(C.segs(cur, reached)));
+      expect(mine(h(Segs, { cur, reached }))).toEqual(proto(regroup(C.segs(cur, reached))));
     }
     expect(mine(h(Ring, { pct: 40, label: '4/10' }))).toEqual(proto(C.ring(40, '4/10')));
     expect(mine(h(Ring, { pct: 140, label: '9', lg: true, color: 'var(--green)' }))).toEqual(

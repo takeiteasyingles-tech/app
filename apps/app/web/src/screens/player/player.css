@@ -285,7 +285,7 @@
   line-height: 1;
 }
 /* Step 2's "Próximo" card follows the last lyric closely (it read as a detached band). */
-.pl-s2 > .pl-next {
+.pl-s1 > .pl-next {
   margin-top: -4px;
 }
 /* Step 10's instruction: a quiet callout at the top of the lyrics (it was a small grey line). */
@@ -626,53 +626,73 @@
 
 /* ---------- 6 · Take the Mic ---------- */
 
-/* The status beside Ouvir: secondary text, not a second heading. */
-.pl-scr .pl-mics {
-  min-width: 0;
-  font-weight: 600;
-  font-size: 0.9rem;
-  line-height: 1.35;
-  color: #3f4759;
-  text-wrap: pretty;
+/* Each phrase card leads with a speaker disc (the card plays the phrase); it pulses while it plays. */
+.pl-micsp {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fde7de;
+  color: var(--orange);
 }
-.pl-microw.rec .pl-mics {
-  color: var(--orangeD);
-  font-weight: 700;
+.pl-micsp.on {
+  background: var(--orange);
+  color: #fff;
+  animation: pulse 1.2s infinite;
 }
-/* The take's waveform: a real track beside Ouvir (taller bars on a soft pill), grey until there is
-   a take, orange and moving while recording, blue once recorded. */
-.pl-microw .waves.pl-waves {
+/* The phrase modal: phrase on top, a big mic in the middle, the take's waveform and the status under
+   it (grey: no take; orange and moving: recording; blue: recorded), then the score card. */
+.pl-micm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pl-micc {
+  align-items: center;
+  padding: 6px 0 2px;
+}
+.mic.pl-micbig {
+  width: 96px;
+  height: 96px;
+}
+.mic.pl-micbig.hear {
+  background: var(--navy);
+}
+.mic.pl-micbig:disabled {
+  opacity: 0.6;
+}
+.pl-micm .waves.pl-waves {
   height: 36px;
   gap: 3px;
-  padding: 0 10px;
+  padding: 0 14px;
   border-radius: 999px;
-  background: var(--cream);
+  background: #fff;
 }
-.pl-microw .waves.pl-waves i {
-  width: 4px;
-}
-.pl-microw .waves.pl-waves.done i {
+.pl-micm .waves.pl-waves.done i {
   background: var(--blue);
   opacity: 0.7;
 }
-/* Phone: Ouvir and the waveform share the first line; the status runs under them, full width. */
-.app:not([data-layout="desktop"]) .pl-microw {
-  flex-wrap: wrap;
-  row-gap: 6px;
+.pl-micm .pl-mics {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #3f4759;
+  text-align: center;
 }
-/* Phone: the waveform fills the rest of Ouvir's line (a short pill left dead space beside it). */
-.app:not([data-layout="desktop"]) .pl-microw .waves.pl-waves {
+.pl-micm .pl-mics.rec {
+  color: var(--orangeD);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.pl-micact > .btn {
   flex: 1 1 0;
-  min-width: 0;
-  justify-content: space-evenly;
-  overflow: hidden;
-}
-.app:not([data-layout="desktop"]) .pl-microw .pl-mics {
-  flex: 1 1 100%;
-  font-size: 0.86rem;
+  justify-content: center;
 }
 /* The feedback text takes all the room beside the score. */
-.pl-scr .pl-fbt {
+.pl-scr .pl-fbt,
+.pl-micm .pl-fbt {
   flex: 1;
   min-width: 0;
   text-wrap: pretty;

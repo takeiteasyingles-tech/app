@@ -6,6 +6,7 @@
 // server, and its award results play the prototype's toasts, sfx and confetti.
 
 import { signal } from '@preact/signals';
+import { STEP } from '@tie/shared/constants';
 import type { Catalog, Episode } from '@tie/shared/content/schema';
 import { ebookApi } from '@tie/shared/contracts/ebook';
 import type { MicScoreSource } from '@tie/shared/contracts/progress';
@@ -38,6 +39,7 @@ import {
 import {
   fresh,
   heard,
+  isSong,
   lyricRows,
   type MicFeedback,
   type PState,
@@ -215,9 +217,9 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
 
   // Auto-scroll: the line being spoken (step 5) or sung (2 and 10) stays in the middle of the screen.
   useEffect(() => {
-    if (!P.playing || ![2, 5, 10].includes(step)) return;
-    const at = step === 5 ? P.line : (lyricRows(Ep.lyrics).of[P.line] ?? P.line);
-    document.getElementById(`${step === 5 ? 'dl' : 'ly'}${at}`)?.scrollIntoView({
+    if (!P.playing || !(isSong(step) || step === STEP.DIALOG)) return;
+    const at = step === STEP.DIALOG ? P.line : (lyricRows(Ep.lyrics).of[P.line] ?? P.line);
+    document.getElementById(`${step === STEP.DIALOG ? 'dl' : 'ly'}${at}`)?.scrollIntoView({
       block: 'center',
       behavior: 'smooth',
     });
@@ -261,6 +263,24 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       if (!P.dead && opener?.isConnected) opener.focus();
     };
   }, [P.sheet]);
+
+  // Take the Mic's phrase modal: focus moves to its Fechar button, Escape closes it, and closing gives
+  // focus back to the phrase card that opened it.
+  useEffect(() => {
+    if (!P.micOpen) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.querySelector<HTMLElement>('.pl-micm .pl-micx')?.focus();
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      actions.micClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (!P.dead && opener?.isConnected) opener.focus();
+    };
+  }, [P.micOpen]);
 
   // The intro/song duration shows before the first play ("0:00 / 0:58", not the prototype's "0:00 / —"):
   // only the file's metadata is fetched.
@@ -364,7 +384,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         if (P.dead || P.audio !== a) return;
         P.aT = a.currentTime;
         P.aD = Number.isFinite(a.duration) ? a.duration : 0;
-        if ((step === 2 || step === 10) && len) {
+        if (isSong(step) && len) {
           P.line = Math.min(len - 1, Math.floor((P.aT / (P.aD || 1)) * len));
         }
         re();
@@ -393,7 +413,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       re();
       return;
     }
-    if (step === 2 || step === 10) {
+    if (isSong(step)) {
       // No recording: synthesized backing track, the lyrics move on every 2.6 s.
       P.playing = true;
       if (P.line >= len - 1) P.line = 0;
@@ -409,7 +429,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       re();
       return;
     }
-    if (step === 1) {
+    if (step === STEP.INTRO) {
       // No intro recording: a 15 s jingle.
       P.playing = true;
       const tk = P.tk;
@@ -417,7 +437,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       setTimeout(() => {
         if (!P.dead && P.playing && P.tk === tk) {
           stopAll(P);
-          mark(1);
+          mark(STEP.INTRO);
           re();
         }
       }, 15000);
@@ -456,20 +476,30 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     // A second tap while the first recording is still being set up (the mic permission prompt) is
     // ignored: it would start a second recorder and orphan the first one.
     if (P.mic === 'busy' || P.arming) return;
+    // Recording happens in the modal; a tap while the phrase is still playing skips to recording.
+    P.micOpen = true;
+    if (P.micHear) {
+      P.micTk++;
+      P.micHear = false;
+      speech.stop();
+    }
+    re();
     let rec: Awaited<ReturnType<typeof speech.record>> | null = null;
     let lis: { stop(): void } | null = null;
     let said = '';
+    // VAD: the take stops by itself once the learner has finished speaking (wired to the stopper below).
+    let quiet = () => {};
     if (speech.canRecord) {
       P.arming = true;
       try {
-        rec = await speech.record({ maxMs: 7000 });
+        rec = await speech.record({ maxMs: 7000, onSilence: () => quiet() });
       } catch {
         rec = null;
       } finally {
         P.arming = false;
       }
     }
-    if (P.dead || P.micIdx !== idx) {
+    if (P.dead || P.micIdx !== idx || !P.micOpen) {
       void rec?.stop();
       return;
     }
@@ -528,23 +558,49 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     };
     P.stopper = () => void stopper();
     const mine = P.stopper;
-    setTimeout(
-      () => {
-        if (!P.dead && P.mic === 'rec' && P.stopper === mine) mine();
-      },
-      rec ? 5500 : 2000,
-    );
+    const auto = () => {
+      if (!P.dead && P.mic === 'rec' && P.stopper === mine) mine();
+    };
+    // Stops on silence after speech (VAD); the timer is only the cap for a take that never goes quiet.
+    quiet = auto;
+    setTimeout(auto, rec ? 7000 : 2000);
   };
 
-  const micPick = (i: number) => {
+  /** Drops a recording in progress (no score) and any phrase still playing. */
+  const micHush = () => {
     if (P.mic === 'rec') {
       P.cancelRec?.();
       P.cancelRec = null;
       P.stopper = null;
+      P.mic = 'idle';
     }
+    P.micTk++;
+    P.micHear = false;
+    speech.stop();
+  };
+
+  /** A phrase card: open the modal, play the phrase, then record ("Fale agora") as soon as it ends. */
+  const micPick = (i: number) => {
+    const m = Ep.mic[i];
+    if (!m || P.mic === 'busy' || P.arming) return;
+    micHush();
     P.micIdx = i;
     P.mic = 'idle';
     P.fb = null;
+    P.micOpen = true;
+    P.micHear = true;
+    re();
+    const tk = P.micTk;
+    void speech.say(m.en).then(() => {
+      if (P.dead || !P.micOpen || P.micTk !== tk || P.micIdx !== i) return;
+      P.micHear = false;
+      void record();
+    });
+  };
+
+  const micClose = () => {
+    micHush();
+    P.micOpen = false;
     re();
   };
 
@@ -627,6 +683,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     line,
     micPick,
     record: () => void record(),
+    micClose,
     showScore: () => {
       P.showScore = true;
       re();
@@ -850,8 +907,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
               <Icon name="back" size={18} />
               <span>Voltar para Hoje</span>
             </button>
-            <div class="lbl mt8">E-book {Ep.ebook}</div>
-            <div class="h2 mt4">Episódio {pad2(Ep.num)}</div>
+            <div class="h2 mt8">Episódio {pad2(Ep.num)}</div>
             <p class="sm mt8">{Ep.scope}</p>
             <div class="mt12">{stepList()}</div>
           </aside>
@@ -884,6 +940,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
             </div>
           </div>
         </Overlay>
+      ) : part.modal ? (
+        <Overlay>{part.modal}</Overlay>
       ) : null}
     </>
   );

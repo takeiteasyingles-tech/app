@@ -298,9 +298,11 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
     let rec: Awaited<ReturnType<typeof speech.record>> | null = null;
     let heard = '';
     let lis: { stop(): void } | null = null;
+    // VAD: the take stops by itself once the learner has finished speaking (wired to the stopper below).
+    let quiet = () => {};
     if (speech.canRecord) {
       try {
-        rec = await speech.record({ maxMs: 7000 });
+        rec = await speech.record({ maxMs: 7000, onSilence: () => quiet() });
       } catch {
         rec = null;
       }
@@ -346,12 +348,12 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
       const source = !rec ? 'script' : r.source === 'ia' && r.attempt ? 'ia' : 'demo';
       void saveDub(x.id, lineIdx, r.score, source, source === 'ia' ? r.attempt : undefined);
     };
-    setTimeout(
-      () => {
-        if (alive.current && V.dubState === 'rec') void V.stopper?.();
-      },
-      rec ? 5000 : 1600,
-    );
+    const auto = () => {
+      if (alive.current && ref.current === V && V.dubState === 'rec') void V.stopper?.();
+    };
+    // Stops on silence after speech (VAD); the timer is only the cap for a take that never goes quiet.
+    quiet = auto;
+    setTimeout(auto, rec ? 7000 : 1600);
   };
   const word = (w: string) => {
     const clean = w.replace(/[.,!?;:“”"…]/g, '');

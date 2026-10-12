@@ -1,6 +1,7 @@
 // Hoje (prototipo/js/screens/inicio.js): the course first (the current episode's next step), then
 // today's plan, missions, EXTRA picks, the Mic mission, the week's focus and the weekly rhythm.
 // Same markup and classes as the prototype; the numbers come from the server-backed store.
+import { STEP_GROUP_STARTS } from '@tie/shared/constants';
 import type { Catalog } from '@tie/shared/content/schema';
 import { getAssistant } from '@tie/shared/domain/assist';
 import { current, plan } from '@tie/shared/domain/guide';
@@ -524,8 +525,8 @@ function CourseCard({
   for (let n = 1; n <= total; n++) {
     // C.segs(stepN, stepN): everything before the current step is done.
     const cls = n < stepN ? 'done' : n === stepN ? 'now' : '';
-    // The prototype's group gaps (tie.css .segs i.sep) before step 4 and step 10.
-    const sep = n === 4 || n === 10;
+    // The group gaps (tie.css .segs i.sep) before "O episódio" (step 3) and "Fechamento" (step 10).
+    const sep = STEP_GROUP_STARTS.includes(n);
     segs.push(<i key={n} class={cls + (sep ? ' sep' : '')} style={grow ? { height: '11px' } : undefined} />);
   }
   // The progress, where you are and the CTA read as one block at the card's foot. Phone: "Você está

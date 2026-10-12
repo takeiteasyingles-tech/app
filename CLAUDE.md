@@ -50,7 +50,7 @@ packages/
   worker-core/ @tie/worker-core: Hono app factory, security headers, CSRF, rate limits, config guard,
                validation, D1 helpers, audit, idempotency, auth (pbkdf2, sessions, cookies, turnstile,
                media token), R2 serveObject/upload, service interfaces
-  db/          migrations/0001_auth … 0005_hardening.sql (one history, shared by both Workers)
+  db/          migrations/0001_auth … 0006_step_order.sql (one history, shared by both Workers)
   seed/        @tie/seed: loads prototipo/ in node:vm, extracts constants with acorn, emits SQL,
                uploads media to R2, publishes content snapshots; bootstrapAdmin.ts
 apps/

@@ -110,8 +110,9 @@ function stateOf(kind: Kind): Any {
   }
   if (kind === 'dl') {
     const s = notTraining(base);
-    s.prog = { 1: 3 };
-    s.stepOk = { '1-1': true, '1-2': true };
+    // On the e-book (step 2), the song (1) heard.
+    s.prog = { 1: 2 };
+    s.stepOk = { '1-1': true };
     s.ebooks = {};
     s.scores = {};
     s.exAns = {};
@@ -230,6 +231,8 @@ const head = (page: Page) => page.locator('.player-head');
 const nextBtn = (page: Page) => page.locator('.player-foot .btn.next');
 const kicker = (page: Page) => page.locator('.player-foot .btn.next .kicker');
 const dock = (page: Page) => page.locator('.player-dock');
+/** Take the Mic's phrase modal (a card plays the phrase, then records). */
+const micModal = (page: Page) => page.locator('.overlay .pl-micm');
 const body = (page: Page) => page.locator('#pl-scroll');
 const ptsToast = (page: Page, n: number) => page.locator('.pts-toast', { hasText: `+${n} pontos` });
 
@@ -366,12 +369,13 @@ for (const vp of VPS) {
       await expect(head(page).locator('.segs, [class*=seg]').first()).toBeVisible();
       await expect(page.locator('.player-foot .btn.prev')).toBeDisabled();
       await expect(nextBtn(page)).toBeDisabled();
-      await expect(kicker(page)).toHaveText('Ouça a abertura até o fim');
-      await expect(nextBtn(page)).toContainText('Take the Mic');
+      // Production order (spec 05 "Step order"): 1 song, 2 e-book, 3 intro.
+      await expect(kicker(page)).toHaveText('Ouça a música até o fim');
+      await expect(nextBtn(page)).toContainText('e-book');
       if (vp === 'desktop') {
         const aside = page.locator('aside');
         await expect(aside).toContainText('Voltar para Hoje');
-        await expect(aside).toContainText('E-book 1');
+        await expect(aside).not.toContainText('E-book 1');
         await expect(aside).toContainText('Episódio 01');
         await expect(aside.locator('.steprow')).toHaveCount(10);
         await expect(aside.locator('.steprow.now')).toContainText('Você está aqui');
@@ -383,34 +387,9 @@ for (const vp of VPS) {
       await page.goto('/#/episodio/1/5');
       await atStep(page, 1, 1);
 
-      // ---- 1 · intro audio
+      // ---- 1 · song, synced lyrics, translation toggle
       const ep1 = () => eps.get(1) as Any;
       await expect.poll(() => !!eps.get(1)).toBe(true);
-      expect(ep1().introAudio).toMatch(/^\/m\//);
-      const card1 = body(page).locator('.now-card');
-      await expect(card1).toContainText('Abertura');
-      await expect(card1).toContainText('Ep. 01');
-      await card1.getByRole('button', { name: 'Ouvir a abertura' }).click();
-      await expect(card1.getByRole('button', { name: 'Pausar a abertura' })).toBeVisible();
-      await expect(card1.locator('#pl-time')).toHaveText(/^\d:\d\d \/ \d:\d\d$/, { timeout: 10_000 });
-      const so1 = await apiCall(page, '/api/progress/step-ok', () =>
-        endMedia(page).then((m) => log.push(`intro:${m}`)),
-      );
-      expect(so1.status).toBe(200);
-      expect(so1.req).toEqual({ ep: 1, step: 1 });
-      await expect(kicker(page)).toHaveText('Próxima · 02 · +10');
-      await expect(card1.getByRole('button', { name: 'Ouvir a abertura' })).toBeVisible();
-      const a1 = await advance(page);
-      expect(a1.status).toBe(200);
-      expect(a1.json.prog).toBe(2);
-      await expect(ptsToast(page, 10).first()).toBeVisible();
-      await atStep(page, 1, 2);
-      // Media stopped on step change.
-      expect(await page.evaluate(() => ((window as any).__media as HTMLMediaElement[]).every((m) => m.paused))).toBe(
-        true,
-      );
-
-      // ---- 2 · song, synced lyrics, translation toggle
       await expect(dock(page)).toContainText('Música · 1ª passada');
       await expect(dock(page)).toContainText(ep1().songTitle);
       await expect(kicker(page)).toHaveText('Ouça a música até o fim');
@@ -453,16 +432,24 @@ for (const vp of VPS) {
           // timeupdate may have advanced one line in the meantime
           await expect(body(page).locator('.dialog-line.on')).toHaveCount(1);
         });
-      const so2 = await apiCall(page, '/api/progress/step-ok', () => endMedia(page).then((m) => log.push(`song:${m}`)));
-      expect(so2.status).toBe(200);
+      const so1 = await apiCall(page, '/api/progress/step-ok', () => endMedia(page).then((m) => log.push(`song:${m}`)));
+      expect(so1.status).toBe(200);
+      expect(so1.req).toEqual({ ep: 1, step: 1 });
+      await expect(kicker(page)).toHaveText('Próxima · 02 · +10');
       const dashed = body(page).locator('button.card.row', { hasText: 'Próximo: baixar o e-book 1.' });
       await expect(dashed).toBeVisible();
-      const a2 = await apiCall(page, '/api/progress/advance', () => dashed.click());
-      expect(a2.status).toBe(200);
-      await atStep(page, 1, 3);
+      const a1 = await apiCall(page, '/api/progress/advance', () => dashed.click());
+      expect(a1.status).toBe(200);
+      expect(a1.json.prog).toBe(2);
+      await expect(ptsToast(page, 10).first()).toBeVisible();
+      await atStep(page, 1, 2);
+      // Media stopped on step change.
+      expect(await page.evaluate(() => ((window as any).__media as HTMLMediaElement[]).every((m) => m.paused))).toBe(
+        true,
+      );
 
-      // ---- 3 · e-book download
-      await expect(body(page)).toContainText('E-book 01 · Episódios 1–2');
+      // ---- 2 · e-book download
+      await expect(body(page)).toContainText('Temporada 01 · Episódio 01');
       await expect(body(page)).toContainText(ep1().ebookTitle);
       await expect(body(page).locator('.pl-inside .pill')).toHaveText([
         'Diálogo bilíngue',
@@ -486,7 +473,27 @@ for (const vp of VPS) {
         expect(pr.status()).toBe(200);
         expect(pr.headers()['content-type']).toMatch(/pdf/);
       }
+      await expect(kicker(page)).toHaveText('Próxima · 03 · +10');
+      await expect(body(page).locator('button.card.row', { hasText: 'Próximo: Intro' })).toBeVisible();
+      await advance(page);
+      await atStep(page, 1, 3);
+
+      // ---- 3 · intro audio (opens "O episódio")
+      expect(ep1().introAudio).toMatch(/^\/m\//);
+      await expect(kicker(page)).toHaveText('Ouça a abertura até o fim');
+      const card1 = body(page).locator('.now-card');
+      await expect(card1).toContainText('Abertura');
+      await expect(card1).toContainText('Ep. 01');
+      await card1.getByRole('button', { name: 'Ouvir a abertura' }).click();
+      await expect(card1.getByRole('button', { name: 'Pausar a abertura' })).toBeVisible();
+      await expect(card1.locator('#pl-time')).toHaveText(/^\d:\d\d \/ \d:\d\d$/, { timeout: 10_000 });
+      const so3 = await apiCall(page, '/api/progress/step-ok', () =>
+        endMedia(page).then((m) => log.push(`intro:${m}`)),
+      );
+      expect(so3.status).toBe(200);
+      expect(so3.req).toEqual({ ep: 1, step: 3 });
       await expect(kicker(page)).toHaveText('Próxima · 04 · +10');
+      await expect(card1.getByRole('button', { name: 'Ouvir a abertura' })).toBeVisible();
       await advance(page);
       await atStep(page, 1, 4);
 
@@ -565,30 +572,35 @@ for (const vp of VPS) {
       await expect(kicker(page)).toHaveText(`Faltam ${nMic} frases para gravar`);
       await expect(dock(page)).toContainText(`Frase 1 de ${nMic} · diga em voz alta`);
       await expect(dock(page)).toContainText(ep1().mic[0].en);
-      await expect(dock(page)).toContainText('Toque no microfone e fale · +5 a +15');
       await expect(body(page)).toContainText(
         'A nota mede quanto da sua fala foi entendida, não quanto você soa americano.',
       );
-      await dock(page).getByRole('button', { name: 'Ouvir' }).click();
-      await expect.poll(async () => (await spoken(page)).map((s) => s.text)).toContain(ep1().mic[0].en);
+      // No "Ouvir" button: each phrase card leads with a speaker disc and plays the phrase itself.
+      await expect(dock(page).getByRole('button', { name: 'Ouvir' })).toHaveCount(0);
       const phraseBtns = body(page).locator('button.card.row');
       await expect(phraseBtns).toHaveCount(nMic);
+      await expect(body(page).locator('button.card.row .pl-micsp')).toHaveCount(nMic);
       for (let i = 0; i < nMic; i++) {
-        await phraseBtns.nth(i).click();
-        await expect(dock(page)).toContainText(`Frase ${i + 1} de ${nMic}`);
+        // Card → modal plays the phrase → "Fale agora" records (no mic: the scripted result after 2 s).
         const r = await apiCall(page, '/api/progress/mic', async () => {
-          await dock(page).getByRole('button', { name: 'Gravar' }).click();
-          await expect(dock(page)).toContainText('Ouvindo… toque para parar');
-          await expect(dock(page).locator('button.mic.rec')).toBeVisible();
+          await phraseBtns.nth(i).click();
+          await expect(micModal(page)).toContainText(`Frase ${i + 1} de ${nMic}`);
+          await expect.poll(async () => (await spoken(page)).map((s) => s.text)).toContain(ep1().mic[i].en);
+          await expect(micModal(page)).toContainText('Fale agora · toque para parar');
+          await expect(micModal(page).locator('button.mic.rec')).toBeVisible();
         });
         expect(r.status).toBe(200);
         expect(r.req.source).toBe('script');
         expect(r.req.phraseId).toBe(ep1().mic[i].id);
         expect(r.json.last).toBe(ep1().mic[i].result);
-        const fb = dock(page).locator('.fb');
+        const fb = micModal(page).locator('.fb');
         await expect(fb).toContainText(`${ep1().mic[i].result}/10`);
         await expect(fb).toContainText(ep1().mic[i].fb.slice(0, 30));
-        await expect(dock(page)).toContainText('Toque no microfone para tentar de novo');
+        await expect(micModal(page)).toContainText('Toque no microfone para tentar de novo');
+        await micModal(page).getByRole('button', { name: 'Fechar' }).click();
+        await expect(micModal(page)).toHaveCount(0);
+        await expect(dock(page)).toContainText(`Frase ${i + 1} de ${nMic}`);
+        await expect(dock(page).locator('.fb')).toContainText(`${ep1().mic[i].result}/10`);
         await expect(phraseBtns.nth(i)).toContainText(`${ep1().mic[i].result}/10`);
         if (i === 0) await expect(page.locator('.pts-toast').first()).toBeVisible();
         if (i < nMic - 1) {
@@ -781,7 +793,7 @@ for (const vp of VPS) {
       if (vp === 'desktop') {
         const aside = page.locator('aside');
         await aside.locator('.steprow', { hasText: 'e-book' }).first().click();
-        await atStep(page, 1, 3);
+        await atStep(page, 1, 2);
         await expect(body(page).locator('.card.gr')).toContainText('E-book baixado.');
         await aside.getByRole('button', { name: 'Voltar para Hoje' }).click();
         await expect(page).toHaveURL(/#\/inicio$/);
@@ -819,17 +831,15 @@ for (const vp of VPS) {
       await expect(kicker(page)).toHaveText(`Faltam ${E.mic.length - 3} frases para gravar`);
       // Phrase 1 already scored → its feedback card with "Ver nota".
       await expect(dock(page).locator('.fb')).toContainText('Ver nota');
-      await expect(dock(page)).toContainText('Toque no microfone para tentar de novo');
-      await phraseBtns.nth(4).click();
-      const r = await apiCall(page, '/api/progress/mic', () =>
-        dock(page).getByRole('button', { name: 'Gravar' }).click(),
-      );
+      const r = await apiCall(page, '/api/progress/mic', () => phraseBtns.nth(4).click());
       expect(r.status).toBe(200);
-      await expect(dock(page).locator('.fb .pl-reveal')).toHaveText('Ver nota');
-      await expect(dock(page).locator('.fb .num')).toHaveCount(0);
-      await expect(dock(page).locator('.fb')).not.toHaveClass(/\b(ok|fix)\b/);
-      await dock(page).getByRole('button', { name: 'Ver nota' }).click();
-      await expect(dock(page).locator('.fb .num')).toContainText(`${E.mic[4].result}/10`);
+      const m = micModal(page);
+      await expect(m.locator('.fb .pl-reveal')).toHaveText('Ver nota');
+      await expect(m.locator('.fb .num')).toHaveCount(0);
+      await expect(m.locator('.fb')).not.toHaveClass(/\b(ok|fix)\b/);
+      await m.getByRole('button', { name: 'Ver nota' }).click();
+      await expect(m.locator('.fb .num')).toContainText(`${E.mic[4].result}/10`);
+      await m.getByRole('button', { name: 'Fechar' }).click();
       await expect(phraseBtns.filter({ hasText: '/10' })).toHaveCount(4);
       await expect(kicker(page)).toHaveText(`Faltam ${E.mic.length - 4} frases para gravar`);
       await expectClean(page, w);
@@ -842,19 +852,19 @@ for (const vp of VPS) {
       const w = watch(page);
       await page.goto('/#/episodio/1/6');
       await atStep(page, 1, 6);
-      await body(page).locator('button.card.row').nth(5).click();
+      const m = micModal(page);
       const r = await apiCall(page, '/api/progress/mic', async () => {
-        await dock(page).getByRole('button', { name: 'Gravar' }).click();
-        await expect(dock(page)).toContainText('Ouvindo… toque para parar');
+        await body(page).locator('button.card.row').nth(5).click();
+        await expect(m).toContainText('Fale agora · toque para parar');
         // Tap to stop early.
         await page.waitForTimeout(1500);
-        await dock(page).getByRole('button', { name: 'Gravar' }).click();
-        await expect(dock(page)).toContainText('Avaliando…');
+        await m.getByRole('button', { name: 'Parar' }).click();
+        await expect(m).toContainText('Avaliando…');
       });
       expect(r.status).toBe(200);
       expect(r.req.source).toBe('demo');
-      await expect(dock(page).locator('.fb')).toBeVisible();
-      await expect(dock(page)).toContainText('Toque no microfone para tentar de novo');
+      await expect(m.locator('.fb')).toBeVisible();
+      await expect(m).toContainText('Toque no microfone para tentar de novo');
       await expectClean(page, w);
     });
 
@@ -879,11 +889,12 @@ for (const vp of VPS) {
       w.ignore.push(/\/api\/progress\/mic/);
       await page.goto('/#/episodio/1/6');
       await atStep(page, 1, 6);
-      await body(page).locator('button.card.row').nth(6).click();
+      const m = micModal(page);
       const r = await apiCall(page, '/api/progress/mic', async () => {
-        await dock(page).getByRole('button', { name: 'Gravar' }).click();
+        await body(page).locator('button.card.row').nth(6).click();
+        await expect(m.getByRole('button', { name: 'Parar' })).toBeVisible();
         await page.waitForTimeout(800);
-        await dock(page).getByRole('button', { name: 'Gravar' }).click();
+        await m.getByRole('button', { name: 'Parar' }).click();
       });
       expect(r.req.source).toBe('ia');
       expect(r.req.attempt).toBe('forged.token');
@@ -892,8 +903,8 @@ for (const vp of VPS) {
       await expect(page.locator('.toast', { hasText: 'Não deu para confirmar essa gravação' }).first()).toBeVisible();
       // The optimistic score rolled back (the phrase stays unscored) and the unconfirmed card is gone.
       await expect(body(page).locator('button.card.row').nth(6)).toContainText('—');
-      await expect(dock(page).locator('.fb')).toHaveCount(0);
-      await expect(dock(page)).toContainText('Toque no microfone e fale');
+      await expect(m.locator('.fb')).toHaveCount(0);
+      await expect(m).toContainText('Toque no microfone e fale');
       // Accepted attempt (the real server, the token swapped for a demo score since the slot has no AI):
       // the feedback card shows the AI result — "Entendi" + per-word issues; training user → Ver nota.
       await context.route('**/api/progress/mic', async (route) => {
@@ -901,46 +912,51 @@ for (const vp of VPS) {
         await route.fallback({ postData: JSON.stringify({ phraseId: b.phraseId, score: b.score, source: 'demo' }) });
       });
       const r2 = await apiCall(page, '/api/progress/mic', async () => {
-        await dock(page).getByRole('button', { name: 'Gravar' }).click();
+        await m.getByRole('button', { name: 'Gravar' }).click();
         await page.waitForTimeout(800);
-        await dock(page).getByRole('button', { name: 'Gravar' }).click();
+        await m.getByRole('button', { name: 'Parar' }).click();
       });
       expect(r2.status).toBe(200);
-      await expect(dock(page).locator('.fb')).toContainText('Entendi: “hello”');
-      await expect(dock(page).locator('.fb')).toContainText('hello:');
-      await expect(dock(page).locator('.fb')).toContainText('Solte o ar.');
-      await expect(dock(page).locator('.fb .pl-reveal')).toBeVisible();
-      await dock(page)
-        .getByRole('button', { name: /Ver nota/ })
-        .click();
-      await expect(dock(page).locator('.fb .num')).toContainText('9/10');
-      await expect(dock(page).locator('.fb')).toHaveClass(/\bok\b/);
+      await expect(m.locator('.fb')).toContainText('Entendi: “hello”');
+      await expect(m.locator('.fb')).toContainText('hello:');
+      await expect(m.locator('.fb')).toContainText('Solte o ar.');
+      await expect(m.locator('.fb .pl-reveal')).toBeVisible();
+      await m.getByRole('button', { name: /Ver nota/ }).click();
+      await expect(m.locator('.fb .num')).toContainText('9/10');
+      await expect(m.locator('.fb')).toHaveClass(/\bok\b/);
       await expectClean(page, w);
     });
 
-    test(`episode 2 without media: synth jingle and synth song (${vp})`, async ({ page, context }) => {
+    test(`episode 2 without media: synth song and synth jingle (${vp})`, async ({ page, context }) => {
       test.setTimeout(150_000);
       await prepApp(context, `u2-synth-${vp}`, { noMic: true });
       const w = watch(page);
       await page.goto('/#/episodio/2');
       await expect(head(page)).toContainText('Episódio 2 · etapa 1 de 10', { timeout: 20_000 });
-      await expect(body(page)).toContainText('A música do episódio abre, marca e fecha a aula.');
-      await body(page).getByRole('button', { name: 'Ouvir a vinheta' }).click();
-      await expect(body(page).locator('.now-card #pl-time')).toHaveCount(0);
-      const so1 = await apiCall(page, '/api/progress/step-ok', async () => {});
-      expect(so1.status).toBe(200);
-      await expect(kicker(page)).toHaveText('Próxima · 02 · +10');
-      await advance(page);
-      await atStep(page, 2, 2);
+      // 1 · song (synth)
       await expect(dock(page)).toContainText('Sem a gravação desta música');
       const lines = body(page).locator('.dialog-line');
       const n = await lines.count();
       await dock(page).getByRole('button', { name: 'Tocar' }).click();
       await expect(lines.nth(1)).toHaveClass(/\bon\b/, { timeout: 5000 });
       await expect(dock(page).locator('#pl-time')).toHaveText('0:15');
-      const so2 = await page.waitForResponse(isApi('/api/progress/step-ok'), { timeout: n * 2600 + 10_000 });
-      expect(so2.status()).toBe(200);
-      await expect(body(page).locator('button.card.row', { hasText: 'Próximo: baixar o e-book 1.' })).toBeVisible();
+      const so1 = await page.waitForResponse(isApi('/api/progress/step-ok'), { timeout: n * 2600 + 10_000 });
+      expect(so1.status()).toBe(200);
+      const dashed = body(page).locator('button.card.row', { hasText: 'Próximo: baixar o e-book 1.' });
+      await expect(dashed).toBeVisible();
+      await apiCall(page, '/api/progress/advance', () => dashed.click());
+      await atStep(page, 2, 2);
+      // 2 · e-book 1 (shared with episode 1, already downloaded)
+      await expect(kicker(page)).toHaveText('Próxima · 03 · +10');
+      await advance(page);
+      await atStep(page, 2, 3);
+      // 3 · intro (synth jingle, 15 s)
+      await expect(body(page)).toContainText('A música do episódio abre, marca e fecha a aula.');
+      await body(page).getByRole('button', { name: 'Ouvir a vinheta' }).click();
+      await expect(body(page).locator('.now-card #pl-time')).toHaveCount(0);
+      const so3 = await page.waitForResponse(isApi('/api/progress/step-ok'), { timeout: 25_000 });
+      expect(so3.status()).toBe(200);
+      await expect(kicker(page)).toHaveText('Próxima · 04 · +10');
       await expectClean(page, w);
     });
 
@@ -960,7 +976,7 @@ for (const vp of VPS) {
         return { status: r.status, body: await r.json().catch(() => null) };
       });
       expect(direct.status).toBe(409);
-      expect(JSON.stringify(direct.body)).toContain('Ouça a abertura até o fim');
+      expect(JSON.stringify(direct.body)).toContain('Ouça a música até o fim');
       const far = await page.evaluate(async () => {
         const r = await fetch('/api/progress/advance', {
           method: 'POST',
@@ -975,10 +991,10 @@ for (const vp of VPS) {
         route.fulfill({
           status: 409,
           contentType: 'application/json',
-          body: JSON.stringify({ error: { code: 'gated', message: 'Ouça a abertura até o fim' } }),
+          body: JSON.stringify({ error: { code: 'gated', message: 'Ouça a música até o fim' } }),
         }),
       );
-      await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
+      await dock(page).getByRole('button', { name: 'Tocar' }).click();
       await apiCall(page, '/api/progress/step-ok', () => endMedia(page));
       await expect(nextBtn(page)).toBeEnabled();
       await nextBtn(page).click();
@@ -993,7 +1009,7 @@ for (const vp of VPS) {
       const playing = () => page.evaluate(() => (window as any).__media.some((m: HTMLMediaElement) => !m.paused));
       await page.goto('/#/episodio/1/1');
       await atStep(page, 1, 1);
-      await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
+      await dock(page).getByRole('button', { name: 'Tocar' }).click();
       await expect.poll(playing).toBe(true);
       await page.locator('.player-head .iconbtn[aria-label="Fechar"]').click();
       await expect(page).toHaveURL(/#\/inicio$/);
@@ -1003,8 +1019,8 @@ for (const vp of VPS) {
       // Back into the player, then leave through the hash (tab bar / sidebar nav / browser back).
       await page.goto('/#/episodio/1/1');
       await atStep(page, 1, 1);
-      await expect(body(page).locator('.now-card .btn.light')).toHaveText('Ouvir a abertura');
-      await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
+      await expect(dock(page).locator('.playbtn')).toHaveClass(/navy/);
+      await dock(page).getByRole('button', { name: 'Tocar' }).click();
       await expect.poll(playing).toBe(true);
       await page.evaluate(() => {
         location.hash = '#/trilha';
@@ -1029,12 +1045,12 @@ for (const vp of VPS) {
       const w = watch(page);
       await page.goto('/#/episodio/1/1');
       await atStep(page, 1, 1);
-      await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
+      await dock(page).getByRole('button', { name: 'Tocar' }).click();
       await expect(
         page.locator('.toast', { hasText: 'O navegador bloqueou o áudio. Toque de novo.' }).first(),
       ).toBeVisible();
-      await expect(body(page).getByRole('button', { name: 'Ouvir a abertura' })).toBeVisible();
-      await expect(kicker(page)).toHaveText('Ouça a abertura até o fim');
+      await expect(dock(page).locator('.playbtn')).toHaveClass(/navy/);
+      await expect(kicker(page)).toHaveText('Ouça a música até o fim');
       await expectClean(page, w);
     });
 
@@ -1042,8 +1058,8 @@ for (const vp of VPS) {
       await prepApp(context, `u2-pdf-${vp}`, { noMic: true });
       const w = watch(page);
       const eps = captureEpisodes(page);
-      await page.goto('/#/episodio/1/3');
-      await atStep(page, 1, 3);
+      await page.goto('/#/episodio/1/2');
+      await atStep(page, 1, 2);
       await expect.poll(() => !!eps.get(1)).toBe(true);
       // The local seed has no e-book PDF: answer as production does when R2 has one (any /m/ file).
       const pdfUrl = eps.get(1)!.introAudio as string;
@@ -1061,11 +1077,11 @@ for (const vp of VPS) {
       const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10_000 }), btn.click()]);
       expect(dl.suggestedFilename()).toBe('take-it-easy-ebook-01.pdf');
       await expect(body(page).locator('.card.gr')).toContainText('E-book baixado.');
-      await expect(kicker(page)).toHaveText('Próxima · 04 · +10');
-      await expect(page).toHaveURL(/#\/episodio\/1\/3$/);
-      // Persisted: a reload keeps step 3 unlocked.
+      await expect(kicker(page)).toHaveText('Próxima · 03 · +10');
+      await expect(page).toHaveURL(/#\/episodio\/1\/2$/);
+      // Persisted: a reload keeps step 2 unlocked.
       await page.reload();
-      await atStep(page, 1, 3);
+      await atStep(page, 1, 2);
       await expect(body(page).locator('.card.gr')).toContainText('E-book baixado.');
       // "Baixar de novo" downloads the file again; "Abrir no app" opens the e-book screen.
       const [dl2] = await Promise.all([
@@ -1083,7 +1099,7 @@ for (const vp of VPS) {
       const w = watch(page);
       await page.goto('/#/episodio/1/1');
       await atStep(page, 1, 1);
-      await body(page).getByRole('button', { name: 'Ouvir a abertura' }).click();
+      await dock(page).getByRole('button', { name: 'Tocar' }).click();
       // End the media and click Next immediately, without waiting for step-ok to land.
       await endMedia(page);
       await nextBtn(page).click();
@@ -1182,9 +1198,8 @@ for (const vp of VPS) {
       expect(direct.status).toBe(409);
       expect(direct.body).toContain('Termine o episódio 1');
       if (inPlayer) {
-        // The episode 2 step 1 has no media in the seed: the jingle runs 15 s, then step-ok is refused.
-        const btn = body(page).locator('.now-card .btn.light');
-        log.push(`intro button: ${await btn.textContent()}`);
+        // The episode 2 step 1 (song) has no media in the seed: the synth song, then step-ok is refused.
+        log.push(`song dock: ${await dock(page).textContent()}`);
       }
       // Concluído deep link for an episode the learner has not finished.
       await page.goto('/#/concluido/1');
@@ -1228,8 +1243,8 @@ for (const vp of VPS) {
         res[label] = `${r.fv && visibleRing(r) ? 'ok' : 'NO RING'} ${r.outline} | ${r.shadow}`;
       };
       await page.keyboard.press('Tab'); // switch the page into keyboard modality
-      await page.goto('/#/episodio/1/2');
-      await atStep(page, 1, 2);
+      await page.goto('/#/episodio/1/1');
+      await atStep(page, 1, 1);
       await page.keyboard.press('Tab');
       await check('song: Tradução toggle', '.player-dock button[aria-pressed]');
       await check('song: play', '.player-dock .playbtn');
@@ -1372,6 +1387,13 @@ function diff(a: string[], b: string[]): string[] {
   return out;
 }
 
+/** The prototype's route for production steps 1-3 (song, e-book, intro). */
+const PROTO_ROUTE: Record<string, string> = {
+  'episodio/1/1': 'episodio/1/2',
+  'episodio/1/2': 'episodio/1/3',
+  'episodio/1/3': 'episodio/1/1',
+};
+
 test.describe('U2 parity with the prototype', () => {
   let proto: StaticServer;
   test.beforeAll(async () => {
@@ -1436,7 +1458,8 @@ test.describe('U2 parity with the prototype', () => {
             }
             const page = await ctx.newPage();
             const base = side === 'proto' ? proto.url.replace(/\/?$/, '/') : `${sl.origin}/`;
-            await page.goto(`${base}#/${route}`);
+            // Steps 1-3 are the prototype's 2, 3, 1 (spec 05 "Step order"): compare the same step.
+            await page.goto(`${base}#/${side === 'proto' ? (PROTO_ROUTE[route] ?? route) : route}`);
             const isDone = name.startsWith('concluido');
             await expect(page.locator(isDone ? '.now-card' : '.player-foot').first()).toBeVisible({
               timeout: 20_000,

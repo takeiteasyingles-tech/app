@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tie-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:app"],
+      "port": 8787
+    },
+    {
+      "name": "tie-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:admin"],
+      "port": 8788
+    }
+  ]
+}

@@ -17,7 +17,7 @@ export type TabId =
 export const TABS: readonly (readonly [TabId, string])[] = [
   ['geral', 'Geral'],
   ['midia', 'Mídia'],
-  ['musica', '2 · Música'],
+  ['musica', '1 · Música'],
   ['olhar', '4 · Take a Look'],
   ['dialogo', '5 · Take It In'],
   ['mic', '6 · Take the Mic'],
@@ -47,9 +47,9 @@ const GERAL: Spec[] = [
     label: 'E-book',
     opt: 'null',
     min: 1,
-    hint: 'O e-book que cobre este episódio (etapa 3).',
+    hint: 'O e-book que cobre este episódio (etapa 2).',
   },
-  { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3, hint: 'Mostrada na Intro (etapa 1).' },
+  { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3, hint: 'Mostrada na Intro (etapa 3).' },
   {
     t: 'strings',
     k: 'castNames',
@@ -61,9 +61,9 @@ const GERAL: Spec[] = [
 ];
 
 const MIDIA: Spec[] = [
-  { t: 'media', k: 'introMedia', label: 'Áudio da Intro (etapa 1)', kind: 'audio', opt: 'null' },
+  { t: 'media', k: 'introMedia', label: 'Áudio da Intro (etapa 3)', kind: 'audio', opt: 'null' },
   { t: 'text', k: 'songTitle', label: 'Título da música', opt: 'null' },
-  { t: 'media', k: 'songMedia', label: 'Música (etapas 2 e 10)', kind: 'audio', opt: 'null' },
+  { t: 'media', k: 'songMedia', label: 'Música (etapas 1 e 10)', kind: 'audio', opt: 'null' },
   { t: 'media', k: 'sceneMedia', label: 'Vídeo da cena (etapa 4)', kind: 'video', opt: 'null' },
   { t: 'text', k: 'sceneNote', label: 'Nota da cena', opt: 'null', rows: 2 },
 ];

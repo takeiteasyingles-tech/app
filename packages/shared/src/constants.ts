@@ -43,6 +43,25 @@ export const DURATIONS = {
   tutorBillCapS: 120,
 } as const;
 
+/**
+ * Episode step numbers. Production order (spec 05 "Step order"): the song's first pass, the e-book,
+ * then the intro opens "O episódio". The prototype had intro → song → e-book.
+ */
+export const STEP = {
+  SONG: 1,
+  EBOOK: 2,
+  INTRO: 3,
+  LOOK: 4,
+  DIALOG: 5,
+  MIC: 6,
+  LESSON: 7,
+  AWAY: 8,
+  ACTION: 9,
+  LAST: 10,
+} as const;
+/** First step of each group after the first ("O episódio", "Fechamento"): the 10-step bar's gaps. */
+export const STEP_GROUP_STARTS: readonly number[] = [STEP.INTRO, STEP.LAST];
+
 export const LOCKOUT_FAILED_LOGINS = 10;
 export const PBKDF2_ITERATIONS = 100_000;
 

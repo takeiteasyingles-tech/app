@@ -325,11 +325,64 @@ export interface RecordOptions {
   maxMs?: number;
   /** Input level 0..1 for the meter. */
   onLevel?: (level: number) => void;
+  /**
+   * Voice activity detection: called once when the learner has spoken and then gone quiet for
+   * `silenceMs`. The caller stops (and scores) the take; recording itself goes on until stop().
+   */
+  onSilence?: () => void;
+  /** Quiet time after speech that counts as "done" (default 1100 ms). */
+  silenceMs?: number;
+}
+
+/** VAD tuning: 50 ms frames; the first 300 ms measure the room; 250 ms of voice before silence counts. */
+const VAD = { tickMs: 50, calibMs: 300, minSpeechMs: 250, silenceMs: 1100, minLevel: 0.012, maxNoise: 0.05 };
+
+/**
+ * Voice activity detector on an analyser: RMS per frame against an adaptive noise floor (calibrated
+ * on the first frames, then tracked while nobody is speaking). Fires `done` once, after speech and
+ * then `silenceMs` of quiet. Returns the stop function.
+ */
+export function detectSilence(
+  an: Pick<AnalyserNode, 'fftSize' | 'getByteTimeDomainData'>,
+  silenceMs: number,
+  done: () => void,
+): () => void {
+  const buf = new Uint8Array(an.fftSize);
+  const t0 = performance.now();
+  let noise = 0;
+  let voiced = 0;
+  let quiet = 0;
+  const id = setInterval(() => {
+    an.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = ((buf[i] ?? 128) - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / buf.length);
+    if (performance.now() - t0 < VAD.calibMs) {
+      noise = Math.min(VAD.maxNoise, Math.max(noise, rms));
+      return;
+    }
+    if (rms > Math.max(VAD.minLevel, noise * 2.5)) {
+      voiced += VAD.tickMs;
+      quiet = 0;
+      return;
+    }
+    quiet += VAD.tickMs;
+    if (voiced < VAD.minSpeechMs) noise = Math.min(VAD.maxNoise, noise * 0.95 + rms * 0.05);
+    else if (quiet >= silenceMs) {
+      clearInterval(id);
+      done();
+    }
+  }, VAD.tickMs);
+  return () => clearInterval(id);
 }
 
 /**
  * speech.record(h): asks for the microphone (rejects when denied), meters the level and records
- * until stop() or maxMs; stop() resolves with the WAV.
+ * until stop() or maxMs; stop() resolves with the WAV. With `onSilence`, it also tells the caller
+ * when the learner has finished speaking (VAD).
  */
 export async function record(h: RecordOptions = {}): Promise<{ stop(): Promise<RecordResult> }> {
   const o = { maxMs: 8000, ...h };
@@ -362,12 +415,15 @@ export async function record(h: RecordOptions = {}): Promise<{ stop(): Promise<R
   };
   const t0 = performance.now();
   mr.start();
+  const onSilence = o.onSilence;
+  const stopVad = onSilence ? detectSilence(an, o.silenceMs ?? VAD.silenceMs, onSilence) : () => {};
   let resolveStop: (r: RecordResult) => void = () => {};
   const stopped = new Promise<RecordResult>((r) => {
     resolveStop = r;
   });
   mr.onstop = async () => {
     cancelAnimationFrame(raf);
+    stopVad();
     for (const t of stream.getTracks()) t.stop();
     srcNode.disconnect();
     try {

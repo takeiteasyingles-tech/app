@@ -190,5 +190,6 @@ Invite the rest of the team from the admin panel (Usuários → Gerar convite).
 
 - Code only: `npm run typecheck; npm test; npm run build` (with `VITE_TURNSTILE_SITEKEY` set for the admin), then `npm run deploy -w @tie/app` and `npm run deploy -w @tie/admin`.
 - New migration in `packages/db/migrations/`: `cd apps/app; npx wrangler d1 migrations apply tie-db --remote` **before** you deploy code that depends on it.
+  - `0006_step_order` (steps 1-3 become song → e-book → intro) changes the `steps` content rows: right after applying it and deploying both Workers, publish once from Admin → Publicações so `catalog.json` carries the new order. Until then the app shows the old step names on the new step bodies.
 - Content is edited and published from the admin panel. Do not re-seed production to change content.
 - Rollback: Admin → Publicações → rollback to a previous content release. For code, use `npx wrangler rollback` in the app's directory.

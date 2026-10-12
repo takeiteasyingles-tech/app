@@ -155,7 +155,8 @@ export function Voz({ desk = false }: { desk?: boolean }) {
     let heard = '';
     let lis: { stop(): void } | null = null;
     try {
-      handle = await record({ maxMs: 5000, onLevel: meter });
+      // VAD: silence after speech stops the take (the 4.2 s timer below is only the cap).
+      handle = await record({ maxMs: 5000, onLevel: meter, onSilence: () => void R.stopper?.() });
     } catch {
       toast('Não deu para usar o microfone. Confira a permissão do navegador.');
       return;

@@ -216,7 +216,7 @@ Book-vs-street cards + accent note.
 
 ### Gating
 - `gate()` = '' if `settings.free`, else `need()`.
-- Step 3 always requires `ebooks[ebook]`.
+- The e-book step always requires `ebooks[ebook]` (step 3 in the prototype, step 2 in production).
 - A step is also unlocked by `epsDone`, `prog > step` or `stepOk`.
 
 ### Progress and points
@@ -224,6 +224,8 @@ Book-vs-street cards + accent note.
 - `plNext` on step 10: `prog=10`, `epsDone`, `episode` (+40), confetti → `concluido/ep`.
 
 ### Steps
+**PROD:** steps 1-3 run in the order song (1), e-book (2), intro (3); the intro opens "O episódio" (spec 05 "Step order"). The list below is the prototype's numbering.
+
 1. **Intro.** Navy card with title and synopsis, `plPlay`.
    - With `introAudio`: Audio element + progress/time; `ended` → `mark(1)`.
    - Without it: synth jingle (bpm 112), 15s, then mark.

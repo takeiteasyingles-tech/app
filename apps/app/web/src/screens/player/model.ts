@@ -3,6 +3,7 @@
 // change is a new route, so a new component and a fresh P), exactly like the prototype's module-level
 // P that was rebuilt whenever the episode or the step changed.
 
+import { STEP } from '@tie/shared/constants';
 import type { Catalog, Episode } from '@tie/shared/content/schema';
 import type { PronounceIssue } from '@tie/shared/contracts/ai';
 import type { TieState } from '@tie/shared/state';
@@ -21,7 +22,7 @@ export interface MicFeedback {
 export interface PState {
   ep: number;
   step: number;
-  /** Current lyric (steps 2 and 10) or dialogue line (step 5). */
+  /** Current lyric (steps 1 and 10) or dialogue line (step 5). */
   line: number;
   playing: boolean;
   micIdx: number;
@@ -44,6 +45,12 @@ export interface PState {
   vD: number;
   /** Take the Mic: a recording is being set up (mic permission prompt): a second tap is ignored. */
   arming: boolean;
+  /** Take the Mic: the phrase modal (hear → "Fale agora" → score) is open. */
+  micOpen: boolean;
+  /** Take the Mic: the modal is playing the phrase; recording starts when it ends. */
+  micHear: boolean;
+  /** Take the Mic: bumped on every pick/close, so a stale "phrase ended → record" stands down. */
+  micTk: number;
   /** Step 10: episode-done is in flight (the done screen opens once the server confirms it). */
   finishing: boolean;
   // Runtime handles (not rendered).
@@ -83,6 +90,9 @@ export function fresh(ep: number, step: number, s: TieState): PState {
     vid: false,
     vD: 0,
     arming: false,
+    micOpen: false,
+    micHear: false,
+    micTk: 0,
     finishing: false,
     audio: null,
     timer: undefined,
@@ -128,9 +138,12 @@ export function lyricRows<L extends { en: string; pt: string }>(
   return { rows, of };
 }
 
-/** Media of the steps that play a recording: intro (1) and song (2, 10). */
+/** Song steps (first pass and sing-along): they share the Song renderer and the lyric sync. */
+export const isSong = (step: number): boolean => step === STEP.SONG || step === STEP.LAST;
+
+/** Media of the steps that play a recording: intro (3) and song (1, 10). */
 export function stepAudio(Ep: Episode, step: number): string {
-  return (step === 1 ? Ep.introAudio : step === 2 || step === 10 ? Ep.songAudio : '') || '';
+  return (step === STEP.INTRO ? Ep.introAudio : isSong(step) ? Ep.songAudio : '') || '';
 }
 
 /** Click handler: preventDefault + tick sfx + action (the prototype's delegated data-act click). */
@@ -141,8 +154,11 @@ export interface StepActions {
   trans(): void;
   speed(v: number): void;
   line(i: number): void;
+  /** Take the Mic: selects phrase i, opens the modal, plays the phrase, then records. */
   micPick(i: number): void;
+  /** Opens the modal (if closed) and records the current phrase now; while recording, stops. */
   record(): void;
+  micClose(): void;
   showScore(): void;
   download(): void;
   /** Opens the e-book's own screen (#/ebook/N). */
@@ -175,5 +191,5 @@ export interface StepCtx {
   tap: Tap;
 }
 
-/** A step either renders one scrolling body or a fixed dock above a scrolling body. */
-export type StepOut = { dock?: VNode; body: VNode };
+/** A step either renders one scrolling body or a fixed dock above a scrolling body, plus an optional modal. */
+export type StepOut = { dock?: VNode; body: VNode; modal?: VNode };
