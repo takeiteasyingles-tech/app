@@ -18,7 +18,7 @@
       "binding": "DB",
       "database_name": "tie-db",
       // Placeholder: replace with the id printed by `wrangler d1 create tie-db` before the first deploy.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "8c691d49-a010-4a1a-be5f-d3315bcd93a2",
       "migrations_dir": "../../packages/db/migrations"
     }
   ],
@@ -42,8 +42,8 @@
   // see .dev.vars.example. Secrets (TURNSTILE_SECRET, MEDIA_TOKEN_KEY, IP_HASH_SALT) go through
   // `wrangler secret put`.
   "vars": {
-    "TURNSTILE_SITEKEY": "",
-    "APP_ORIGIN": ""
+    "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
+    "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev"
   },
   "env": {
     // `npm run dev` (wrangler dev --env local): the same bindings WITHOUT `ai`. Workers AI only exists
@@ -56,7 +56,7 @@
         {
           "binding": "DB",
           "database_name": "tie-db",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "8c691d49-a010-4a1a-be5f-d3315bcd93a2",
           "migrations_dir": "../../packages/db/migrations"
         }
       ],
@@ -68,8 +68,8 @@
         { "name": "RL_UPLOAD", "namespace_id": "1004", "simple": { "limit": 5, "period": 60 } }
       ],
       "vars": {
-        "TURNSTILE_SITEKEY": "",
-        "APP_ORIGIN": ""
+        "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
+        "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev"
       }
     }
   }

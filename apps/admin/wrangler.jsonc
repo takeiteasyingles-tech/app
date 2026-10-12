@@ -18,7 +18,7 @@
       "binding": "DB",
       "database_name": "tie-db",
       // Placeholder: the same id as apps/app/wrangler.jsonc (one shared database).
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "8c691d49-a010-4a1a-be5f-d3315bcd93a2",
       "migrations_dir": "../../packages/db/migrations"
     }
   ],
@@ -37,8 +37,8 @@
   // tie-app's). COOKIE_PREFIX stays absent (__Host-). Local dev overrides them from .dev.vars
   // (see .dev.vars.example). Secrets as in tie-app.
   "vars": {
-    "TURNSTILE_SITEKEY": "",
-    "APP_ORIGIN": ""
+    "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
+    "APP_ORIGIN": "https://tie-admin.takeiteasyingles.workers.dev"
   },
   "env": {
     // `npm run dev` (wrangler dev --env local): the same bindings WITHOUT the remote-only `ai`, so
@@ -49,7 +49,7 @@
         {
           "binding": "DB",
           "database_name": "tie-db",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "8c691d49-a010-4a1a-be5f-d3315bcd93a2",
           "migrations_dir": "../../packages/db/migrations"
         }
       ],
@@ -61,8 +61,8 @@
         { "name": "RL_UPLOAD", "namespace_id": "2004", "simple": { "limit": 5, "period": 60 } }
       ],
       "vars": {
-        "TURNSTILE_SITEKEY": "",
-        "APP_ORIGIN": ""
+        "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
+        "APP_ORIGIN": "https://tie-admin.takeiteasyingles.workers.dev"
       }
     }
   }

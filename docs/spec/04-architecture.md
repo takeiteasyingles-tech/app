@@ -372,7 +372,7 @@ Model IDs live in `app_settings`, so they can be swapped without a deploy.
 
 | Use | Model |
 |---|---|
-| Tutor + report | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with JSON schema `response_format`; retry once on `@cf/meta/llama-3.1-8b-instruct-fast` |
+| Tutor + report | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with JSON schema `response_format`; retry once on `@cf/meta/llama-3.1-8b-instruct-fp8` (the `-fast` variant left the Workers AI catalog) |
 | ASR | `@cf/openai/whisper-large-v3-turbo` (`language: en`) |
 | TTS | `@cf/deepgram/aura-1` |
 | Guard | `@cf/meta/llama-guard-3-8b` |

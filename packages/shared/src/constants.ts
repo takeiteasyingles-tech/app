@@ -153,7 +153,7 @@ export const SETTINGS = {
 
 export const DEFAULT_MODELS = {
   tutor: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-  tutorFallback: '@cf/meta/llama-3.1-8b-instruct-fast',
+  tutorFallback: '@cf/meta/llama-3.1-8b-instruct-fp8',
   asr: '@cf/openai/whisper-large-v3-turbo',
   tts: '@cf/deepgram/aura-1',
   guard: '@cf/meta/llama-guard-3-8b',
