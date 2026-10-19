@@ -5,7 +5,7 @@
 .dev.vars.*
 !.env.example
 !.dev.vars.example
-
+prototipo/*
 # Dependencies and builds
 node_modules/
 dist/
