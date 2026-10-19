@@ -9,11 +9,7 @@ import { endpoint } from './http';
 // verification page (`#/certificado/<code>`), which shows name, season and date only.
 
 /** Code as typed by a person: trimmed and upper-cased before matching CERT_CODE_RE. */
-export const CertCode = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .pipe(z.string().regex(CERT_CODE_RE, 'Código inválido.'));
+export const CertCode = z.string().trim().toUpperCase().pipe(z.string().regex(CERT_CODE_RE, 'Código inválido.'));
 
 export const CertCodeParams = z.object({ code: CertCode });
 

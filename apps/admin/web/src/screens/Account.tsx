@@ -33,6 +33,9 @@ const PERM_LABEL: Record<Permission, string> = {
   'flags.manage': 'Ligar e desligar recursos',
   'settings.manage': 'Mudar configurações',
   'stats.read': 'Ver o painel de números',
+  'feedback.read': 'Ver as avaliações dos episódios',
+  'certificates.revoke': 'Revogar certificados',
+  'api_tokens.manage': 'Gerenciar tokens de agentes (MCP)',
   'roles.grant_admin': 'Dar o papel admin',
 };
 

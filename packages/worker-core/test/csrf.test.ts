@@ -81,6 +81,23 @@ describe('csrfDecision', () => {
     expect(csrfDecision(input({ contentType: ct, multipart: false })).ok).toBe(false);
   });
 
+  it('lets a bearer-only JSON request through on a bearer route (MCP), and only there', () => {
+    const agent = { origin: null, secFetchSite: null, authorization: 'Bearer tie_pat_abc', cookie: null };
+    expect(csrfDecision(input({ ...agent, bearerRoute: true }))).toEqual({ ok: true });
+    // Not a bearer route: the usual Origin check applies.
+    expect(csrfDecision(input({ ...agent, bearerRoute: false }))).toEqual({ ok: false, reason: 'missing-origin' });
+    // A cookie on the request (a browser) gets the full check even on the bearer route.
+    expect(csrfDecision(input({ ...agent, bearerRoute: true, cookie: 'tie_adm=x' })).ok).toBe(false);
+    // No or malformed Authorization: full check.
+    expect(csrfDecision(input({ ...agent, bearerRoute: true, authorization: null })).ok).toBe(false);
+    expect(csrfDecision(input({ ...agent, bearerRoute: true, authorization: 'Basic abc' })).ok).toBe(false);
+    // Still JSON only.
+    expect(csrfDecision(input({ ...agent, bearerRoute: true, contentType: 'text/plain' }))).toEqual({
+      ok: false,
+      reason: 'content-type',
+    });
+  });
+
   it('allows body-less writes without Content-Type', () => {
     expect(csrfDecision(input({ method: 'DELETE', contentType: null, contentLength: null }))).toEqual({ ok: true });
     expect(csrfDecision(input({ contentType: null, contentLength: '0' }))).toEqual({ ok: true });

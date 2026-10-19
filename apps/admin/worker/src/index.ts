@@ -1,5 +1,6 @@
 // tie-admin Worker. Static Assets serve the admin SPA; this runs only for /admin-api/* and /m/*.
 import { adminApi } from '@tie/shared/contracts/admin';
+import { MCP_PATH } from '@tie/shared/contracts/mcp';
 import { createApp, type Env, fail } from '@tie/worker-core';
 import routes from './routes/index';
 
@@ -7,7 +8,11 @@ const MULTIPART = new Set([`POST ${adminApi.media.upload.path}`]);
 
 /** The admin app: shared middleware (headers, config guard, CSRF, JSON cap) + every admin route. */
 export function buildAdminApp() {
-  const app = createApp({ multipart: (path, method) => MULTIPART.has(`${method} ${path}`) });
+  const app = createApp({
+    multipart: (path, method) => MULTIPART.has(`${method} ${path}`),
+    // MCP (spec 07): Bearer API tokens, no cookie; csrf still checks any request that has a cookie.
+    bearer: (path) => path === MCP_PATH,
+  });
   app.route('/', routes);
   app.all('*', (c) => {
     const p = c.req.path;

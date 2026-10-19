@@ -39,11 +39,16 @@
   // and whenever a deploy carries dev values, the Worker answers non-local requests with 500 and logs
   // why (worker-core config.ts). COOKIE_PREFIX is deliberately absent, so cookies get the __Host- prefix.
   // Local dev overrides these from .dev.vars (localhost origin, Turnstile test keys, COOKIE_PREFIX="");
-  // see .dev.vars.example. Secrets (TURNSTILE_SECRET, MEDIA_TOKEN_KEY, IP_HASH_SALT) go through
-  // `wrangler secret put`.
+  // see .dev.vars.example. Secrets (TURNSTILE_SECRET, MEDIA_TOKEN_KEY, IP_HASH_SALT, RESEND_API_KEY)
+  // go through `wrangler secret put`.
+  // MAIL_FROM (spec 07, password reset e-mail): onboarding@resend.dev is Resend's shared test sender,
+  // which only delivers to the Resend account's own address. Replace it with an address on a domain
+  // verified in Resend before real learners reset passwords. Without RESEND_API_KEY nothing is sent:
+  // the e-mail is logged to the Worker console instead.
   "vars": {
     "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
-    "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev"
+    "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev",
+    "MAIL_FROM": "Take It Easy <onboarding@resend.dev>"
   },
   "env": {
     // `npm run dev` (wrangler dev --env local): the same bindings WITHOUT `ai`. Workers AI only exists
@@ -69,7 +74,8 @@
       ],
       "vars": {
         "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
-        "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev"
+        "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev",
+        "MAIL_FROM": "Take It Easy <onboarding@resend.dev>"
       }
     }
   }

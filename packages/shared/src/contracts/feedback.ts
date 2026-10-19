@@ -99,9 +99,7 @@ export const FeedbackSummaryQuery = z.object({
 export const FeedbackSummary = z.object({
   overall: FeedbackStatsSchema,
   /** Every episode with at least one rating in the range, by episode number. */
-  episodes: z.array(
-    FeedbackStatsSchema.extend({ episodeNum: z.int().positive(), title: z.string().nullable() }),
-  ),
+  episodes: z.array(FeedbackStatsSchema.extend({ episodeNum: z.int().positive(), title: z.string().nullable() })),
 });
 export type FeedbackSummary = z.infer<typeof FeedbackSummary>;
 

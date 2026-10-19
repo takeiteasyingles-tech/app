@@ -115,6 +115,33 @@ describe('content CRUD', () => {
     expect(pk.body.error.details.issues[0].code).toBe('immutable');
   });
 
+  it('edits seasons with their test settings; a season in use is not deleted (spec 07)', async () => {
+    const since = Date.now();
+    const list = await editor.client.json(C.seasons.list.path);
+    expect(list.body.items[0]).toMatchObject({ n: 1, title: 'Arrival', testPassPct: 70, testQuestionCount: 20 });
+    const upd = await editor.client.json(p(C.seasons.update.path, 1), {
+      method: 'PUT',
+      json: { testPassPct: 80, synopsis: '  Nova sinopse  ' },
+    });
+    expect(upd.status).toBe(200);
+    expect(upd.body.item).toMatchObject({ testPassPct: 80, testQuestionCount: 20, synopsis: 'Nova sinopse' });
+    expect(upd.body.item.updatedBy).toBe(editor.id);
+    expect(await auditRows('content.seasons.update', since)).toHaveLength(1);
+    // test_published is changed only by the season test publish endpoint.
+    const pub = await editor.client.json(p(C.seasons.update.path, 1), { method: 'PUT', json: { testPublished: true } });
+    expect(pub.status).toBe(400);
+    expect(
+      (await editor.client.send(p(C.seasons.update.path, 1), { method: 'PUT', json: { testPassPct: 101 } })).status,
+    ).toBe(400);
+    const created = await editor.client.json(C.seasons.create.path, {
+      json: { n: 9, title: 'Nova', synopsis: null, testPassPct: 60, testQuestionCount: 10 },
+    });
+    expect(created.status).toBe(201);
+    expect((await editor.client.json(p(C.seasons.remove.path, 9), { method: 'DELETE' })).status).toBe(200);
+    // Season 1 still has episodes.
+    expect((await editor.client.send(p(C.seasons.remove.path, 1), { method: 'DELETE' })).status).toBe(409);
+  });
+
   it('rejects unknown keys, server-only keys and malformed nested content', async () => {
     const up = (json: unknown) => editor.client.json(p(C.episodes.update.path, 1), { method: 'PUT', json });
     expect((await up({ title: 'x', extra: 1 })).status).toBe(400);

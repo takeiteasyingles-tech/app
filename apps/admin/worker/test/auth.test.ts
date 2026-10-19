@@ -21,7 +21,8 @@ describe('login', () => {
     const r = await login(c, s.email.toUpperCase(), PASSWORD);
     expect(r.status).toBe(200);
     expect(r.body.user).toEqual({ id: s.id, email: s.email, roles: ['editor'] });
-    expect(r.body.permissions).toEqual(['content.edit', 'content.publish', 'media.manage']);
+    // feedback.read (spec 07) is shared by editors and moderators.
+    expect(r.body.permissions).toEqual(['feedback.read', 'content.edit', 'content.publish', 'media.manage']);
     const cookie = r.res.headers.getSetCookie().find((l) => l.startsWith('tie_adm='));
     expect(cookie).toMatch(/Max-Age=28800/i);
     expect(cookie).toMatch(/HttpOnly/i);

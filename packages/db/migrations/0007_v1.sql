@@ -52,7 +52,7 @@ CREATE INDEX ix_str_season ON season_test_results(season_n, passed);
 
 -- Certificates: issued automatically on the first pass of a season test. code is the short public
 -- verification code (CERT_CODE_ALPHABET, 'TIE-XXXX-XXXX'); the name and season title are frozen at
--- issue time. r2_key is the cached PDF (certs/{user_id}/{id}.pdf), NULL until first rendered.
+-- issue time. r2_key is the cached PDF (users/{user_id}/certs/{id}.pdf), NULL until first rendered.
 -- A revoked certificate still verifies, as revoked.
 CREATE TABLE certificates(id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   season_n INTEGER NOT NULL, full_name_snapshot TEXT NOT NULL, season_title_snapshot TEXT NOT NULL,

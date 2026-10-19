@@ -26,6 +26,8 @@ import {
 } from '../content/schema';
 import { QuotaInfo } from '../state';
 import { Feedback, PronTip, ReportResult } from './ai';
+import { adminApiTokensApi } from './apiTokens';
+import { adminCertificatesApi } from './certificates';
 import {
   Email,
   IdParams,
@@ -39,8 +41,11 @@ import {
   Timestamp,
   TurnstileToken,
 } from './common';
+import { adminFeedbackApi } from './feedback';
 import { BadgeRule } from './game';
 import { type EndpointDef, endpoint } from './http';
+import { adminSeasonTestApi } from './seasonTest';
+import { adminStatsApi } from './stats';
 
 // Admin API (/admin-api). Bodies are strict (unknown keys rejected). Every staff endpoint names the
 // permission it needs; every mutation is audited with a JSON diff. Media fields are media ids.
@@ -229,6 +234,24 @@ export type PlanPatch = z.infer<typeof PlanPatch>;
 export const PlanRow = Plan.extend({ users: z.int().min(0) });
 
 // ---------- Content entities (DB rows, camelCase; JSON columns typed) ----------
+
+/**
+ * Season (spec 07, feature D: season editor). title/synopsis reach learners through catalog.json on
+ * the next publish; the test settings are read live by the season test. Whether the test is open
+ * (seasons.test_published) is changed only through adminSeasonTestApi.publish.
+ */
+export const SeasonRow = z.object({
+  n: z.int().positive(),
+  title: z.string(),
+  synopsis: z.string().nullable(),
+  /** Percentage of right answers needed to pass the season test. */
+  testPassPct: z.int().min(0).max(100),
+  /** Target size of the season test (see seasons.test_question_count). */
+  testQuestionCount: z.int().min(1).max(100),
+  updatedAt: Timestamp,
+  updatedBy: z.string().nullable(),
+});
+export type SeasonRow = z.infer<typeof SeasonRow>;
 
 export const EpisodeRow = z.object({
   num: z.int().positive(),
@@ -509,6 +532,12 @@ function crud<Item extends z.ZodType, Create extends z.ZodType, Update extends z
  */
 const RequiredTitle = z.string().trim().min(1);
 
+export const SeasonEdit = editable(
+  SeasonRow.omit({ updatedAt: true, updatedBy: true }).extend({
+    title: RequiredTitle,
+    synopsis: z.string().trim().max(2000).nullable(),
+  }),
+);
 export const EpisodeEdit = editable(
   EpisodeRow.omit({ updatedAt: true, updatedBy: true }).extend({ title: RequiredTitle }),
 );
@@ -939,6 +968,7 @@ export const adminPlansApi = {
 
 /** `list` accepts ?parent= (episode num, exercise id, ebook num or album id) for child entities. */
 export const adminContentApi = {
+  seasons: crud('seasons', SeasonRow, SeasonEdit.create, SeasonEdit.update),
   episodes: crud('episodes', EpisodeRow, EpisodeEdit.create, EpisodeEdit.update),
   micPhrases: crud('mic-phrases', MicPhraseRow, MicPhraseEdit.create, MicPhraseEdit.update),
   exercises: crud('exercises', ExerciseRow, ExerciseEdit.create, ExerciseEdit.update),
@@ -1193,6 +1223,12 @@ export const adminApi = {
   media: adminMediaApi,
   moderation: adminModerationApi,
   ops: adminOpsApi,
+  // v1 (spec 07). The MCP endpoint (access 'agent') is adminMcpApi in contracts/mcp.ts.
+  seasonTest: adminSeasonTestApi,
+  certificates: adminCertificatesApi,
+  feedback: adminFeedbackApi,
+  stats: adminStatsApi,
+  apiTokens: adminApiTokensApi,
 } as const;
 
 /** Flattens a nested endpoint map (for route tables and tests). */

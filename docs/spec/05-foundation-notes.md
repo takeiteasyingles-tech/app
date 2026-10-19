@@ -45,6 +45,16 @@ Screens that knowingly depart from the prototype's markup (the golden rule's "sa
 | White card on a navy screen | `tie-ext.css` resets `.h1`, `.lbl` and `.btn.ghost` inside `.on-navy .card.paper`. | The Mic pronunciation card showed the phrase and the "Ouvir" button white on white (the prototype had the same gap). |
 | Staff accounts in the student app | `PUT /api/me/profile` and `POST /api/me/profile/complete` create the learner rows (profile, settings, stats) when they are missing. | Accounts created by an admin invite had none, so onboarding failed with "Não encontrado". |
 
+### v1 features (2026-10-18, spec 07)
+
+PROD additions with no prototype counterpart. Each feature agent adds its screen-level rows here.
+
+| Area | Deviation | Why |
+|---|---|---|
+| Points | `POINT_KINDS` / `POINTS` gain `season_pass` (100, `PROD_POINTS` in `domain/game.ts`), seeded by migration 0007. `game.test.ts` compares `POINTS` with the prototype's table plus `PROD_POINTS`. | Passing a season test pays once per season. |
+| `TieState` | Three additive keys: `feedback`, `seasonTests`, `certificates` (zod defaults keep older cached states parseable). `PROGRESS_KEYS` gains `seasonTests`; "Zerar progresso" also deletes `season_test_answers` / `season_test_results`, never certificates or NPS ratings. | Season test, certificates and NPS per episode (spec 07). |
+| Roles | `feedback.read` is held by both editor and moderator (the two roles were disjoint before). | Content and support both read the episode ratings. |
+
 ### U2: Episode player and Concluído (`screens/player`, `screens/concluido`)
 
 The aside stays 300px and the content wrap 760px, as in the prototype. Every step keeps the prototype's head, dock, foot, gating copy and step markup except for the rows below. An extra `.pl-scr` wrapper is the slice's CSS scope; on mobile it is `display: contents`, so the head, dock, scroll and foot are still flex items of the view.

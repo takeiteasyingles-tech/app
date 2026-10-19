@@ -202,8 +202,11 @@ export const CERT_CODE_PREFIX = 'TIE';
 export const CERT_CODE_RE = /^TIE-[ABCDEFGHJKMNPQRSTWXYZ2-9]{4}-[ABCDEFGHJKMNPQRSTWXYZ2-9]{4}$/;
 /** Student-app hash route of the public verification page: `${APP_ORIGIN}/#/certificado/<code>`. */
 export const CERT_VERIFY_ROUTE = 'certificado';
-/** R2 key of a certificate's cached PDF. */
-export const certificateR2Key = (userId: string, certId: string): string => `certs/${userId}/${certId}.pdf`;
+/**
+ * R2 key of a certificate's cached PDF. Under users/{uid}/ so account deletion (purgeUserObjects)
+ * removes it with the rest of the learner's objects.
+ */
+export const certificateR2Key = (userId: string, certId: string): string => `users/${userId}/certs/${certId}.pdf`;
 
 /** Hash route the reset e-mail links to: `${APP_ORIGIN}/#/entrar?reset=<token>` (ResetForm consumes it). */
 export const RESET_LINK_ROUTE = 'entrar';

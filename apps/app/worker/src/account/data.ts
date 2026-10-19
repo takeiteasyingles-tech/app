@@ -28,6 +28,10 @@ export function resetProgressQueries(db: D1Database, userId: string): Query<neve
     del('point_ledger'),
     del('user_badges'),
     del('karaoke_picks'),
+    // v1 (spec 07): season test answers and results are progress. Certificates (issued documents)
+    // and NPS ratings (opinions about the course) stay.
+    del('season_test_answers'),
+    del('season_test_results'),
     q<never>(
       db,
       `DELETE FROM mic_sessions WHERE user_id = ?1 AND (flagged = 0 OR id NOT IN (${pendingReview}))`,
@@ -70,6 +74,15 @@ const EXPORT_TABLES: ReadonlyArray<readonly [string, string]> = [
   ['point_ledger', 'SELECT * FROM point_ledger WHERE user_id = ?1 ORDER BY id'],
   ['user_badges', 'SELECT * FROM user_badges WHERE user_id = ?1'],
   ['karaoke_picks', 'SELECT * FROM karaoke_picks WHERE user_id = ?1 ORDER BY picked_at'],
+  // v1 (spec 07)
+  ['lesson_feedback', 'SELECT * FROM lesson_feedback WHERE user_id = ?1 ORDER BY episode_num'],
+  ['season_test_answers', 'SELECT * FROM season_test_answers WHERE user_id = ?1'],
+  ['season_test_results', 'SELECT * FROM season_test_results WHERE user_id = ?1 ORDER BY season_n'],
+  [
+    'certificates',
+    `SELECT id, code, season_n, full_name_snapshot, season_title_snapshot, score_pct, issued_at, revoked_at
+     FROM certificates WHERE user_id = ?1 ORDER BY issued_at`,
+  ],
   [
     'mic_sessions',
     `SELECT id, assistant_key, mode, mission_key, extra_id, started_at, ended_at, secs, status, report, report_source

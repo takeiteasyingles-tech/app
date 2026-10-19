@@ -27,6 +27,7 @@ const POINTS: Record<PointKind, number> = {
   test_pass: 50,
   mission: 15,
   word: 3,
+  season_pass: 100,
 };
 
 export interface AwardCall {

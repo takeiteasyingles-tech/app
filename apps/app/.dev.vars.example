@@ -20,3 +20,10 @@ MEDIA_TOKEN_KEY=dev-media-token-key-change-me-0123456789abcdef
 
 # Salt for the hashed IPs stored in sessions and audit_log.
 IP_HASH_SALT=dev-ip-hash-salt-change-me-0123456789abcdef
+
+# --- E-mail (password reset, spec 07) ---
+# Sender for transactional e-mail sent through Resend.
+MAIL_FROM="Take It Easy <onboarding@resend.dev>"
+# Resend API key (secret). Leave it unset locally: without it the reset e-mail (with its link) is
+# written to the wrangler dev console instead of being sent. Set it only to test real delivery.
+# RESEND_API_KEY=re_...

@@ -22,6 +22,11 @@ export interface Env {
   APP_ORIGIN: string;
   /** Cookie name prefix. Unset → `__Host-`; set to '' for plain-HTTP localhost. */
   COOKIE_PREFIX?: string;
+  // v1 (spec 07): transactional e-mail through Resend (tie-app only; password reset).
+  /** Secret. Unset → the e-mail is logged to the console instead of sent (local dev, tests). */
+  RESEND_API_KEY?: string;
+  /** Var. Sender, e.g. 'Take It Easy <no-reply@example.com>' (a domain verified in Resend). */
+  MAIL_FROM?: string;
 }
 
 export type Audience = 'app' | 'admin';

@@ -115,6 +115,32 @@ const optsIssues = (item: Item, optsKey: string, idxKey: string): Issue[] => {
   return [];
 };
 
+// Season editor (spec 07, feature D). test_published is not a field: only
+// adminSeasonTestApi.publish changes it (it checks the approved questions first).
+const seasons: Entity = {
+  name: 'seasons',
+  target: 'season',
+  table: 'seasons',
+  pk: f('n', 'n', 'int'),
+  numericPk: true,
+  fields: [
+    f('n', 'n', 'int'),
+    f('title', 'title'),
+    f('synopsis', 'synopsis'),
+    f('testPassPct', 'test_pass_pct', 'int'),
+    f('testQuestionCount', 'test_question_count', 'int'),
+  ],
+  orderBy: 'n',
+  stamp: { updatedAt: true, updatedBy: true },
+  api: C.seasons,
+  inUse: [
+    { label: 'episódios', sql: 'SELECT COUNT(*) AS n FROM episodes WHERE season_n = ?' },
+    { label: 'questões do teste', sql: 'SELECT COUNT(*) AS n FROM season_test_questions WHERE season_n = ?' },
+    { label: 'resultados de teste', sql: 'SELECT COUNT(*) AS n FROM season_test_results WHERE season_n = ?' },
+    { label: 'certificados', sql: 'SELECT COUNT(*) AS n FROM certificates WHERE season_n = ?' },
+  ],
+};
+
 const episodes: Entity = {
   name: 'episodes',
   target: 'episode',
@@ -156,6 +182,7 @@ const episodes: Entity = {
     { label: 'progresso de alunos', sql: 'SELECT COUNT(*) AS n FROM episode_progress WHERE episode_num = ?' },
     { label: 'etapas concluídas', sql: 'SELECT COUNT(*) AS n FROM step_completions WHERE episode_num = ?' },
     { label: 'faixas de álbum', sql: 'SELECT COUNT(*) AS n FROM album_tracks WHERE ep_num = ?' },
+    { label: 'avaliações de alunos', sql: 'SELECT COUNT(*) AS n FROM lesson_feedback WHERE episode_num = ?' },
   ],
   check(item) {
     if (item.status === 'published' && item.done == null) {
@@ -499,6 +526,7 @@ const missions: Entity = {
 };
 
 export const ENTITIES: readonly Entity[] = [
+  seasons,
   episodes,
   micPhrases,
   exercises,

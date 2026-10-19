@@ -13,6 +13,8 @@ export interface CreateAppOptions {
   services?: ServiceFactories;
   /** Routes that accept multipart/form-data (photo upload, admin media). */
   multipart?: CsrfOptions['multipart'];
+  /** Routes authenticated by a Bearer token instead of a cookie (tie-admin MCP endpoint). */
+  bearer?: CsrfOptions['bearer'];
   /** Cache-Control for responses that set none. Default 'no-store'. */
   defaultCacheControl?: string;
   /** Declared JSON bodies above this are rejected before parsing. Default 1 MB (pronounce audio is ≤700 KB). */
@@ -63,7 +65,7 @@ export function createApp(opts: CreateAppOptions = {}): Hono<AppEnv> {
   app.use('*', requestId);
   app.use('*', securityHeaders({ defaultCacheControl: opts.defaultCacheControl }));
   app.use('*', configGuard());
-  app.use('*', csrf({ multipart: opts.multipart }));
+  app.use('*', csrf({ multipart: opts.multipart, bearer: opts.bearer }));
   app.use('*', jsonLimit(opts.maxJsonBytes ?? 1024 * 1024));
   app.use('*', async (c, next) => {
     c.set('services', createServices(c.env, opts.services));

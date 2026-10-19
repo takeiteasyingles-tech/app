@@ -206,6 +206,9 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
     usage,
     flags,
     content,
+    feedbackRows,
+    seasonResults,
+    certRows,
   ] = await batch(db, [
     q<{ id: string; email: string; tz: string }>(db, 'SELECT id, email, tz FROM users WHERE id = ?', uid),
     q<ProfileRow>(db, `${PROFILE_SELECT} WHERE p.user_id = ?`, uid),
@@ -298,6 +301,23 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
     ),
     flagRowsQuery(db),
     appSettingQuery(db, SETTINGS.contentCurrent),
+    // v1 (spec 07)
+    q<{ episode_num: number; stars: number; comment: string | null }>(
+      db,
+      'SELECT episode_num, stars, comment FROM lesson_feedback WHERE user_id = ?',
+      uid,
+    ),
+    q<{ season_n: number; score_pct: number; passed: number; attempts: number; submitted_at: number }>(
+      db,
+      'SELECT season_n, score_pct, passed, attempts, submitted_at FROM season_test_results WHERE user_id = ?',
+      uid,
+    ),
+    q<{ id: string; code: string; season_n: number; score_pct: number; issued_at: number; revoked_at: number | null }>(
+      db,
+      `SELECT id, code, season_n, score_pct, issued_at, revoked_at FROM certificates WHERE user_id = ?
+       ORDER BY issued_at, id`,
+      uid,
+    ),
   ]);
 
   const user = users[0];
@@ -361,6 +381,28 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
   const quota = quotaInfo(s.plan, usage[0]?.seconds_used ?? 0, per);
   const contentVersion = settingString(content[0]?.value);
 
+  const feedback: TieState['feedback'] = {};
+  for (const f of feedbackRows) {
+    if (f.stars >= 1 && f.stars <= 5) feedback[String(f.episode_num)] = { stars: f.stars, comment: f.comment };
+  }
+  const seasonTests: TieState['seasonTests'] = {};
+  for (const r of seasonResults) {
+    seasonTests[String(r.season_n)] = {
+      scorePct: Math.min(100, Math.max(0, r.score_pct)),
+      passed: bool(r.passed),
+      attempts: Math.max(0, r.attempts),
+      submittedAt: Math.max(0, r.submitted_at),
+    };
+  }
+  const certificates: TieState['certificates'] = certRows.map((c) => ({
+    id: c.id,
+    code: c.code,
+    seasonN: c.season_n,
+    scorePct: Math.min(100, Math.max(0, c.score_pct)),
+    issuedAt: c.issued_at,
+    revoked: c.revoked_at != null,
+  }));
+
   return {
     v: STATE_VERSION,
     user: { id: uid, email, name: profileRow?.name ?? s.name, fullName: profileRow?.full_name ?? s.fullName },
@@ -406,5 +448,8 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
     contentVersion,
     now,
     tz,
+    feedback,
+    seasonTests,
+    certificates,
   };
 }

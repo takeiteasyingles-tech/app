@@ -33,6 +33,7 @@ export const KIND_LABEL: Record<string, string> = {
   test_pass: 'Teste do e-book',
   mission: 'Missão do dia',
   word: 'Palavra nova',
+  season_pass: 'Teste da temporada',
 };
 
 const SPECS: Record<string, readonly Spec[]> = {
