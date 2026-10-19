@@ -47,7 +47,7 @@ async function repSave(c: Catalog, sess: MicSession): Promise<void> {
   );
   if (!r) return;
   const n = r.added;
-  toast(n ? `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} na Revisão.` : 'Essas palavras já estavam na Revisão.');
+  toast(n ? `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} nos Flashcards.` : 'Essas palavras já estavam nos seus Flashcards.');
 }
 
 const say = (t: string) => () => void speech.say(t);
@@ -444,7 +444,7 @@ export default function Relatorio({ params }: ScreenProps) {
       </div>
       <div style={{ marginTop: 'auto' }}>
         <Btn
-          label={`Levar ${words.length} para a Revisão`}
+          label={`Levar ${words.length} para os Flashcards`}
           icon="plus"
           kind="blue"
           cls="block"

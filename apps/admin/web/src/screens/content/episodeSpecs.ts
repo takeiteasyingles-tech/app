@@ -91,7 +91,7 @@ const OLHAR: Spec[] = [
     label: 'Vocabulário da cena',
     item: 'palavra',
     inline: true,
-    hint: 'Viram cartões de revisão quando o aluno termina a etapa 4.',
+    hint: 'Viram flashcards quando o aluno termina a etapa 4.',
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },
@@ -230,7 +230,7 @@ const AWAY: Spec[] = [
     label: 'Expressões',
     item: 'expressão',
     inline: true,
-    hint: 'Viram cartões de revisão quando o aluno termina a etapa 8.',
+    hint: 'Viram flashcards quando o aluno termina a etapa 8.',
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },

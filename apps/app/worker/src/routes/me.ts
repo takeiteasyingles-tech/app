@@ -80,6 +80,17 @@ async function freeStepsOn(c: Context<AppEnv>): Promise<boolean> {
 const profileQuery = (db: D1Database, userId: string): Query<ProfileRow> =>
   q<ProfileRow>(db, `${PROFILE_SELECT} WHERE p.user_id = ?`, userId);
 
+/**
+ * The rows signup creates for a learner. Staff accounts come from an admin invite instead, so the
+ * first onboarding save of such an account creates them here (no-ops for everyone else).
+ */
+const learnerRows = (db: D1Database, userId: string, now: number) =>
+  [
+    q(db, 'INSERT OR IGNORE INTO profiles(user_id, updated_at) VALUES(?, ?)', userId, now),
+    q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', userId),
+    q(db, 'INSERT OR IGNORE INTO user_stats(user_id) VALUES(?)', userId),
+  ] as const;
+
 const settingsQuery = (db: D1Database, userId: string): Query<SettingsRow> =>
   q<SettingsRow>(
     db,
@@ -141,7 +152,8 @@ routes.put(api.profile.path, requireUser(), rateLimit('RL_API'), vJson(api.profi
     sets.push('onb_step = MAX(onb_step, ?)');
     binds.push(patch.onbStep);
   }
-  const stmts: Query<unknown>[] = [];
+  // Staff accounts are created by an admin invite, not by signup, so they have no learner rows yet.
+  const stmts: Query<unknown>[] = [...learnerRows(db, s.userId, now)];
   if (sets.length) {
     stmts.push(
       q(db, `UPDATE profiles SET ${sets.join(', ')}, updated_at = ? WHERE user_id = ?`, ...binds, now, s.userId),
@@ -164,7 +176,11 @@ routes.post(api.profileComplete.path, requireUser(), rateLimit('RL_API'), async 
   const now = Date.now();
   const tz = s.tz || DEFAULT_TZ;
 
-  const [profiles, flagRows] = await batch(db, [profileQuery(db, s.userId), flagQuery(db, FLAGS.freeSteps)]);
+  const [, , , profiles, flagRows] = await batch(db, [
+    ...learnerRows(db, s.userId, now),
+    profileQuery(db, s.userId),
+    flagQuery(db, FLAGS.freeSteps),
+  ]);
   const row = profiles[0];
   if (!row) throw new ApiError('not_found');
   // onbFinish (prototype cadastro.js): reminders sorted, settings.slow from the personalization

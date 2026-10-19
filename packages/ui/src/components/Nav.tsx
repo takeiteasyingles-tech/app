@@ -12,7 +12,7 @@ export const NAV = [
 ] as const;
 
 /** On the phone tab bar, Revisão takes the place of Você; the profile stays in the top avatar. */
-export const TABS = [...NAV.slice(0, 4), ['revisao', 'Revisão', 'cards']] as const;
+export const TABS = [...NAV.slice(0, 4), ['revisao', 'Flashcards', 'cards']] as const;
 
 export type NavSection = (typeof NAV)[number][0] | 'revisao' | 'conquistas' | '';
 
@@ -46,7 +46,7 @@ export function Side({ active, due, g }: { active: string; due: number; g: GameV
       ))}
       <a class={`nav${active === 'revisao' ? ' on' : ''}`} href="#/revisao">
         <Icon name="cards" size={21} />
-        <span>Revisão</span>
+        <span>Flashcards</span>
         {due ? <span class="badge">{due}</span> : null}
       </a>
       <a class={`nav${active === 'conquistas' ? ' on' : ''}`} href="#/conquistas">

@@ -49,7 +49,7 @@ export function awardFx(a: AwardResult | null | undefined): Fx[] {
 /** review.sync()'s toast when finished steps unlock cards ("2 cartões novos na Revisão."). */
 export function cardsFx(n: number): Fx[] {
   if (n <= 0) return [];
-  return [{ at: 0, kind: 'toast', msg: `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} na Revisão.` }];
+  return [{ at: 0, kind: 'toast', msg: `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} nos Flashcards.` }];
 }
 
 /** app.toast(msg, ms), a no-op without a DOM (unit tests, prerender). */

@@ -91,7 +91,7 @@ export default function Concluido({ params }: ScreenProps) {
           </div>
           <div class="stat">
             <div class="num">{cardsOf(E).length}</div>
-            <div class="sm mt8">cartões na sua Revisão</div>
+            <div class="sm mt8">cartões nos seus Flashcards</div>
           </div>
         </div>
         <div class="card stack" style={{ '--gap': '12px' }}>

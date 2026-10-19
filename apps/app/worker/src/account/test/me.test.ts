@@ -280,6 +280,23 @@ describe('delete account', () => {
     expect((await client.json(M.state.path)).status).toBe(401);
   });
 
+  it('lets an invite-created account (no learner rows) save and finish onboarding', async () => {
+    const { client, id } = await signup('invited@example.com');
+    // An admin invite creates only users + user_roles: no profile, settings or stats.
+    await exec('DELETE FROM profiles WHERE user_id = ?', id);
+    await exec('DELETE FROM user_settings WHERE user_id = ?', id);
+    await exec('DELETE FROM user_stats WHERE user_id = ?', id);
+    await exec("INSERT INTO user_roles(user_id, role, granted_at) VALUES(?, 'super_admin', 0)", id);
+
+    const put = await client.json(M.profile.path, { method: 'PUT', json: { onbStep: 3 } });
+    expect(put.status).toBe(200);
+    const done = await client.json(M.profileComplete.path, { method: 'POST' });
+    expect(done.status).toBe(200);
+    const state = TieState.parse((await client.json(M.state.path)).body);
+    expect(state.profile).not.toBeNull();
+    expect(await one('SELECT user_id FROM user_stats WHERE user_id = ?', id)).not.toBeNull();
+  });
+
   it('refuses staff accounts', async () => {
     const { client, id } = await signup('staff@example.com');
     await exec("INSERT INTO user_roles(user_id, role, granted_at) VALUES(?, 'editor', 0)", id);

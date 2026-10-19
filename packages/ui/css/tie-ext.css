@@ -12,3 +12,17 @@
 #overlayroot {
   display: contents;
 }
+
+/* A white .card.paper on a navy screen (the Mic pronunciation card). tie.css resets .p/.h2/.h3/.sm/.xs
+   inside it but not .h1, .lbl or a ghost button, which stayed white on white: the phrase to say and
+   the "Ouvir" button were invisible. */
+.on-navy .card.paper .h1 {
+  color: var(--navy);
+}
+.on-navy .card.paper .lbl {
+  color: var(--muted);
+}
+.on-navy .card.paper .btn.ghost {
+  --fg: var(--navy);
+  border-color: var(--navy);
+}

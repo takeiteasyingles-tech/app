@@ -197,13 +197,15 @@ describe('components match the prototype markup', () => {
   });
 
   it('tab bar and side nav', () => {
+    // Product rename (spec 05, cross-cutting changes): the prototype's 'Revisão' is labelled 'Flashcards'.
+    const renamed = (html: string) => proto(html.split('Revisão').join('Flashcards'));
     for (const active of ['inicio', 'revisao', 'conquistas', 'perfil']) {
-      expect(mine(h(Tabbar, { active, due: 3 }))).toEqual(proto(C.tabbar(active)));
-      expect(mine(h(Side, { active, due: 3, g: G }))).toEqual(proto(C.side(active)));
+      expect(mine(h(Tabbar, { active, due: 3 }))).toEqual(renamed(C.tabbar(active)));
+      expect(mine(h(Side, { active, due: 3, g: G }))).toEqual(renamed(C.side(active)));
     }
     const none = loadPrototype({ profile: null, due: 0 }).C;
-    expect(mine(h(Tabbar, { active: 'trilha', due: 0 }))).toEqual(proto(none.tabbar('trilha')));
-    expect(mine(h(Side, { active: 'trilha', due: 0, g: G }))).toEqual(proto(none.side('trilha')));
+    expect(mine(h(Tabbar, { active: 'trilha', due: 0 }))).toEqual(renamed(none.tabbar('trilha')));
+    expect(mine(h(Side, { active: 'trilha', due: 0, g: G }))).toEqual(renamed(none.side('trilha')));
   });
 
   it('assistant picker', () => {

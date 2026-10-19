@@ -447,7 +447,7 @@ function Look({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx, onVideoEnd: () => v
         </div>
         <p class="sm pl-note">
           <Icon name="cards" size={16} />
-          <span>Ao seguir para a próxima etapa, estas palavras entram na sua Revisão.</span>
+          <span>Ao seguir para a próxima etapa, estas palavras entram nos seus Flashcards.</span>
         </p>
       </>
     ),
@@ -940,7 +940,7 @@ function Away({ Ep, desk, a, tap }: StepCtx): StepOut {
       <>
         <p class="p-read">
           Lista fechada. Toque para ouvir: o que você já ouviu fica azul. Ao seguir, as{' '}
-          <span class="nw">expressões-chave</span> entram na sua Revisão.
+          <span class="nw">expressões-chave</span> entram nos seus Flashcards.
         </p>
         <div class="card" style={{ padding: '6px 16px' }}>
           <div class="lbl or" style={{ padding: '12px 0 6px' }}>

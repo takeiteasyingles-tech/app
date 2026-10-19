@@ -230,6 +230,15 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     toTop.current = false;
   });
 
+  // Take Action: once a question is answered, the feedback grows the card and pushes the
+  // "Próxima pergunta" row under the fixed foot on a phone, so bring that row into view.
+  const revealNav = useRef(false);
+  useEffect(() => {
+    if (!revealNav.current) return;
+    revealNav.current = false;
+    scrollRef.current?.querySelector('.pl-exnav')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+
   // The map sheet is a modal: focus moves to its Fechar button, Escape closes it, Tab stays inside,
   // and closing gives focus back to the control that opened it (the prototype had none of this).
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -705,7 +714,10 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       P.vD = d;
       re();
     },
-    ex: (itemId, choice) => void answerExercise(itemId, choice),
+    ex: (itemId, choice) => {
+      revealNav.current = true;
+      void answerExercise(itemId, choice);
+    },
     exGo,
     exPick,
     exAudio,

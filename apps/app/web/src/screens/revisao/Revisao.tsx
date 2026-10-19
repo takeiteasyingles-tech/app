@@ -392,7 +392,7 @@ function Review({ c }: { c: Catalog }) {
   const empty = s.deck.length ? (
     <div class="card gr stack tc pop" style={{ '--gap': '10px', alignItems: 'center' }}>
       <Icon name="check" size={40} extra={{ style: { color: 'var(--green)' } }} />
-      <div class="h2">Revisão em dia.</div>
+      <div class="h2">Flashcards em dia.</div>
       <p class="p">{`Nenhum cartão para agora. O próximo volta ${nextIn(s.deck, now)}.`}</p>
       <Btn label="Ver um Extra" go="extra" icon="tv" />
     </div>
@@ -616,14 +616,14 @@ function Review({ c }: { c: Catalog }) {
 
   return (
     <>
-      {desk ? null : <Topbar kicker="Revisão" title={title} right={<UserAvatarBtn />} />}
+      {desk ? null : <Topbar kicker="Flashcards" title={title} right={<UserAvatarBtn />} />}
       <div class="scroll">
         <div class="wrap stack" style={{ '--wrap': desk ? '1040px' : '560px', '--gap': '16px' }}>
           {desk ? (
             <>
               <div class="row between top">
                 <div>
-                  <div class="lbl">Revisão</div>
+                  <div class="lbl">Flashcards</div>
                   <h1 class="h1 mt4">{title}</h1>
                 </div>
                 <UserAvatarBtn />

@@ -454,12 +454,12 @@ async function mgWord(i: number, en: string): Promise<void> {
   if (!w) return;
   const key = norm(w.en);
   if (S().deck.some((d) => norm(d.en) === key)) {
-    toast('Já está na sua Revisão.');
+    toast('Já está nos seus Flashcards.');
     return;
   }
   const r = await addCards([{ en: w.en, pt: w.pt, scene: `Mic · ${assistant(c).name}` }], 'mic');
   if (!r) return;
-  toast(r.added ? `Levei “${w.en}” para a Revisão.` : 'Já está na sua Revisão.');
+  toast(r.added ? `Levei “${w.en}” para os Flashcards.` : 'Já está nos seus Flashcards.');
 }
 
 function mgPronHear(): void {
@@ -1726,7 +1726,7 @@ export default function Maggie({ q }: ScreenProps) {
         {MicStage(c, m)}
         {inCall ? (
           <div class="xs">
-            A legenda mostra a última fala {of(A)}. Toque nas palavras azuis para levar para a Revisão.
+            A legenda mostra a última fala {of(A)}. Toque nas palavras azuis para levar para os Flashcards.
           </div>
         ) : (
           lobby?.setup

@@ -35,6 +35,16 @@ The foundation (F0) has been built and verified. The first section lists known i
 
 Screens that knowingly depart from the prototype's markup (the golden rule's "same DOM/classes"), because the prototype had a placeholder, a layout defect or a weaker behaviour there. Every behaviour in 01-features still works. The DOM-signature diffs against `prototipo/` for these routes are expected.
 
+### Cross-cutting product changes (2026-10-18, from the client's tests on phones)
+
+| Area | Deviation | Why |
+|---|---|---|
+| Name of the review deck | The section the prototype calls "Revisão" is **"Flashcards"** in every UI string: tab bar, sidebar, screen kicker and label, "Flashcards em dia.", and toasts and buttons ("nos seus Flashcards", "Levar para os Flashcards"). The route stays `#/revisao`; code identifiers keep `revisao`/`srs`. | Product request: the client calls them Flashcards. |
+| Take a Look video | `object-fit: contain` (also in fullscreen) instead of `cover`. | The scene's Portuguese subtitles are burned into the bottom of the frame; `cover` cropped them, worst with the phone turned sideways. |
+| Take Action (step 9) | After an answer, the "Próxima pergunta" row scrolls into view. | On a phone the feedback pushed the row under the fixed foot. |
+| White card on a navy screen | `tie-ext.css` resets `.h1`, `.lbl` and `.btn.ghost` inside `.on-navy .card.paper`. | The Mic pronunciation card showed the phrase and the "Ouvir" button white on white (the prototype had the same gap). |
+| Staff accounts in the student app | `PUT /api/me/profile` and `POST /api/me/profile/complete` create the learner rows (profile, settings, stats) when they are missing. | Accounts created by an admin invite had none, so onboarding failed with "Não encontrado". |
+
 ### U2: Episode player and Concluído (`screens/player`, `screens/concluido`)
 
 The aside stays 300px and the content wrap 760px, as in the prototype. Every step keeps the prototype's head, dock, foot, gating copy and step markup except for the rows below. An extra `.pl-scr` wrapper is the slice's CSS scope; on mobile it is `display: contents`, so the head, dock, scroll and foot are still flex items of the view.
