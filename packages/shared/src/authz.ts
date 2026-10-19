@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-// Staff roles. super_admin ⊇ admin ⊇ {editor, moderator}; editor and moderator are disjoint.
+// Staff roles. super_admin ⊇ admin ⊇ {editor, moderator}; editor and moderator share only
+// feedback.read (NPS ratings, spec 07). MIN_ROLE reports 'moderator' for it.
 export const ROLES = ['super_admin', 'admin', 'editor', 'moderator'] as const;
 export const Role = z.enum(ROLES);
 export type Role = z.infer<typeof Role>;
@@ -13,6 +14,8 @@ export const PERMISSIONS = [
   'users.suspend',
   'transcripts.read',
   'moderation.manage',
+  // moderator and editor (v1, spec 07): NPS ratings and comments of learners
+  'feedback.read',
   // editor
   'content.edit',
   'content.publish',
@@ -32,14 +35,23 @@ export const PERMISSIONS = [
   'flags.manage',
   'settings.manage',
   'stats.read',
+  // admin (v1, spec 07)
+  'certificates.revoke',
+  'api_tokens.manage',
   // super_admin
   'roles.grant_admin',
 ] as const;
 export const Permission = z.enum(PERMISSIONS);
 export type Permission = z.infer<typeof Permission>;
 
-const MODERATOR: readonly Permission[] = ['users.read', 'users.suspend', 'transcripts.read', 'moderation.manage'];
-const EDITOR: readonly Permission[] = ['content.edit', 'content.publish', 'media.manage'];
+const MODERATOR: readonly Permission[] = [
+  'users.read',
+  'users.suspend',
+  'transcripts.read',
+  'moderation.manage',
+  'feedback.read',
+];
+const EDITOR: readonly Permission[] = ['content.edit', 'content.publish', 'media.manage', 'feedback.read'];
 const ADMIN_ONLY: readonly Permission[] = [
   'users.delete',
   'users.plan',
@@ -55,8 +67,10 @@ const ADMIN_ONLY: readonly Permission[] = [
   'flags.manage',
   'settings.manage',
   'stats.read',
+  'certificates.revoke',
+  'api_tokens.manage',
 ];
-const ADMIN: readonly Permission[] = [...MODERATOR, ...EDITOR, ...ADMIN_ONLY];
+const ADMIN: readonly Permission[] = [...new Set([...MODERATOR, ...EDITOR, ...ADMIN_ONLY])];
 
 export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   moderator: new Set(MODERATOR),

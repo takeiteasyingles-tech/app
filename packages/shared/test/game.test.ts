@@ -12,6 +12,7 @@ import {
   level,
   newBadges,
   POINTS,
+  PROD_POINTS,
   touchStreak,
 } from '../src/domain/game';
 import { current } from '../src/domain/guide';
@@ -29,7 +30,8 @@ const assistant = (k: string) => C.assistants.find((a) => a.k === k) ?? (C.assis
 
 describe('game constants', () => {
   it('POINTS, LEVELS and badge metadata match game.js', () => {
-    expect(POINTS).toEqual(plain(G.POINTS));
+    // Production adds PROD_POINTS (season_pass, spec 07) on top of the prototype's table.
+    expect(POINTS).toEqual({ ...plain(G.POINTS), ...PROD_POINTS });
     expect(LEVELS.map((l) => [...l])).toEqual(plain(G.LEVELS));
     expect(BADGES.map(({ id, t, s, icon }) => ({ id, t, s, icon }))).toEqual(
       G.BADGES.map((b: Any) => ({ id: b.id, t: b.t, s: b.s, icon: b.icon })),

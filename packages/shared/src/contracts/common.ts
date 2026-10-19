@@ -4,6 +4,10 @@ import { LIMITS } from '../constants';
 export const Ok = z.object({ ok: z.literal(true) });
 export type Ok = z.infer<typeof Ok>;
 
+/** 204 No Content: the endpoint answers with an empty body (the web client resolves undefined). */
+export const NoContent = z.undefined();
+export type NoContent = z.infer<typeof NoContent>;
+
 /** Unix ms. */
 export const Timestamp = z.int().min(0);
 

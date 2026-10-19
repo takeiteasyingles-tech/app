@@ -222,6 +222,36 @@ export type QuotaInfo = z.infer<typeof QuotaInfo>;
 export const TestAnswer = z.union([z.int().min(0), z.string().max(LIMITS.freeTextMax)]);
 export type TestAnswer = z.infer<typeof TestAnswer>;
 
+// ---------- v1 additions (spec 07). PROD-only keys: the prototype's store.s has none of them. ----------
+
+/** The learner's NPS rating of one episode (lesson_feedback). */
+export const EpisodeFeedbackState = z.object({
+  stars: z.int().min(1).max(5),
+  comment: z.string().max(LIMITS.feedbackCommentMax).nullable(),
+});
+export type EpisodeFeedbackState = z.infer<typeof EpisodeFeedbackState>;
+
+/** Last graded season test attempt (season_test_results). */
+export const SeasonTestState = z.object({
+  scorePct: z.int().min(0).max(100),
+  passed: z.boolean(),
+  attempts: z.int().min(0),
+  /** 0 while a redo is in progress (as testDone for e-books). */
+  submittedAt: Timestamp,
+});
+export type SeasonTestState = z.infer<typeof SeasonTestState>;
+
+/** A certificate the learner holds (certificates). */
+export const CertificateRef = z.object({
+  id: z.string(),
+  code: z.string(),
+  seasonN: z.int().positive(),
+  scorePct: z.int().min(0).max(100),
+  issuedAt: Timestamp,
+  revoked: z.boolean(),
+});
+export type CertificateRef = z.infer<typeof CertificateRef>;
+
 export const TieState = z.object({
   v: z.literal(STATE_VERSION),
   user: SessionUser.nullable(),
@@ -255,6 +285,13 @@ export const TieState = z.object({
   /** Server clock and the user's timezone, for local-date math on the client. */
   now: Timestamp,
   tz: z.string(),
+  // v1 (spec 07). Defaults keep a state cached before v1 parseable.
+  /** NPS rating per episode number. */
+  feedback: z.record(z.string(), EpisodeFeedbackState).default({}),
+  /** Season test result per season number. */
+  seasonTests: z.record(z.string(), SeasonTestState).default({}),
+  /** Certificates held, oldest first. */
+  certificates: z.array(CertificateRef).default([]),
 });
 export type TieState = z.infer<typeof TieState>;
 
@@ -318,10 +355,16 @@ export function freshState(now: number = Date.now()): TieState {
     contentVersion: null,
     now,
     tz: DEFAULT_TZ,
+    feedback: {},
+    seasonTests: {},
+    certificates: [],
   };
 }
 
-/** Keys cleared by "Zerar progresso" (store.resetProgress); account, profile and settings stay. */
+/**
+ * Keys cleared by "Zerar progresso" (store.resetProgress); account, profile and settings stay.
+ * v1: season test results are progress too; NPS ratings and certificates (issued documents) stay.
+ */
 export const PROGRESS_KEYS = [
   'prog',
   'ebooks',
@@ -337,4 +380,5 @@ export const PROGRESS_KEYS = [
   'extras',
   'maggie',
   'game',
+  'seasonTests',
 ] as const satisfies readonly (keyof TieState)[];

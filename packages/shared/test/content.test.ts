@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { TTS_SPEAKERS } from '../src/constants';
 import { Album, Catalog, ContentManifest, Ebook, Episode, Extra, type OptionItem } from '../src/content/schema';
 import { BadgeRule } from '../src/contracts/game';
+import { PROD_POINTS } from '../src/domain/game';
 import { type Any, extractConst, loadPrototypeData } from './helpers/prototype';
 
 const url = (p: string | undefined | null) => (p ? `/m/media/00000000/${p.replace(/^assets\//, '')}` : null);
@@ -228,7 +229,8 @@ describe('prototype content fits the schemas', () => {
         help: M.HELP,
       },
       game: {
-        points: POINTS,
+        // The prototype's table plus the PROD kind season_pass (spec 07).
+        points: { ...POINTS, ...PROD_POINTS },
         levels: LEVELS.map(([min, name], i) => ({ n: i + 1, min, name })),
         badges: BADGES.map((b) => ({ id: b.id, t: b.t, s: b.s, icon: b.icon })),
       },

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LIMITS } from '../constants';
 import { SessionUser } from '../state';
-import { Email, IsoDate, Ok, Password, PasswordAttempt, TurnstileToken } from './common';
+import { Email, IsoDate, NoContent, Ok, Password, PasswordAttempt, TurnstileToken } from './common';
 import { endpoint } from './http';
 
 export const FullName = z
@@ -38,7 +38,16 @@ export type LoginBody = z.infer<typeof LoginBody>;
 export const AuthRes = z.object({ user: SessionUser });
 export type AuthRes = z.infer<typeof AuthRes>;
 
-/** Admin-issued one-time reset link (one_time_tokens kind 'reset'). */
+/**
+ * "Esqueci a senha" (spec 07, feature A). Always answers 204, whether or not the e-mail has an
+ * account, is suspended, or has hit LIMITS.resetMailsPerHour (anti-enumeration). For an active
+ * account it stores a one_time_tokens row (kind 'reset', DURATIONS.resetEmailTokenMs) and e-mails
+ * `${APP_ORIGIN}/#/entrar?reset=<token>` through Resend (logged to the console without RESEND_API_KEY).
+ */
+export const ResetRequestBody = z.object({ email: Email, turnstileToken: TurnstileToken });
+export type ResetRequestBody = z.infer<typeof ResetRequestBody>;
+
+/** One-time reset link (one_time_tokens kind 'reset'), issued by an admin or by the e-mail flow. */
 export const ResetConsumeBody = z.object({
   token: z.string().min(16).max(200),
   password: Password,
@@ -79,6 +88,14 @@ export const authApi = {
     rateLimit: 'RL_AUTH',
   }),
   logout: endpoint({ method: 'POST', path: '/api/auth/logout', access: 'public', res: Ok }),
+  resetRequest: endpoint({
+    method: 'POST',
+    path: '/api/auth/reset/request',
+    access: 'public',
+    body: ResetRequestBody,
+    res: NoContent,
+    rateLimit: 'RL_AUTH',
+  }),
   resetConsume: endpoint({
     method: 'POST',
     path: '/api/auth/reset/consume',

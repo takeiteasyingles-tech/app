@@ -30,6 +30,21 @@ export const LIMITS = {
   gameLogMax: 400,
   pageSizeDefault: 50,
   pageSizeMax: 200,
+  // v1 (spec 07)
+  /** Live reset tokens per account: a reset request beyond this sends nothing (still answers 204). */
+  resetMailsPerHour: 3,
+  /** NPS comment on the Concluído screen (lesson_feedback.comment CHECK). */
+  feedbackCommentMax: 1000,
+  /** Approved + draft questions one season test may hold. */
+  seasonTestQuestionsMax: 100,
+  /** Questions one AI draft call (or one MCP draft call) may create. */
+  seasonTestDraftMax: 30,
+  seasonTestQuestionMax: 500,
+  seasonTestOptionMax: 200,
+  /** Extra guidance staff may give the AI draft (pt-BR free text). */
+  seasonTestInstructionsMax: 1000,
+  apiTokenNameMax: 80,
+  apiTokenDaysMax: 365,
 } as const;
 
 export const DURATIONS = {
@@ -37,8 +52,13 @@ export const DURATIONS = {
   adminSessionAbsoluteMs: 8 * HOUR,
   adminSessionIdleMs: 30 * MIN,
   mediaTokenMs: 12 * HOUR,
+  /** Admin-issued reset link (POST /admin-api/users/:id/reset-link). */
   resetTokenMs: 24 * HOUR,
+  /** Self-service reset link sent by e-mail (POST /api/auth/reset/request). */
+  resetEmailTokenMs: HOUR,
   inviteTokenMs: 7 * DAY,
+  /** Default lifetime of an API token for agents; null (no expiry) must be chosen explicitly. */
+  apiTokenDefaultMs: 90 * DAY,
   lockoutMs: 15 * MIN,
   tutorBillCapS: 120,
 } as const;
@@ -98,6 +118,9 @@ export const OUTBOX_PATHS: readonly RegExp[] = [
   /^\/api\/karaoke\/gap$/,
   /^\/api\/game\/event$/,
   /^\/api\/me\/(profile|settings)$/,
+  // v1 (spec 07): the season test saves and submit (like the e-book test) and the NPS rating.
+  /^\/api\/seasons\/\d+\/test\/(answers|submit)$/,
+  /^\/api\/feedback\/episodes\/\d+$/,
 ];
 
 export const isOutboxPath = (pathname: string): boolean => OUTBOX_PATHS.some((re) => re.test(pathname));
@@ -130,6 +153,8 @@ export const FLAGS = {
 export const AI_PROMPT_KEYS = {
   tutor: 'tutor_system',
   report: 'report_system',
+  /** Season test drafting (tie-admin, spec 07). Falls back to a built-in template when the row is missing. */
+  seasonTestDraft: 'season_test_draft',
 } as const;
 
 /** plans.features keys the code reads (truthy = the plan has it). */
@@ -158,6 +183,37 @@ export const DEFAULT_MODELS = {
   tts: '@cf/deepgram/aura-1',
   guard: '@cf/meta/llama-guard-3-8b',
 } as const;
+
+// ---------- v1 (spec 07) ----------
+
+/** Season test defaults (seasons.test_pass_pct / test_question_count column defaults). */
+export const SEASON_TEST = {
+  passPctDefault: 70,
+  questionCountDefault: 20,
+} as const;
+
+/**
+ * Certificate verification codes: 'TIE-XXXX-XXXX' over an alphabet without look-alikes (no 0/O,
+ * 1/I/L, U/V). 8 random characters of 29 ≈ 2^38: unguessable enough for a public lookup that is
+ * also rate limited. ids.ts certificateCode() makes one.
+ */
+export const CERT_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTWXYZ23456789';
+export const CERT_CODE_PREFIX = 'TIE';
+export const CERT_CODE_RE = /^TIE-[ABCDEFGHJKMNPQRSTWXYZ2-9]{4}-[ABCDEFGHJKMNPQRSTWXYZ2-9]{4}$/;
+/** Student-app hash route of the public verification page: `${APP_ORIGIN}/#/certificado/<code>`. */
+export const CERT_VERIFY_ROUTE = 'certificado';
+/** R2 key of a certificate's cached PDF. */
+export const certificateR2Key = (userId: string, certId: string): string => `certs/${userId}/${certId}.pdf`;
+
+/** Hash route the reset e-mail links to: `${APP_ORIGIN}/#/entrar?reset=<token>` (ResetForm consumes it). */
+export const RESET_LINK_ROUTE = 'entrar';
+
+/** Plaintext API tokens start with this (helps secret scanners); the rest is randomToken(32). */
+export const API_TOKEN_PREFIX = 'tie_pat_';
+/** api_tokens.token_prefix: the first characters kept for display. */
+export const API_TOKEN_DISPLAY_LEN = 12;
+/** audit_log.actor_role for writes made through an API token (actor_user_id = the token's creator). */
+export const AUDIT_AGENT_ROLE = 'agent';
 
 /** Deepgram Aura speakers per assistant; /api/tts only accepts these. */
 export const TTS_SPEAKERS: Readonly<Record<string, string>> = {

@@ -6,8 +6,10 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /**
  * public: no session. user: app session. owner: app session that owns the :id resource.
  * staff: admin session; `perm` names the required permission (authz.ts).
+ * agent: `Authorization: Bearer <api token>` and no cookie (the MCP endpoint, spec 07); the token's
+ * scopes and its creator's current roles decide what each call may do.
  */
-export type Access = 'public' | 'user' | 'owner' | 'staff';
+export type Access = 'public' | 'user' | 'owner' | 'staff' | 'agent';
 
 export type RateLimitBinding = 'RL_AUTH' | 'RL_AI' | 'RL_API' | 'RL_UPLOAD';
 

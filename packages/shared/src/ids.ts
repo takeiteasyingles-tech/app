@@ -1,5 +1,6 @@
 // ULID-style ids: 10 chars of millisecond timestamp + 16 chars of randomness, Crockford base32.
 // Lexicographic order follows creation time, which keeps D1 primary-key indexes append-friendly.
+import { API_TOKEN_PREFIX, CERT_CODE_ALPHABET, CERT_CODE_PREFIX } from './constants';
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const TIME_LEN = 10;
@@ -85,4 +86,30 @@ export function toBase64Url(bytes: Uint8Array): string {
 /** Opaque random token (session, reset link, invite). 32 bytes → 43 base64url chars. */
 export function randomToken(byteLength = 32): string {
   return toBase64Url(randomBytes(byteLength));
+}
+
+/** `count` characters drawn uniformly from `alphabet` (rejection sampling, no modulo bias). */
+export function randomChars(alphabet: string, count: number): string {
+  if (alphabet.length < 2 || alphabet.length > 256) throw new RangeError('alphabet must have 2..256 characters');
+  const limit = 256 - (256 % alphabet.length);
+  let out = '';
+  while (out.length < count) {
+    for (const b of randomBytes(count * 2)) {
+      if (b >= limit) continue;
+      out += alphabet.charAt(b % alphabet.length);
+      if (out.length === count) break;
+    }
+  }
+  return out;
+}
+
+/** Public certificate verification code, e.g. 'TIE-7KQ2-MXR9' (CERT_CODE_RE). */
+export function certificateCode(): string {
+  const r = randomChars(CERT_CODE_ALPHABET, 8);
+  return `${CERT_CODE_PREFIX}-${r.slice(0, 4)}-${r.slice(4)}`;
+}
+
+/** Plaintext API token for agents: 'tie_pat_' + 43 base64url chars. Store only its sha256. */
+export function apiToken(): string {
+  return API_TOKEN_PREFIX + randomToken(32);
 }

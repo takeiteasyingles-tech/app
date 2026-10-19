@@ -7,7 +7,14 @@ import { type AssistantRef, assistantThe } from './assist';
 // production the Worker's game engine owns the ledger and calls these for levels, goals,
 // missions and badges. Vocabulary follows the brand book: pontos, sequência, meta, medalha.
 
+/** Point kinds production added on top of the prototype's POINTS (spec 07). */
+export const PROD_POINTS = {
+  season_pass: 100,
+} as const satisfies Partial<Record<PointKind, number>>;
+
+/** The prototype's POINTS plus PROD_POINTS. */
 export const POINTS: Readonly<Record<PointKind, number>> = {
+  ...PROD_POINTS,
   step: 10,
   episode: 40,
   ex_right: 5,

@@ -271,6 +271,8 @@ export const POINT_KINDS = [
   'test_pass',
   'mission',
   'word',
+  // PROD (spec 07): passing a season test, award key season_pass:{n}.
+  'season_pass',
 ] as const;
 export const PointKind = z.enum(POINT_KINDS);
 export type PointKind = z.infer<typeof PointKind>;
