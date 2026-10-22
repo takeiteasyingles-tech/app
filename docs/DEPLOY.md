@@ -62,7 +62,7 @@ Dashboard → Turnstile → Add widget:
 - Hostnames: `tie-app.<subdomain>.workers.dev` and `tie-admin.<subdomain>.workers.dev` (one widget covers both Workers)
 - Widget mode: **Managed**. The app renders it as "interaction-only", so it stays hidden unless Cloudflare needs a click.
 
-Note the **site key** (public) and the **secret key**. The Workers verify the `action` too: `signup`, `login` and `reset` on tie-app; `login` and `invite` on tie-admin.
+Note the **site key** (public) and the **secret key**. The Workers verify the `action` too: `signup`, `login`, `reset` and `reset_request` on tie-app; `login` and `invite` on tie-admin.
 
 ## 4. Production vars in wrangler.jsonc
 
@@ -72,9 +72,11 @@ Fill the `vars` block in each file. As in step 1, fill **both** the top-level bl
 ```jsonc
 "vars": {
   "TURNSTILE_SITEKEY": "<turnstile site key>",
-  "APP_ORIGIN": "https://tie-app.<subdomain>.workers.dev"
+  "APP_ORIGIN": "https://tie-app.<subdomain>.workers.dev",
+  "MAIL_FROM": "Take It Easy <no-reply@<your verified domain>>"
 }
 ```
+(`MAIL_FROM` is the sender of the password-reset e-mail; see step 5a.)
 
 `apps/admin/wrangler.jsonc`:
 ```jsonc
@@ -117,6 +119,29 @@ cd ../..
 ```
 
 Confirm with `npx wrangler secret list` in each app dir.
+
+## 5a. Password-reset e-mail (Resend)
+
+"Esqueci a senha" on the student app e-mails a one-time link (`https://tie-app…/#/entrar?reset=<token>`, valid 1 hour, at most 3 per account per hour) through [Resend](https://resend.com)'s HTTP API. Only tie-app sends e-mail; tie-admin needs nothing.
+
+1. Create a Resend account (the free tier sends 100 e-mails/day, 3000/month).
+2. Resend → Domains → **Add domain**. Use a domain you control, ideally a subdomain such as `mail.<your domain>` so its reputation is separate from your main mail. Resend shows the DNS records to create at your DNS provider (in Cloudflare: Dashboard → your zone → DNS → Records):
+   - **DKIM**: a `TXT` record `resend._domainkey.<domain>` with the public key Resend gives you;
+   - **SPF**: an `MX` record `send.<domain>` → `feedback-smtp.<region>.amazonses.com` (priority 10) and a `TXT` record `send.<domain>` → `v=spf1 include:amazonses.com ~all`;
+   - **DMARC** (recommended): a `TXT` record `_dmarc.<domain>` → `v=DMARC1; p=none;` (tighten to `quarantine` once mail flows).
+   
+   Copy the values exactly as Resend shows them (they vary by region), set the Cloudflare records to **DNS only** (grey cloud), and click **Verify** in Resend. Verification usually takes minutes, sometimes up to a few hours.
+3. Resend → API Keys → **Create API key**, permission **Sending access**, restricted to that domain. Copy it (`re_…`; shown once).
+4. Store it as a secret of tie-app (paste when prompted):
+   ```powershell
+   cd apps/app
+   npx wrangler secret put RESEND_API_KEY
+   cd ../..
+   ```
+5. Set `MAIL_FROM` in `apps/app/wrangler.jsonc`, in **both** the top-level `vars` and `env.local.vars` (they must match; `tools/parity/test/hardening.test.ts` checks it), to an address on the verified domain, e.g. `"Take It Easy <no-reply@mail.<your domain>>"`. The committed value, `onboarding@resend.dev`, is Resend's shared test sender: it only delivers to the e-mail address of the Resend account itself.
+6. Deploy tie-app (step 8), then test: on `#/entrar` choose "Esqueci a senha", enter your own address, open the e-mail and set a new password. Resend → Emails shows each send and its delivery status.
+
+Without `RESEND_API_KEY` the app still works: the request answers as usual, nothing is sent, and the Worker logs a warning (`mail not sent: RESEND_API_KEY is not set`, without the link). Staff can still issue a reset link from Admin → Usuários. Locally (`npm run dev:app`) leave the key unset: the reset link is printed in the wrangler console.
 
 ## 6. Migrations (remote)
 
@@ -185,6 +210,20 @@ Invite the rest of the team from the admin panel (Usuários → Gerar convite).
 5. In the admin panel, log in and open the Painel; the numbers should load. Edit a harmless field (for example an episode synopsis), then publish it under Publicações. Reload the app: the change shows up, and `/api/content/manifest` has the new version. Revert the change and publish again, or use Publicações → rollback.
 6. Under Moderação, the photo from step 4 is pending. Remove it. The student's photo disappears, and its `/m/users/…` URL answers 404.
 7. Check the logs with `npx wrangler tail tie-app` and `npx wrangler tail tie-admin`. There should be no `misconfigured deploy` lines and no unhandled errors.
+
+## 11. Connecting Claude (MCP)
+
+tie-admin serves an MCP endpoint at `https://tie-admin.<subdomain>.workers.dev/admin-api/mcp`. Through it, Claude (Claude Code or Claude Desktop) can read and edit the content draft. It cannot publish. The endpoint needs no extra configuration: it uses the D1 binding, `RL_API` and migration 0007 (`api_tokens`).
+
+1. Sign in to the admin as an admin, open **Configurações → Integrações** and create a token. Choose a name, the permissions and a validity (90 days by default). Copy the `tie_pat_…` value; it is shown only once.
+2. Connect Claude Code:
+   ```powershell
+   claude mcp add --transport http take-it-easy https://tie-admin.<subdomain>.workers.dev/admin-api/mcp --header "Authorization: Bearer <token>"
+   ```
+   For Claude Desktop, use the `mcp-remote` snippet on the same screen.
+3. Smoke test: in Claude Code, `/mcp` lists `take-it-easy` with 13 tools. Ask it to "list the seasons". Its edits appear in Auditoria with the role `agent`.
+
+The tool list, the safety rules and the troubleshooting steps are in `docs/MCP.md`. To cut an agent's access, revoke its token on the same screen.
 
 ## Updating later
 

@@ -5,6 +5,8 @@ import type { LoadStatus } from './store/state';
 
 /** Route guards (draw() lines 1-4). Returns the path to replace() with, or null to render. */
 export function guard(r: Route, s: TieState): string | null {
+  // The public certificate check (spec 07, feature B) opens for anyone, signed in or not.
+  if (r.name === 'certificado') return null;
   if (!s.user && r.name !== 'entrar' && r.name !== 'cadastro') return 'entrar';
   if (s.user && !s.profile && r.name !== 'cadastro') return `cadastro/${s.onbStep || 1}`;
   if (r.name === 'raiz' || (s.profile && (r.name === 'entrar' || r.name === 'cadastro')))

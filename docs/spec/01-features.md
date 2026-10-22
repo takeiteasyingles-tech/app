@@ -54,7 +54,7 @@ logo, btn, chip, toggle, topbar, userPic (photo or `avatar/user-N.webp`), assist
 - Real auth: email + password + Turnstile.
 - **Remove** the Google/Apple buttons.
 - Remove the demo account entry, or replace it with nothing.
-- "Esqueci a senha" shows a toast telling the user to contact support (admin issues reset links). Optional later: email reset.
+- "Esqueci a senha" shows a toast telling the user to contact support (admin issues reset links). Optional later: email reset. (v1: done; "Esqueci a senha" e-mails a one-time link, spec 07 feature A.)
 - Replace the footer line with links to the privacy policy and terms.
 
 ## 2. `cadastro` (`#/cadastro/:step`): onboarding, 7 steps from `ONB.STEPS`

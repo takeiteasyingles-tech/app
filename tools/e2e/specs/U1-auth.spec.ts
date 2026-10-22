@@ -309,9 +309,14 @@ for (const vp of VPS) {
       await expect(v.locator('#login-pass')).toHaveAttribute('type', 'text');
       await v.getByRole('button', { name: 'Mostrar senha' }).click();
       await expect(v.locator('#login-pass')).toHaveAttribute('type', 'password');
-      // Esqueci a senha → support toast
+      // Esqueci a senha → the e-mail form (spec 07 A), then back to Entrar
       await btn(page, /^Esqueci a senha$/).click();
-      await expect(toast(page, /suporte/)).toBeVisible();
+      await expect(page).toHaveURL(/#\/entrar\?esqueci=1$/);
+      await expect(v.locator('.formcard .h2')).toHaveText('Esqueci a senha');
+      await expect(v.locator('#forgot-email')).toBeVisible();
+      await btn(page, /^Voltar para Entrar$/).click();
+      await expect(page).toHaveURL(/#\/entrar$/);
+      await expect(v.locator('.formcard .h2')).toHaveText('Entrar');
       // legal sheets
       await v.getByRole('link', { name: 'Termos de Uso' }).click();
       await expect(page).toHaveURL(/#\/entrar\?doc=termos$/);

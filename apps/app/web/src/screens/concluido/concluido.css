@@ -282,3 +282,204 @@
   background: var(--gold);
   transform: rotate(40deg);
 }
+
+/* ---------- Episode rating (PROD, spec 07: NPS per episode) ---------- */
+/* A white card under the stats: a gold star badge beside the question, five large tappable stars
+   (52px targets on a phone), the meaning of the chosen star, then the optional comment and the CTA. */
+.cc-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cc-rate-hd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cc-rate-t {
+  min-width: 0;
+}
+.cc-rate-t .xs {
+  margin: 2px 0 0;
+}
+.cc-rate-t .h3:focus {
+  outline: none;
+}
+.cc-rate-t .h3:focus-visible {
+  outline: 3px solid var(--blue);
+}
+.cc-rate-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cc-stars {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  max-width: 340px;
+}
+.cc-star {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
+}
+.cc-star label {
+  width: 56px;
+  height: 56px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cc-star-svg {
+  display: block;
+  transition: transform 0.12s ease;
+}
+.cc-star-svg path {
+  fill: #fffdf7;
+  stroke: #c9bc95;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  transition:
+    fill 0.12s ease,
+    stroke 0.12s ease;
+}
+.cc-star.on .cc-star-svg path,
+.cc-stars-ro .on .cc-star-svg path {
+  fill: #ffc93d;
+  stroke: var(--gold);
+}
+.cc-star.hov .cc-star-svg path {
+  fill: #ffd666;
+  stroke: var(--gold);
+}
+.cc-star label:hover .cc-star-svg {
+  transform: scale(1.1);
+}
+.cc-star label:active .cc-star-svg {
+  transform: scale(0.94);
+}
+.cc-star-in:focus-visible + label {
+  outline: 3px solid var(--blue);
+  outline-offset: 0;
+}
+.cc-rate-word {
+  min-height: 1.4em;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--navy);
+}
+.cc-rate-word.empty {
+  font-weight: 600;
+  color: var(--muted);
+}
+.cc-rate-more {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--line);
+  animation: cc-rate-in 0.2s ease-out;
+}
+@keyframes cc-rate-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.cc-rate-cl {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--navy);
+}
+.cc-rate-opt {
+  margin-left: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+textarea.input.cc-rate-ta {
+  min-height: 92px;
+  font-weight: 500;
+  line-height: 1.45;
+  resize: vertical;
+}
+.cc-rate-n {
+  align-self: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+.cc-rate-n.low {
+  color: var(--orangeD);
+  font-weight: 800;
+}
+.cc-rate-act {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+/* Saved / thank-you state. */
+.cc-rate-sum {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.cc-stars-ro {
+  display: inline-flex;
+  gap: 2px;
+}
+/* The badge beside the heading: a filled gold star (form), a green check (thank-you). */
+.cc-rate-ic {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--goldT);
+  color: #b77f00;
+}
+.cc-rate-ic:not(.ok) svg {
+  fill: currentColor;
+}
+.cc-rate-ic.ok {
+  background: var(--greenT);
+  color: var(--green);
+}
+.cc-rate-q {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--cream);
+  border-left: 3px solid var(--gold);
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.cc-rate-done .cc-rate-act {
+  flex-direction: row;
+}
+/* Desktop: the stars keep their size, and the send button its natural width. */
+.app[data-layout="desktop"] .cc-rate-act .btn.block {
+  width: auto;
+  align-self: flex-start;
+  min-width: 240px;
+}
+.app[data-layout="desktop"] .cc-rate-act {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.app:not([data-layout="desktop"]) .cc-stars {
+  max-width: none;
+}

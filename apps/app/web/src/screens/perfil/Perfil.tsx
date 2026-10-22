@@ -27,6 +27,8 @@ import { nextReminder, toggled, weekdayName } from '../cadastro/onb';
 import { ADD_ROW, BELL_TILE, OptChips, Sec } from '../cadastro/ui';
 import { logout } from '../entrada/session';
 import { AccountActions } from './Account';
+import { AccountEdit } from './AccountEdit';
+import { Certificates } from './Certificates';
 import { clearPhoto, uploadPhoto } from './photo';
 import { saveProfile, saveProfileSoon } from './save';
 import './perfil.css';
@@ -684,6 +686,7 @@ function Body({ s, p, c, desk }: { s: TieState; p: Profile; c: Catalog; desk: bo
   );
 
   const mic = sessions.length ? <MicSessions c={c} list={sessions} /> : null;
+  const certs = <Certificates s={s} c={c} />;
 
   const prefs = (
     <Sec title="Leitura, som e efeitos" id="pf-prefs">
@@ -751,7 +754,8 @@ function Body({ s, p, c, desk }: { s: TieState; p: Profile; c: Catalog; desk: bo
       { full: genres },
       { pair: [[rhythm], [diffs]] },
       { pair: [[prefs], [learning, mic]] },
-      { full: <Plan s={s} /> },
+      { full: certs },
+      { pair: [[<Plan s={s} />], [<AccountEdit />]] },
     ];
     return (
       <div
@@ -799,8 +803,10 @@ function Body({ s, p, c, desk }: { s: TieState; p: Profile; c: Catalog; desk: bo
       {rhythm}
       {ladder}
       {mic}
+      {certs}
       {prefs}
       <Plan s={s} />
+      <AccountEdit />
       {account}
     </div>
   );

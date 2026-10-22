@@ -1,0 +1,526 @@
+/* Feedbacks and learning statistics (spec 07, feature C): stars, NPS, distribution bars, the episode
+   funnel, the day bars and the per-learner card. Additive to admin.css; prefix .ad- like the panel. */
+
+/* ---------- Stars ---------- */
+.ad-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  vertical-align: middle;
+  flex: none;
+}
+.ad-star {
+  position: relative;
+  display: inline-block;
+  flex: none;
+}
+.ad-star svg {
+  display: block;
+}
+.ad-star > svg path {
+  fill: var(--line);
+  stroke: var(--line2);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.ad-star-on {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+}
+.ad-star-on svg path {
+  fill: #f5b301;
+  stroke: #d99a00;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.ad-fb-avg {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Distribution (5★ … 1★) ---------- */
+.ad-dist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ad-dist li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 8px;
+}
+.ad-dist-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--navy);
+}
+.ad-dist-k svg path {
+  fill: #f5b301;
+}
+.ad-dist-bar {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cream);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.ad-db {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green);
+}
+.ad-dist-bar.s4 .ad-db {
+  background: #5fa77f;
+}
+.ad-dist-bar.s3 .ad-db {
+  background: var(--gold);
+}
+.ad-dist-bar.s2 .ad-db {
+  background: #ee8a5e;
+}
+.ad-dist-bar.s1 .ad-db {
+  background: var(--orange);
+}
+.ad-dist-n {
+  text-align: right;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Feedbacks: per-episode cards ---------- */
+.ad-fb-eps {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 640px) {
+  .ad-fb-eps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.app[data-layout="desktop"] .ad-fb-eps {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+.ad-fb-ep {
+  gap: 12px;
+}
+.ad-fb-ep.on {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 1.5px var(--navy);
+}
+.ad-fb-ep-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ad-fb-ep-n {
+  flex: none;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 6px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--navy);
+  color: #fff;
+  font-family: var(--fd);
+  font-style: italic;
+  font-weight: 900;
+}
+.ad-fb-ep-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ad-fb-ep-h .pill {
+  flex: none;
+}
+.ad-fb-ep-avg {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ad-fb-ep-avg > .num {
+  font-size: 2.2rem;
+  line-height: 1;
+  color: var(--navy);
+}
+.ad-fb-ep .btn {
+  align-self: flex-start;
+}
+
+/* ---------- Feedbacks: the ratings ---------- */
+.ad-fb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ad-fb-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  min-width: 0;
+}
+.ad-fb-item-h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.ad-fb-item-ep {
+  font-size: 0.9rem;
+  color: var(--navy);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ad-fb-item-c {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.ad-fb-item-none {
+  margin: 0;
+  font-style: italic;
+}
+.ad-fb-item-f {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.ad-fb-item-f .ad-linkbtn {
+  font-weight: 800;
+}
+.ad-fb-edited {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cream);
+  font-weight: 700;
+}
+.ad-more > .ad-fb-period {
+  padding: 4px 16px 16px;
+}
+.ad-fb-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+.ad-fb-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ---------- Day bars ---------- */
+.ad-vbars-f {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ad-vbars {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0;
+  height: 120px;
+  display: grid;
+  grid-template-columns: repeat(var(--n, 30), minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+  border-bottom: 1.5px solid var(--line2);
+}
+.ad-vbars li {
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+.ad-vb {
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--blue);
+  min-height: 0;
+}
+.ad-vbars.or .ad-vb {
+  background: var(--orange);
+}
+.ad-vbars li:hover .ad-vb {
+  filter: brightness(0.85);
+}
+.ad-vbars-x {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* ---------- Painel: funnel and pass rates ---------- */
+.ad-lstat .ad-lstat-sub {
+  margin-top: 2px;
+}
+.ad-lg-st,
+.ad-lg-dn {
+  display: inline-block;
+}
+.ad-legend .ad-lg-st {
+  background: var(--blueT);
+  box-shadow: inset 0 0 0 1.5px #b9cdf7;
+}
+.ad-legend .ad-lg-dn {
+  background: var(--blue);
+}
+.ad-legend svg path {
+  fill: #f5b301;
+  stroke: #d99a00;
+}
+.ad-funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ad-funnel li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ad-funnel-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ad-funnel-n {
+  flex: none;
+  font-family: var(--fd);
+  font-style: italic;
+  font-weight: 900;
+  color: var(--orange);
+  font-size: 1.05rem;
+  min-width: 26px;
+}
+.ad-funnel-t {
+  flex: 1;
+  min-width: 0;
+  font-weight: 800;
+  color: var(--navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ad-funnel-r {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ad-funnel-r .xs {
+  font-weight: 800;
+  color: var(--navy);
+}
+.ad-funnel-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--cream);
+  overflow: hidden;
+}
+.ad-fn {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+}
+.ad-fn.st {
+  background: var(--blueT);
+  box-shadow: inset 0 0 0 1.5px #b9cdf7;
+}
+.ad-fn.dn {
+  background: var(--blue);
+}
+.ad-funnel-x {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ad-funnel-x b {
+  color: var(--navy);
+  white-space: nowrap;
+}
+.ad-rates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ad-rates li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ad-rates-t {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 0.95rem;
+}
+.ad-rates-p {
+  font-weight: 900;
+  color: var(--navy);
+  font-size: 1.1rem;
+}
+
+/* ---------- User page: Estatísticas ---------- */
+.ad-ulearn {
+  gap: 18px;
+}
+.ad-ulearn h3.lbl {
+  margin: 0;
+}
+.app[data-layout="desktop"] .ad-ukpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ad-ukpis .ad-kpi {
+  padding: 14px;
+  border-radius: 14px;
+  gap: 4px;
+}
+.ad-ukpis .ad-kpi-v {
+  font-size: 1.8rem;
+}
+.ad-utests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ad-utests li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 10px 0;
+  border-top: 1.5px solid var(--line);
+  font-weight: 700;
+  color: var(--navy);
+}
+.ad-utests li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.ad-utests .grow {
+  min-width: 0;
+}
+.ad-utests .xs {
+  font-weight: 600;
+}
+.ad-uep {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px 18px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.app[data-layout="desktop"] .ad-uep {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ad-uep li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ad-uep-n {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream);
+  color: var(--navy);
+  font-weight: 900;
+  font-size: 0.8rem;
+}
+.ad-uep-n.done {
+  background: var(--greenT);
+  color: var(--green);
+}
+.ad-uep-t {
+  font-weight: 800;
+  color: var(--navy);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+.ad-uep-b {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+.ad-uep-b .segs {
+  flex: 1;
+  min-width: 0;
+}
+.ad-uep-b .segs i.done {
+  background: var(--green);
+}
+.ad-fbq {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ad-fbq li {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--cream);
+  border-left: 3px solid #f5b301;
+}
+.ad-fbq b {
+  color: var(--navy);
+  font-size: 0.9rem;
+}
+.ad-fbq p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}

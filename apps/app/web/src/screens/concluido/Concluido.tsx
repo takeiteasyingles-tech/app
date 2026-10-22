@@ -7,6 +7,8 @@
 // link to an unfinished episode shows a progress screen instead: how many steps are left, the
 // 10-step bar, what the student will be able to do, where to pick up and the CTA back to that step.
 // It never shows points, cards or a "concluído" the learner did not get.
+//
+// PROD (spec 07): the celebration carries the episode rating card (Rating.tsx) under the stats.
 import type { Episode } from '@tie/shared/content/schema';
 import { cardsOf } from '@tie/shared/domain/srs';
 import { Btn, Icon, Segs } from '@tie/ui';
@@ -15,6 +17,7 @@ import './concluido.css';
 import type { ScreenProps } from '../../frame';
 import { replace } from '../../router';
 import { catalog, loadCatalog, loadEpisode, state, useContent } from '../../store';
+import { Rating } from './Rating';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 /** TIE.u.sub: {N} → the student's name. */
@@ -94,6 +97,8 @@ export default function Concluido({ params }: ScreenProps) {
             <div class="sm mt8">cartões nos seus Flashcards</div>
           </div>
         </div>
+        {/* PROD (spec 07, NPS per episode): the learner rates the episode they just finished. */}
+        <Rating ep={E.num} />
         <div class="card stack" style={{ '--gap': '12px' }}>
           <div class="lbl">A seguir</div>
           <div class="row" style={{ '--gap': '14px' }}>

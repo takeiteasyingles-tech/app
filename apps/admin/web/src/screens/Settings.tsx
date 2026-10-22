@@ -1,6 +1,7 @@
 // Configurações (admin): feature flags (on/off, gradual rollout, allowlists), the app settings the
-// Worker reads (retention, terms version, Workers AI model ids, the student app origin) and the AI
-// prompt templates (versioned: a save over a newer edit is refused).
+// Worker reads (retention, terms version, Workers AI model ids, the student app origin), the AI
+// prompt templates (versioned: a save over a newer edit is refused) and Integrações (API tokens for
+// AI agents over MCP, screens/ApiTokens).
 import { FLAGS, SETTINGS } from '@tie/shared/constants';
 import {
   type AppSetting,
@@ -20,6 +21,7 @@ import { Icon } from '../ui/icons';
 import { Area, Async, Button, Card, Empty, Field, Page, Pill, Sel, Switch, TabsNav, TextIn } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { toast } from '../ui/toast';
+import { ApiTokens } from './ApiTokens';
 import type { ScreenProps } from './registry';
 
 const FLAG_INFO: Record<string, string> = {
@@ -413,6 +415,7 @@ export function Settings({ q }: ScreenProps) {
     ...(can('flags.manage') ? ([['flags', 'Flags']] as const) : []),
     ...(can('settings.manage') ? ([['app', 'Valores do app']] as const) : []),
     ...(can('ai.prompts') ? ([['prompts', 'Prompts da IA']] as const) : []),
+    ...(can('api_tokens.manage') ? ([['integracoes', 'Integrações']] as const) : []),
   ];
   const tab = tabs.some(([t]) => t === q.aba) ? (q.aba as string) : (tabs[0]?.[0] ?? 'flags');
   return (
@@ -440,7 +443,15 @@ export function Settings({ q }: ScreenProps) {
         ) : undefined
       }
     >
-      {tab === 'flags' ? <Flags /> : tab === 'app' ? <AppSettings /> : <Prompts />}
+      {tab === 'flags' ? (
+        <Flags />
+      ) : tab === 'app' ? (
+        <AppSettings />
+      ) : tab === 'integracoes' ? (
+        <ApiTokens />
+      ) : (
+        <Prompts />
+      )}
     </Page>
   );
 }

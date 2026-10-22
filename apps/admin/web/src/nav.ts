@@ -21,12 +21,15 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { href: 'usuarios', label: 'Usuários', icon: 'users', perm: 'users.read' },
       { href: 'moderacao', label: 'Moderação', icon: 'flag', perm: 'moderation.manage' },
+      { href: 'feedbacks', label: 'Feedbacks', icon: 'star', perm: 'feedback.read' },
+      { href: 'certificados', label: 'Certificados', icon: 'trophy', perm: 'users.read' },
       { href: 'planos', label: 'Planos', icon: 'coin', perm: 'plans.manage' },
     ],
   },
   {
     label: 'Conteúdo',
     items: [
+      { href: 'conteudo/temporadas', label: 'Temporadas', icon: 'layers', perm: 'content.edit' },
       { href: 'conteudo/episodios', label: 'Episódios', icon: 'trail', perm: 'content.edit' },
       { href: 'conteudo/ebooks', label: 'E-books', icon: 'book', perm: 'content.edit' },
       { href: 'conteudo/extras', label: 'Extras', icon: 'tv', perm: 'content.edit' },

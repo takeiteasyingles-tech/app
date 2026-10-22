@@ -5,6 +5,7 @@
 import type { Catalog } from '@tie/shared/content/schema';
 import { type CurrentEpisode, current } from '@tie/shared/domain/guide';
 import { levelInfo } from '@tie/shared/domain/personalize';
+import { seasonTestUnlocked } from '@tie/shared/domain/season';
 import type { TieState } from '@tie/shared/state';
 import { Icon, Topbar } from '@tie/ui';
 import { useState } from 'preact/hooks';
@@ -290,6 +291,70 @@ function ExtrasNode({ e, s, c }: { e: number; s: TieState; c: Catalog }) {
           <span class="sm">{e === EBOOKS ? 'Mais o Season Check' : 'Liberam com os dois episódios'}</span>
         </span>
         {/* No row-end lock here: the dashed body and the lock in the dot say it, and the title keeps the room. */}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The season test after the last chapter (spec 07, feature B; PROD): open once every published episode
+ * of the season is done (seasonTestUnlocked, the server's rule too), "Aprovado" once the certificate is
+ * issued. It opens #/temporada/<n>/teste, which explains when the test is not published yet.
+ */
+function SeasonTestNode({ s, c, seasonN, total }: { s: TieState; c: Catalog; seasonN: number; total: number }) {
+  const published = c.episodes.filter((x) => (x.season ?? 1) === seasonN && x.status === 'published').map((x) => x.num);
+  const open = seasonTestUnlocked(published, s.epsDone);
+  const cert = s.certificates.find((x) => x.seasonN === seasonN && !x.revoked);
+  const last = s.seasonTests[String(seasonN)];
+  const chip = (on: boolean) => (
+    <span
+      style={{
+        width: on ? '34px' : '30px',
+        height: on ? '34px' : '30px',
+        borderRadius: '10px',
+        background: on ? 'var(--orangeT)' : 'var(--goldT)',
+        color: on ? 'var(--orange)' : '#B88A1E',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Icon name="trophy" size={18} />
+    </span>
+  );
+  if (open) {
+    const sub = cert
+      ? `Aprovado · ${cert.scorePct}% · certificado emitido`
+      : last && last.submittedAt > 0
+        ? `Último resultado: ${last.scorePct}% · tente de novo`
+        : 'Faça o teste e ganhe o seu certificado';
+    return (
+      <a href={`#/temporada/${seasonN}/teste`} class={`node aside ${cert ? 'done' : 'now'}`}>
+        <span class="dot">{cert ? <Icon name="check" size={12} /> : <Icon name="play" size={10} />}</span>
+        <div class="body">
+          <span class="ep">{chip(true)}</span>
+          <span class="grow">
+            <span class="h3" style={{ display: 'block', fontSize: '1rem' }}>
+              {`Teste da temporada ${seasonN}`}
+            </span>
+            <span class="sm">{sub}</span>
+          </span>
+          <Icon name="next" size={18} />
+        </div>
+      </a>
+    );
+  }
+  return (
+    <div class="node aside locked" style={LOCKED_STYLE}>
+      <span class="dot" style={LOCKED_STOP} />
+      <div class="body" style={{ ...LOCKED_BODY, borderColor: '#CFC4A6' }}>
+        <span class="ep">{chip(false)}</span>
+        <span class="grow">
+          <span class="h3" style={{ ...LOCKED_TITLE, fontSize: '1rem' }}>
+            {`Teste da temporada ${seasonN}`}
+          </span>
+          <span class="sm">{`Libera com os ${total} episódios · vale certificado`}</span>
+        </span>
       </div>
     </div>
   );
@@ -681,6 +746,14 @@ export default function Trilha(_props: ScreenProps) {
           ) : (
             <div class="trail">{chapters}</div>
           )}
+          {/* The season test closes the trail (spec 07). Its own short trail, so the line has a stop. */}
+          <div class="trail" style={desk ? { marginLeft: 'calc(50% + 14px)' } : undefined}>
+            <div class="chapter">
+              <ChapterLine on={!!s.epsDone[EBOOKS * 2]} />
+              <div class="lbl">{`Fim da Temporada ${seasonN}`}</div>
+            </div>
+            <SeasonTestNode s={s} c={c} seasonN={seasonN} total={total} />
+          </div>
         </div>
       </div>
     </>

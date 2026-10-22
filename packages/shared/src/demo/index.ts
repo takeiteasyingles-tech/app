@@ -8,3 +8,4 @@ export * from './pronWatch';
 export * from './rng';
 export * from './rules';
 export * from './script';
+export * from './seasonTestDraft';

@@ -67,8 +67,22 @@ export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
     perm: 'game.rules',
     nav: 'conteudo/gamificacao',
   },
+  seasons: { load: m(() => import('./content/Seasons'), 'Seasons'), perm: 'content.edit', nav: 'conteudo/temporadas' },
+  season: {
+    load: m(() => import('./content/Seasons'), 'SeasonEdit'),
+    perm: 'content.edit',
+    nav: 'conteudo/temporadas',
+  },
   media: { load: m(() => import('./Media'), 'Media'), perm: 'media.manage', nav: 'midia' },
   moderation: { load: m(() => import('./Moderation'), 'Moderation'), perm: 'moderation.manage', nav: 'moderacao' },
+  feedbacks: { load: m(() => import('./Feedbacks'), 'Feedbacks'), perm: 'feedback.read', nav: 'feedbacks' },
+  // v1 (spec 07, feature B).
+  seasonTest: {
+    load: m(() => import('./content/SeasonTest'), 'SeasonTestEditor'),
+    perm: 'content.edit',
+    nav: 'conteudo/temporadas',
+  },
+  certificates: { load: m(() => import('./Certificates'), 'Certificates'), perm: 'users.read', nav: 'certificados' },
   audit: { load: m(() => import('./Audit'), 'Audit'), perm: 'audit.read', nav: 'auditoria' },
   releases: {
     load: m(() => import('./Releases'), 'Releases'),

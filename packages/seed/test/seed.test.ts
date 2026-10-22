@@ -49,7 +49,12 @@ describe('extraction and transform', () => {
       'dev.free_steps': 0,
       'mic.store_recordings': 0,
     });
-    expect(S.config.ai_prompts.map((p) => p.key)).toEqual(['tutor_system', 'report_system', 'guard']);
+    expect(S.config.ai_prompts.map((p) => p.key)).toEqual([
+      'tutor_system',
+      'report_system',
+      'guard',
+      'season_test_draft',
+    ]);
   });
 
   it('extracts closure constants and inline copy from the screens', () => {

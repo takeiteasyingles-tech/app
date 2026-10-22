@@ -25,8 +25,13 @@ export type RouteName =
   | 'mission'
   | 'onboarding'
   | 'gamification'
+  | 'seasons'
+  | 'season'
+  | 'seasonTest'
+  | 'certificates'
   | 'media'
   | 'moderation'
+  | 'feedbacks'
   | 'audit'
   | 'releases'
   | 'settings'
@@ -56,8 +61,13 @@ export const ROUTES: readonly (readonly [RegExp, RouteName, (readonly string[])?
   [new RegExp(`^conteudo/missoes/${ID}$`), 'mission', ['key']],
   [/^conteudo\/cadastro$/, 'onboarding'],
   [/^conteudo\/gamificacao$/, 'gamification'],
+  [/^conteudo\/temporadas$/, 'seasons'],
+  [/^conteudo\/temporadas\/(\d{1,9})$/, 'season', ['n']],
+  [/^conteudo\/temporadas\/(\d{1,9})\/teste$/, 'seasonTest', ['n']],
+  [/^certificados$/, 'certificates'],
   [/^midia$/, 'media'],
   [/^moderacao$/, 'moderation'],
+  [/^feedbacks$/, 'feedbacks'],
   [/^auditoria$/, 'audit'],
   [/^publicacoes$/, 'releases'],
   [/^config$/, 'settings'],

@@ -32,9 +32,20 @@ const FIXED: Record<string, string> = {
   'game.rules': 'Editou a gamificação',
   'flags.set': 'Mudou uma flag',
   'settings.set': 'Mudou uma configuração',
+  'api_token.create': 'Criou um token de API',
+  'api_token.revoke': 'Revogou um token de API',
+  'season_test.question.create': 'Criou uma questão do teste da temporada',
+  'season_test.question.update': 'Editou uma questão do teste da temporada',
+  'season_test.question.delete': 'Apagou uma questão do teste da temporada',
+  'season_test.question.review': 'Revisou questões do teste da temporada',
+  'season_test.question.draft': 'Gerou rascunhos do teste da temporada',
+  'season_test.publish': 'Abriu ou fechou o teste da temporada',
+  'certificate.revoke': 'Revogou um certificado',
+  'certificate.reinstate': 'Reativou um certificado',
 };
 
 const ENTITY: Record<string, string> = {
+  seasons: 'temporada',
   episodes: 'episódio',
   'mic-phrases': 'frase do Mic',
   exercises: 'exercício',
@@ -82,6 +93,10 @@ const TARGET: Record<string, string> = {
   setting: 'Configuração',
   prompt: 'Prompt da IA',
   game_rules: 'Gamificação',
+  season: 'Temporada',
+  api_token: 'Token de API',
+  season_test_question: 'Questão do teste da temporada',
+  certificate: 'Certificado',
 };
 
 /** A target type in words ("moderation_item" → "Item da moderação"). */
@@ -108,7 +123,7 @@ export function targetText(
 
 /** Icon for an action family. */
 export function auditIcon(action: string): string {
-  if (action.startsWith('admin.auth')) return 'key';
+  if (action.startsWith('admin.auth') || action.startsWith('api_token.')) return 'key';
   if (action.startsWith('users.') || action.startsWith('roles.')) return 'users';
   if (action.startsWith('transcripts.') || action.startsWith('moderation.')) return 'shield';
   if (action.startsWith('content.publish') || action.includes('rollback')) return 'rocket';
@@ -117,7 +132,8 @@ export function auditIcon(action: string): string {
   if (action.startsWith('plans.')) return 'coin';
   if (action.startsWith('flags.') || action.startsWith('settings.')) return 'settings';
   if (action.startsWith('ai.')) return 'mic';
-  if (action.startsWith('game.')) return 'trophy';
+  if (action.startsWith('game.') || action.startsWith('certificate.')) return 'trophy';
+  if (action.startsWith('season_test.')) return 'pen';
   return 'history';
 }
 
@@ -168,4 +184,7 @@ export const AUDIT_FAMILIES: readonly (readonly [string, string])[] = [
   ['game.', 'Gamificação'],
   ['flags.', 'Flags'],
   ['settings.', 'Configurações'],
+  ['api_token.', 'Tokens de API'],
+  ['season_test.', 'Teste da temporada'],
+  ['certificate.', 'Certificados'],
 ];

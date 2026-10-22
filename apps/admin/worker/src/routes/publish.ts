@@ -176,28 +176,29 @@ const EMPTY_MANIFEST = (now: number): ContentManifest => ({
   files: { catalog: 'catalog.json', episodes: [], ebooks: [], extras: [] },
 });
 
-route(routes, C.preview, async (c) => {
+/** What a publish would produce right now, without publishing (also the MCP preview_release tool). */
+export async function previewContent(c: Ctx): Promise<PreviewRes> {
   const now = Date.now();
   try {
     const compiled = await compileNow(c.env.DB, now);
-    const out: PreviewRes = {
+    return {
       version: compiled.version,
       manifest: compiled.manifest,
       changed: await changedFiles(c, compiled),
       errors: [],
     };
-    return c.json(out);
   } catch (err) {
     if (!(err instanceof ContentCompileError)) throw err;
-    const out: PreviewRes = {
+    return {
       version: '',
       manifest: EMPTY_MANIFEST(now),
       changed: [],
       errors: err.issues.slice(0, 200),
     };
-    return c.json(out);
   }
-});
+}
+
+route(routes, C.preview, async (c) => c.json(await previewContent(c)));
 
 /** Uploads content/{ver}/* (manifest last, so its presence means the set is complete). */
 async function uploadRelease(bucket: R2Bucket, compiled: CompiledContent): Promise<void> {

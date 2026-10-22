@@ -1,6 +1,19 @@
-// S1 Auth & account: /api/auth/* (config, signup, login, logout, reset/consume, password). Spec 04 §3, §5.
+// S1 Auth & account: /api/auth/* (config, signup, login, logout, reset/request, reset/consume, password).
+// Spec 04 §3, §5; reset/request is spec 07 feature A.
 // Mounted at '/' by worker/src/index.ts, so paths are absolute (appApi.*.path) and middleware is per route.
-import { ApiError, type AuthConfig, type AuthRes, appApi, DEFAULT_TZ, LIMITS, newId, type Ok } from '@tie/shared';
+import {
+  ApiError,
+  type AuthConfig,
+  type AuthRes,
+  appApi,
+  DEFAULT_TZ,
+  DURATIONS,
+  LIMITS,
+  newId,
+  type Ok,
+  RESET_LINK_ROUTE,
+  randomToken,
+} from '@tie/shared';
 import {
   type AppEnv,
   auditFor,
@@ -37,6 +50,8 @@ import {
 } from '@tie/worker-core';
 import { type Context, Hono } from 'hono';
 import { appSettingQuery, auditAs, checkBirth, requestIpHash, TERMS_SETTING, termsVersionOf } from '../account/common';
+import { sendMail } from '../mail/resend';
+import { resetEmail } from '../mail/resetEmail';
 
 const routes = new Hono<AppEnv>();
 const api = appApi.auth;
@@ -239,6 +254,101 @@ routes.post(api.logout.path, async (c) => {
   clearSessionCookie(c, 'app');
   clearMediaCookie(c);
   return c.json({ ok: true } satisfies Ok);
+});
+
+/** `${APP_ORIGIN}/#/entrar?reset=<token>`, opened by Entrar's ResetForm. */
+export function resetLink(appOrigin: string, token: string): string {
+  return `${appOrigin.replace(/\/+$/, '')}/#/${RESET_LINK_ROUTE}?reset=${encodeURIComponent(token)}`;
+}
+
+interface ResetUserRow {
+  id: string;
+  email: string;
+  status: string;
+  has_pass: number;
+  name: string | null;
+}
+
+/**
+ * The work behind "Esqueci a senha", run after the 204 went out (waitUntil), so the answer's timing
+ * says nothing about the e-mail. Only an active account with a password gets a link (staff invites
+ * keep their own flow). The throttle is atomic: the token row is inserted only while the account has
+ * fewer than LIMITS.resetMailsPerHour live self-service links (created_by IS NULL; admin-issued
+ * links carry the staff id and do not count). Earlier links stay valid until they expire or are used.
+ */
+async function issueResetMail(c: Context<AppEnv>, email: string, now: number): Promise<void> {
+  const db = c.env.DB;
+  const user = await one<ResetUserRow>(
+    db,
+    `SELECT u.id, u.email, u.status, u.pass_hash IS NOT NULL AS has_pass, p.name
+     FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.email = ?`,
+    email,
+  );
+  if (user?.status !== 'active' || !user.has_pass) return;
+
+  const token = randomToken(32);
+  const expiresAt = now + DURATIONS.resetEmailTokenMs;
+  const [ins] = await batchRun(db, [
+    q(
+      db,
+      `INSERT INTO one_time_tokens(token_hash, user_id, kind, email, role, created_by, expires_at, used_at)
+       SELECT ?, ?, 'reset', ?, NULL, NULL, ?, NULL
+       WHERE (SELECT COUNT(*) FROM one_time_tokens
+              WHERE user_id = ? AND kind = 'reset' AND expires_at > ? AND created_by IS NULL) < ?`,
+      await hashToken(token),
+      user.id,
+      user.email,
+      expiresAt,
+      user.id,
+      now,
+      LIMITS.resetMailsPerHour,
+    ),
+  ]);
+  const issued = !!ins?.changes;
+  await (
+    await auditAs(
+      c,
+      user.id,
+      {
+        action: 'auth.reset_request',
+        targetType: 'user',
+        targetId: user.id,
+        diff: issued ? { expiresAt } : { throttled: true },
+      },
+      now,
+    )
+  ).stmt.run();
+  if (!issued) return;
+
+  const link = resetLink(c.env.APP_ORIGIN, token);
+  const mail = resetEmail({ name: user.name ?? '', link, minutes: DURATIONS.resetEmailTokenMs / 60_000 });
+  await sendMail(c.env, { to: user.email, ...mail, tag: 'auth.reset', devNote: `Reset link: ${link}` });
+}
+
+/** Runs `work` after the response (waitUntil); awaited inline only when there is no execution context. */
+async function afterResponse(c: Context<AppEnv>, work: Promise<void>): Promise<void> {
+  const guarded = work.catch((err: unknown) => {
+    console.error(JSON.stringify({ level: 'error', msg: 'reset request failed', error: String(err) }));
+  });
+  let ctx: Pick<ExecutionContext, 'waitUntil'> | null = null;
+  try {
+    ctx = c.executionCtx;
+  } catch {
+    // No ExecutionContext (plain app.fetch without one).
+  }
+  if (ctx) ctx.waitUntil(guarded);
+  else await guarded;
+}
+
+routes.post(api.resetRequest.path, vJson(api.resetRequest.body), async (c) => {
+  const body = c.req.valid('json');
+  // Two buckets: one per client IP (spraying many addresses) and one per address (many IPs at one inbox).
+  await checkRateLimit(c.env, 'RL_AUTH', `ip:${clientIp(c)}|reset_request`);
+  await checkRateLimit(c.env, 'RL_AUTH', `email:${body.email}|reset_request`);
+  await turnstileOrThrow(c, body.turnstileToken, 'reset_request');
+  // Always 204, whether or not the address has an account (anti-enumeration).
+  await afterResponse(c, issueResetMail(c, body.email, Date.now()));
+  return c.body(null, 204);
 });
 
 routes.post(api.resetConsume.path, vJson(api.resetConsume.body), async (c) => {

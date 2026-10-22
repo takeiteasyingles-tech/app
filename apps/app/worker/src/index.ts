@@ -7,15 +7,18 @@ import { awardFactory } from './game';
 import { runRetention } from './retention';
 import ai from './routes/ai';
 import auth from './routes/auth';
+import certificates from './routes/certificates';
 import content, { contentServiceFactory } from './routes/content';
 import ebook from './routes/ebook';
 import extras from './routes/extras';
+import feedback from './routes/feedback';
 import game from './routes/game';
 import me from './routes/me';
 import media from './routes/media';
 import mic from './routes/mic';
 import progress from './routes/progress';
 import reports from './routes/reports';
+import seasons from './routes/seasons';
 import srs from './routes/srs';
 import uploads from './routes/uploads';
 import { srsServiceFactory } from './services/srs.impl';
@@ -45,6 +48,9 @@ const slices: Hono<AppEnv>[] = [
   uploads,
   progress,
   ebook,
+  seasons,
+  certificates,
+  feedback,
   srs,
   extras,
   game,

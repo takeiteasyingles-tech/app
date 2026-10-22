@@ -79,7 +79,7 @@ export function AvatarVideo({ a, talking, mood }: { a: AvatarAssistant; talking:
 
   if (!clips.length) {
     return (
-      <div class="av2d vid">
+      <div class="av2d vid" data-a={a.k}>
         <div class="av-empty">
           <span class="av-ini" style={{ '--s': '120px' }}>
             {assistInitials(a)}
@@ -88,8 +88,9 @@ export function AvatarVideo({ a, talking, mood }: { a: AvatarAssistant; talking:
       </div>
     );
   }
+  // data-a: maggie.css frames each assistant's clips (where the face sits in the 16:9 frame).
   return (
-    <div class="av2d vid" ref={wrap}>
+    <div class="av2d vid" data-a={a.k} ref={wrap}>
       {clips.map(([k, src]) => (
         <video
           key={k}

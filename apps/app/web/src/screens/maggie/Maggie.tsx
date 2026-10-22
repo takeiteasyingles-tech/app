@@ -43,6 +43,7 @@ import {
   uid,
   usableExtras,
 } from './data';
+import './maggie.css';
 
 type Mode = 'livre' | 'missao' | 'pronuncia' | 'extra';
 const MODES: readonly Mode[] = ['livre', 'missao', 'pronuncia', 'extra'];
@@ -93,6 +94,8 @@ interface Session {
 let M: Session | null = null;
 let listener: { stop(): void } | null = null;
 let rerender: () => void = () => {};
+/** A última nota da pronúncia já trazida à vista (o cartão rola até ela uma vez só). */
+let shownRes: PronounceResult | null = null;
 const re = () => rerender();
 
 const S = () => state.value;
@@ -657,12 +660,24 @@ function MicStage(c: Catalog, m: Session) {
   const talking = m.speaking;
   // Uma gravação do modo pronúncia também é escuta (av.listening(true) do mgPronRec do protótipo).
   const hearing = m.listening || m.pronState === 'rec';
+  // Na conversa o palco diz o que está acontecendo (ouvindo, pensando, falando) e ganha um anel da
+  // mesma cor (maggie.css): laranja ouvindo você, verde enquanto o assistente fala.
+  const status = on
+    ? hearing
+      ? 'Ouvindo você'
+      : m.busy
+        ? 'Pensando'
+        : talking
+          ? `${A.name} falando`
+          : 'Ao vivo'
+    : A.full;
   return (
     <Stage
       id="av-live"
       bg={catalogImage('bg/maggie-set')}
-      status={on ? (hearing ? 'Ouvindo você' : m.busy ? 'Pensando' : 'Ao vivo') : A.full}
+      status={status}
       listening={hearing}
+      cls={on ? (hearing ? 'mg-hearing' : talking ? 'mg-talking' : m.busy ? 'mg-busy' : '') : ''}
     >
       {on && last ? (
         <div class="caption">
@@ -1261,43 +1276,45 @@ function Dock(c: Catalog, m: Session) {
             <Icon name="bulb" size={16} /> Dica
           </button>
         ) : null}
-        <button type="button" onClick={activator(undefined, mgSubs)}>
+        {/* Os dois ajustes da conversa vêm depois de um fio, com o estado à vista (aceso = ligado). O
+            nome continua a ação ("Esconder PT", "Mãos livres: não"), como no protótipo. */}
+        <i class="mg-sep" aria-hidden="true" />
+        <button type="button" class={`mg-tgl${m.subsPt ? ' on' : ''}`} onClick={activator(undefined, mgSubs)}>
           <Icon name="cc" size={16} />
           {m.subsPt ? ' Esconder PT' : ' Mostrar PT'}
         </button>
-        <button type="button" onClick={activator(undefined, mgHands)}>
-          <Icon name="mic" size={16} />
+        <button type="button" class={`mg-tgl${m.hands ? ' on' : ''}`} onClick={activator(undefined, mgHands)}>
+          <Icon name="ear" size={16} />
           {m.hands ? ' Mãos livres: sim' : ' Mãos livres: não'}
         </button>
       </div>
       <div class="say">
-        <input
-          class="input"
-          id="mg-input"
-          aria-label="Sua resposta em inglês"
-          placeholder={speech.canListen ? 'Fale no microfone ou digite' : 'Digite a sua resposta em inglês'}
-          autocomplete="off"
-          value={m.typed}
-          disabled={off}
-          onInput={(e) => {
-            m.typed = (e.currentTarget as HTMLInputElement).value;
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              mgSend();
-            }
-          }}
-        />
-        <button
-          type="button"
-          class="iconbtn"
-          aria-label="Enviar"
-          style={{ width: '52px', height: '52px' }}
-          onClick={activator(undefined, mgSend)}
-        >
-          <Icon name="send" size={22} />
-        </button>
+        {/* O enviar fica dentro do campo (maggie.css): o campo ganha a largura do botão, e a dica "Fale
+            no microfone ou digite" cabe inteira num celular estreito. */}
+        <div class="mg-field">
+          <input
+            class="input"
+            id="mg-input"
+            aria-label="Sua resposta em inglês"
+            placeholder={speech.canListen ? 'Fale no microfone ou digite' : 'Digite a sua resposta em inglês'}
+            autocomplete="off"
+            enterkeyhint="send"
+            value={m.typed}
+            disabled={off}
+            onInput={(e) => {
+              m.typed = (e.currentTarget as HTMLInputElement).value;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                mgSend();
+              }
+            }}
+          />
+          <button type="button" class="iconbtn mg-send" aria-label="Enviar" onClick={activator(undefined, mgSend)}>
+            <Icon name="send" size={20} />
+          </button>
+        </div>
         <button
           type="button"
           class={`mic${m.listening ? ' rec' : ''}`}
@@ -1322,66 +1339,81 @@ function PronPanel(c: Catalog, m: Session) {
   const A = assistant(c);
   if (!it) return null;
   const lastOne = m.pronIdx >= list.length - 1;
+  const good = !!r && r.score >= 8;
+  // Celular: o cartão rola sozinho sob o palco (o avatar nunca sai da tela) e a navegação fica presa
+  // embaixo, como a barra da conversa. Desktop: o cartão e a navegação na coluna da direita.
   return (
-    <div class="stack" style={{ '--gap': '14px', padding: '16px' }}>
-      <div class="card paper stack tc" style={{ '--gap': '12px', alignItems: 'center' }}>
-        <div class="lbl">{`Frase ${m.pronIdx + 1} de ${list.length}`}</div>
-        <div class="h1">{it.en}</div>
-        <div class="fb tip" style={{ textAlign: 'left', width: '100%' }}>
-          <b>Dica {of(A)}:</b> {it.tip}
-        </div>
-        <div class="row center" style={{ '--gap': '10px' }}>
-          <Btn label="Ouvir" kind="ghost compact" icon="speaker" onClick={mgPronHear} />
-          <button
-            type="button"
-            class={`mic${m.pronState === 'rec' ? ' rec' : ''}`}
-            aria-label="Gravar"
-            onClick={activator(undefined, () => void mgPronRec())}
-          >
-            <Icon name={m.pronState === 'rec' ? 'stop' : 'mic'} size={28} />
-          </button>
-        </div>
-        <div class="sm" style={{ fontWeight: '700' }}>
-          {m.pronState === 'rec'
-            ? 'Ouvindo… toque para parar'
-            : m.pronState === 'busy'
-              ? `${The(A)} está ouvindo…`
-              : 'Toque no microfone e diga a frase'}
-        </div>
-        {r ? (
-          <div class="stack pop" style={{ '--gap': '10px', width: '100%' }}>
-            {training ? null : (
-              <div class="row center base" style={{ '--gap': '4px' }}>
-                <span class="num" style={{ fontSize: '3rem' }}>
-                  {r.score}
-                </span>
-                <span class="h3 muted">/10</span>
-              </div>
-            )}
-            <div class={`fb ${r.score >= 8 ? 'ok' : 'fix'}`} style={{ textAlign: 'left' }}>
-              <b>{r.praise_pt}</b>
-              {r.heard ? (
-                <>
-                  <br />
-                  <span class="sm">Entendi: “{r.heard}”</span>
-                </>
-              ) : null}
-              {(r.issues || []).map((x) => (
-                <Fragment key={x.word}>
-                  <br />
-                  <b>{x.word}:</b> {x.issue_pt ? `${x.issue_pt} ` : ''}
-                  {x.tip_pt}
-                </Fragment>
+    <div class="mg-pron">
+      <div class="mg-pron-scroll">
+        <div class="card paper stack tc mg-pcard">
+          <div class="mg-phead">
+            <div class="lbl">{`Frase ${m.pronIdx + 1} de ${list.length}`}</div>
+            {/* O progresso das frases: as já vistas cheias, a atual comprida. */}
+            <div class="mg-dots" aria-hidden="true">
+              {list.map((x, i) => (
+                <i key={x.en} class={i < m.pronIdx ? 'done' : i === m.pronIdx ? 'cur' : ''} />
               ))}
             </div>
           </div>
-        ) : null}
+          <div class="h1 mg-phrase" lang="en">
+            {it.en}
+          </div>
+          <div class="fb tip mg-ptip">
+            <b>Dica {of(A)}:</b> {it.tip}
+          </div>
+          <div class="row center mg-pctl">
+            <Btn label="Ouvir" kind="ghost compact" icon="speaker" onClick={mgPronHear} />
+            <button
+              type="button"
+              class={`mic${m.pronState === 'rec' ? ' rec' : ''}`}
+              aria-label="Gravar"
+              onClick={activator(undefined, () => void mgPronRec())}
+            >
+              <Icon name={m.pronState === 'rec' ? 'stop' : 'mic'} size={28} />
+            </button>
+          </div>
+          <div class="sm mg-pstate" aria-live="polite">
+            {m.pronState === 'rec'
+              ? 'Ouvindo… toque para parar'
+              : m.pronState === 'busy'
+                ? `${The(A)} está ouvindo…`
+                : 'Toque no microfone e diga a frase'}
+          </div>
+          {r ? (
+            // A nota e o retorno num bloco só: a nota à esquerda do elogio, os ajustes embaixo.
+            <div class="mg-pres pop" id="mg-pres">
+              <div class={`fb ${good ? 'ok' : 'fix'}`}>
+                <div class="mg-reshead">
+                  {training ? null : (
+                    <span class={`row base mg-score ${good ? 'ok' : 'fix'}`}>
+                      <span class="num">{r.score}</span>
+                      <span class="h3 muted">/10</span>
+                    </span>
+                  )}
+                  <b>{r.praise_pt}</b>
+                </div>
+                {r.heard ? (
+                  <div class="mg-resline">
+                    <span class="sm">Entendi: “{r.heard}”</span>
+                  </div>
+                ) : null}
+                {(r.issues || []).map((x) => (
+                  <div key={x.word} class="mg-resline">
+                    <b>{x.word}:</b> {x.issue_pt ? `${x.issue_pt} ` : ''}
+                    {x.tip_pt}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div class="row" style={{ '--gap': '10px' }}>
-        <Btn label="Anterior" kind="ghost compact" cls="grow" onClick={() => mgPronNav(-1)} />
+      <div class="row mg-pnav">
+        <Btn label="Anterior" kind="ghost compact" icon="back" cls="grow" onClick={() => mgPronNav(-1)} />
         <Btn
           label={lastOne ? 'Encerrar' : 'Próxima frase'}
           kind="compact"
+          iconR={lastOne ? undefined : 'next'}
           cls="grow"
           onClick={() => (lastOne ? void mgEnd() : mgPronNav(1))}
         />
@@ -1655,9 +1687,26 @@ export default function Maggie({ q }: ScreenProps) {
   }, [inCall]);
 
   // Na conversa, a última fala fica à vista.
+  // Na pronúncia, uma nota nova aparece inteira (o cartão rola só até ela, uma vez por nota).
   useLayoutEffect(() => {
     if (M?.stage !== 'call') return;
-    const sc = document.getElementById('mg-scroll') || document.getElementById('mg-tr');
+    if (M.mode === 'pronuncia') {
+      if (M.pronRes && M.pronRes !== shownRes) {
+        shownRes = M.pronRes;
+        // Depois que o palco encolhe (a transição do maggie.css), só o cartão rola até a nota, se ela
+        // ainda não couber (scrollIntoView também mexeria nos contêineres de overflow:hidden acima).
+        setTimeout(() => {
+          const el = document.getElementById('mg-pres');
+          const sc = el?.closest('.mg-pron-scroll');
+          if (!el || !sc) return;
+          const below = el.getBoundingClientRect().bottom - sc.getBoundingClientRect().bottom;
+          const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+          if (below > 0) sc.scrollTo({ top: sc.scrollTop + below + 12, behavior: calm ? 'auto' : 'smooth' });
+        }, 400);
+      }
+      return;
+    }
+    const sc = document.getElementById('mg-tr');
     if (sc) sc.scrollTop = sc.scrollHeight;
   });
 
@@ -1666,6 +1715,7 @@ export default function Maggie({ q }: ScreenProps) {
 
   const A = assistant(c);
   const desk = layoutOf(s) === 'desktop';
+  const callLabel = m.mode === 'missao' ? `Missão · ${mission(c, m.mission)?.t ?? ''}` : (modeCard(c, m.mode)?.t ?? '');
   const top = (
     <header class="topbar">
       <button
@@ -1677,14 +1727,19 @@ export default function Maggie({ q }: ScreenProps) {
         <Icon name={inCall ? 'close' : 'back'} size={20} />
       </button>
       <div class="ttl">
-        <div class="lbl">
-          {inCall
-            ? m.mode === 'missao'
-              ? `Missão · ${mission(c, m.mission)?.t ?? ''}`
-              : (modeCard(c, m.mode)?.t ?? '')
-            : 'Conversa em tempo real'}
+        <div class="lbl" title={inCall ? callLabel : undefined}>
+          {inCall ? callLabel : 'Conversa em tempo real'}
         </div>
-        {inCall || desk ? (
+        {inCall ? (
+          // Na conversa os minutos vão na linha do nome: o rótulo do modo fica com a largura toda.
+          <div class="row mg-who">
+            <div class="h2">{A.name}</div>
+            <span class="pill mg-min" title="Minutos restantes no mês">
+              <Icon name="clock" size={13} />
+              {`${minutesLeft(m)} min`}
+            </span>
+          </div>
+        ) : desk ? (
           <div class="h2" style={{ color: '#fff', marginTop: '2px' }}>
             {A.name}
           </div>
@@ -1698,16 +1753,7 @@ export default function Maggie({ q }: ScreenProps) {
           </div>
         )}
       </div>
-      {inCall ? (
-        <>
-          <span class="pill" style={{ background: 'var(--navy2)', color: '#FFD27A' }}>
-            {`${minutesLeft(m)} min`}
-          </span>
-          <Btn label="Encerrar" kind="compact" onClick={() => void mgEnd()} />
-        </>
-      ) : desk ? (
-        <AiBadge />
-      ) : null}
+      {inCall ? <Btn label="Encerrar" kind="compact" onClick={() => void mgEnd()} /> : desk ? <AiBadge /> : null}
     </header>
   );
   const talk =
@@ -1720,37 +1766,45 @@ export default function Maggie({ q }: ScreenProps) {
       </>
     );
   const lobby = inCall ? null : Lobby(c, m, desk);
-  const body = desk ? (
+  // Na conversa a tela não rola: o palco (o avatar) fica sempre inteiro à vista e só a conversa (ou o
+  // cartão da frase) rola sob ele, com a barra do microfone presa embaixo. Celular em pé: palco em
+  // cima, conversa embaixo; deitado e desktop: palco à esquerda, conversa à direita (maggie.css).
+  const body = inCall ? (
+    <div class="live-grid mg-grid">
+      <div class="left mg-stagecol">
+        {MicStage(c, m)}
+        {desk ? (
+          <div class="xs mg-note">
+            A legenda mostra a última fala {of(A)}. Toque nas palavras azuis para levar para os Flashcards.
+          </div>
+        ) : null}
+      </div>
+      <div class="right mg-talkcol">{talk}</div>
+    </div>
+  ) : desk ? (
     <div class="live-grid">
       <div class="left stack" style={{ '--gap': '16px' }}>
         {MicStage(c, m)}
-        {inCall ? (
-          <div class="xs">
-            A legenda mostra a última fala {of(A)}. Toque nas palavras azuis para levar para os Flashcards.
-          </div>
-        ) : (
-          lobby?.setup
-        )}
+        {lobby?.setup}
       </div>
-      <div class="right">{inCall ? talk : LobbyAside(c, lobby?.start)}</div>
+      <div class="right">{LobbyAside(c, lobby?.start)}</div>
     </div>
   ) : (
-    <>
+    <div class="scroll" id="mg-scroll">
       {/* No lobby a foto ganha um respiro sob o topo (o selo "Modo demo" não encosta nela). */}
-      <div style={{ padding: inCall ? '0 16px 12px' : '10px 16px 14px' }}>{MicStage(c, m)}</div>
-      {inCall ? talk : <div class="wrap">{lobby?.setup}</div>}
-    </>
+      <div class="mg-hero">{MicStage(c, m)}</div>
+      <div class="wrap mg-setup">{lobby?.setup}</div>
+    </div>
   );
   return (
-    <div class="live on-navy" style={{ flex: '1', minHeight: '0', display: 'flex', flexDirection: 'column' }}>
+    <div
+      class={`live on-navy mg ${inCall ? 'mg-call' : 'mg-lobby'}`}
+      data-mode={m.mode}
+      data-res={inCall && m.mode === 'pronuncia' && m.pronRes ? '' : undefined}
+      style={{ flex: '1', minHeight: '0', display: 'flex', flexDirection: 'column' }}
+    >
       {top}
-      {desk ? (
-        body
-      ) : (
-        <div class="scroll" id="mg-scroll">
-          {body}
-        </div>
-      )}
+      {body}
     </div>
   );
 }

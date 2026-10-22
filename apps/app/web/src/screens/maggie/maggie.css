@@ -1,0 +1,520 @@
+/* #/maggie (Mic): layout of the lobby hero and of the call, scoped by .mg on the screen's .live root.
+   tie.css stays verbatim; these rules only add to it (05-foundation-notes § U6, "Mic page redesign").
+
+   The call never scrolls as a page: the stage (the assistant's video) always shows whole, and only the
+   conversation (or the pronunciation card) scrolls under it, with the mic dock pinned at the foot.
+   Phone portrait: stage on top, conversation below. Phone landscape and desktop: stage left,
+   conversation right. */
+
+/* ---------- Avatar framing ----------
+   The clips are 16:9 with the head in the top half (the top of the hair touches the frame's top edge).
+   Anchoring the video to its top edge means a box wider than the clip never cuts the head, and a box
+   narrower than it (portrait phones) crops only the sides, around where each assistant's face sits. */
+.mg .av2d.vid video {
+  object-position: var(--av-x, 50%) 0%;
+}
+.mg .av2d[data-a="margaret"] {
+  --av-x: 50%;
+}
+.mg .av2d[data-a="robert"] {
+  --av-x: 52%;
+}
+.mg .av2d[data-a="rebecca"] {
+  --av-x: 51%;
+}
+.mg .av2d[data-a="zach"] {
+  --av-x: 58%;
+}
+.mg .av2d[data-a="barbara"] {
+  --av-x: 57%;
+}
+
+/* In the call there is no tab bar: a toast at its usual place (above the tab bar) covered the mic and
+   swallowed the tap that stops a take. It drops from under the topbar instead and lets taps through. */
+.app:has(.mg-call) .toast {
+  top: calc(68px + env(safe-area-inset-top, 0px));
+  bottom: auto;
+  pointer-events: none;
+}
+
+/* ---------- Lobby (phone) ---------- */
+.mg-lobby .mg-hero {
+  padding: 10px 16px 14px;
+}
+
+/* ---------- Call: frame ---------- */
+.mg-call {
+  overflow: hidden;
+}
+.mg-call .topbar {
+  min-height: 0;
+  padding: 10px 12px 10px;
+  gap: 10px;
+}
+.mg-call .topbar .ttl .lbl {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg-call .mg-who {
+  --gap: 8px;
+  margin-top: 2px;
+  min-width: 0;
+}
+.mg-call .mg-who .h2 {
+  font-size: 1.2rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.mg-call .mg-min {
+  flex: none;
+  gap: 4px;
+  padding: 3px 9px 3px 7px;
+  background: var(--navy2);
+  color: #ffd27a;
+}
+.mg-call .topbar > .btn {
+  flex: none;
+}
+
+.mg-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mg-stagecol {
+  flex: none;
+  padding: 0 12px 10px;
+}
+.mg-talkcol {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Call: stage ---------- */
+.mg-call .avatar-stage {
+  aspect-ratio: auto;
+  height: clamp(200px, 44dvh, 470px);
+  border-radius: 22px;
+  box-shadow: 0 0 0 0 rgba(255, 210, 122, 0);
+  transition:
+    height 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.3s ease;
+}
+/* Pronunciation: the stage takes what the phrase card leaves (the topbar, the card and the nav bar
+   take about 430px), and gives room back to the score while one is shown. */
+.mg-call[data-mode="pronuncia"] .avatar-stage {
+  height: clamp(170px, calc(100dvh - 430px), 460px);
+}
+.mg-call[data-mode="pronuncia"][data-res] .avatar-stage {
+  height: clamp(150px, calc(100dvh - 610px), 320px);
+}
+/* The assistant is speaking: a warm ring. Listening to you: the mic's orange, breathing. */
+.mg-call .avatar-stage.mg-talking {
+  box-shadow: 0 0 0 3px rgba(255, 210, 122, 0.9);
+}
+.mg-call .avatar-stage.mg-hearing {
+  box-shadow: 0 0 0 3px var(--orange);
+  animation: mg-ring 1.6s ease-in-out infinite;
+}
+@keyframes mg-ring {
+  50% {
+    box-shadow: 0 0 0 5px rgba(244, 90, 40, 0.55);
+  }
+}
+.mg-call .avatar-stage .status {
+  color: #fff;
+}
+/* A soft scrim under the subtitles, so they read on any frame without black boxes over the face. */
+.mg-call .avatar-stage::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 46%;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(rgba(10, 30, 63, 0), rgba(10, 30, 63, 0.62));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.mg-call .avatar-stage:has(.caption)::after {
+  opacity: 1;
+}
+.mg-call .avatar-stage .caption {
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  animation: enter 0.25s both;
+}
+.mg-call .avatar-stage .caption .en {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  background: rgba(10, 30, 63, 0.78);
+}
+.mg-call .avatar-stage .caption .ptl span {
+  font-size: 0.84rem;
+  background: rgba(10, 30, 63, 0.6);
+}
+
+/* ---------- Call: conversation ---------- */
+.mg-call .transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 14px 14px;
+  gap: 10px;
+}
+.mg-call .bub {
+  max-width: 88%;
+}
+
+/* The dock: helpers on one sideways row (fading out at the right edge, so it reads as scrollable),
+   then the answer row with the mic as the primary, thumb-side action. */
+.mg-call .dock {
+  position: relative;
+  flex: none;
+  padding: 10px 12px calc(10px + var(--safe-b));
+  gap: 10px;
+  box-shadow: 0 -12px 24px -18px rgba(0, 0, 0, 0.5);
+}
+.mg-call .help {
+  padding-right: 28px;
+  margin-right: -12px;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+.mg-call .help button {
+  min-height: 40px;
+  border: 1.5px solid transparent;
+}
+.mg-call .help .mg-sep {
+  flex: none;
+  width: 1.5px;
+  margin: 8px 2px;
+  border-radius: 1px;
+  background: var(--navy3);
+}
+.mg-call .help .mg-tgl {
+  background: transparent;
+  border-color: var(--navy3);
+  color: var(--onNavy);
+}
+.mg-call .help .mg-tgl.on {
+  border-color: rgba(255, 210, 122, 0.55);
+  color: #ffd27a;
+}
+.mg-call .say {
+  gap: 8px;
+}
+.mg-call .mg-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.mg-call .say .input {
+  min-height: 54px;
+  border-radius: 999px;
+  padding: 0 52px 0 16px;
+  font-size: 0.98rem;
+}
+.mg-call .say .input::placeholder {
+  font-size: 0.94rem;
+}
+.mg-call .say .mg-send {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+.mg-call .say .input:placeholder-shown + .mg-send {
+  color: var(--onNavy);
+  opacity: 0.6;
+}
+.mg-call .say .mic {
+  width: 62px;
+  height: 62px;
+  box-shadow: 0 8px 20px -8px rgba(244, 90, 40, 0.8);
+}
+.mg-call .say .mic.rec {
+  box-shadow: none;
+}
+
+/* ---------- Call: pronunciation ---------- */
+.mg-pron {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mg-pron-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 12px 12px;
+}
+.mg-pcard {
+  --gap: 10px;
+  align-items: center;
+  padding: 14px 16px 16px;
+}
+.mg-phead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mg-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mg-dots i {
+  width: 8px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  transition:
+    width 0.25s ease,
+    background 0.25s ease;
+}
+.mg-dots i.done {
+  background: var(--blue);
+}
+.mg-dots i.cur {
+  width: 20px;
+  background: var(--orange);
+}
+.on-navy .mg-pcard .h1.mg-phrase {
+  font-size: clamp(1.55rem, 6.6vw, 2.1rem);
+  line-height: 1.15;
+  margin: 2px 0;
+}
+.mg-ptip {
+  width: 100%;
+  text-align: left;
+  font-size: 0.92rem;
+  padding: 10px 12px;
+}
+.mg-pctl {
+  --gap: 16px;
+}
+.mg-call .mg-pcard .mg-pctl .btn {
+  min-height: 52px;
+  border-radius: 999px;
+  padding: 0 20px;
+}
+.mg-call .mg-pcard .mg-pctl .mic {
+  width: 68px;
+  height: 68px;
+  box-shadow: 0 8px 20px -8px rgba(244, 90, 40, 0.8);
+}
+.mg-call .mg-pcard .mg-pctl .mic.rec {
+  box-shadow: none;
+}
+.mg-pstate {
+  font-weight: 700;
+}
+.mg-pres {
+  width: 100%;
+}
+.mg-pres .fb {
+  text-align: left;
+  padding: 12px 14px;
+}
+/* The score beside the praise, the adjustments as lines under it. */
+.mg-reshead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mg-reshead > b {
+  line-height: 1.35;
+}
+.mg-score {
+  --gap: 2px;
+  flex: none;
+  padding-right: 12px;
+  border-right: 1.5px solid rgba(15, 42, 85, 0.15);
+}
+.mg-score .num {
+  font-size: 2.3rem;
+}
+.mg-score .h3 {
+  font-size: 0.95rem;
+}
+.mg-score.ok .num {
+  color: var(--green);
+}
+.mg-resline {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.mg-pnav {
+  flex: none;
+  --gap: 10px;
+  padding: 10px 12px calc(10px + var(--safe-b));
+  background: var(--navyD);
+  border-top: 1.5px solid var(--navy3);
+}
+
+/* ---------- Phone landscape: stage left, conversation right ---------- */
+@media (orientation: landscape) and (max-height: 560px) {
+  .app:not([data-layout="desktop"]) .mg-call .topbar {
+    padding: 6px max(12px, env(safe-area-inset-right)) 6px max(12px, env(safe-area-inset-left));
+  }
+  .app:not([data-layout="desktop"]) .mg-call .topbar .iconbtn {
+    width: 40px;
+    height: 40px;
+  }
+  .app:not([data-layout="desktop"]) .mg-grid {
+    flex-direction: row;
+  }
+  .app:not([data-layout="desktop"]) .mg-stagecol {
+    width: 42%;
+    max-width: 440px;
+    display: flex;
+    flex-direction: column;
+    padding: 0 0 calc(12px + var(--safe-b)) max(12px, env(safe-area-inset-left));
+  }
+  .app:not([data-layout="desktop"]) .mg-call .avatar-stage {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+  .app:not([data-layout="desktop"]) .mg-talkcol {
+    padding-right: env(safe-area-inset-right);
+  }
+  .app:not([data-layout="desktop"]) .mg-call .dock {
+    margin-left: 12px;
+    border-left: 1.5px solid var(--navy3);
+    border-top-left-radius: 18px;
+  }
+  .app:not([data-layout="desktop"]) .mg-pnav {
+    margin-left: 12px;
+    border-left: 1.5px solid var(--navy3);
+    border-top-left-radius: 18px;
+  }
+  /* A short stage: the English line only (the Portuguese is in the bubble right beside it), so the
+     subtitle stays under the chin. */
+  .app:not([data-layout="desktop"]) .mg-call .avatar-stage .caption .en {
+    font-size: 0.88rem;
+  }
+  .app:not([data-layout="desktop"]) .mg-call .avatar-stage .caption .ptl {
+    display: none;
+  }
+
+  /* Lobby: the hero stays beside the choices instead of filling the whole screen. */
+  .app:not([data-layout="desktop"]) .mg-lobby #mg-scroll {
+    display: grid;
+    grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
+    align-items: start;
+  }
+  .app:not([data-layout="desktop"]) .mg-lobby .mg-hero {
+    position: sticky;
+    top: 0;
+    padding: 4px 0 12px max(16px, env(safe-area-inset-left));
+  }
+  .app:not([data-layout="desktop"]) .mg-lobby .mg-hero .avatar-stage {
+    aspect-ratio: auto;
+    height: calc(100dvh - 76px - var(--tab-h) - var(--safe-b));
+    min-height: 180px;
+  }
+  .app:not([data-layout="desktop"]) .mg-lobby .mg-setup {
+    padding-top: 4px;
+  }
+}
+
+/* ---------- Desktop ---------- */
+.app[data-layout="desktop"] .mg-call .topbar {
+  padding: 12px 22px 10px;
+}
+.app[data-layout="desktop"] .mg-grid {
+  display: grid;
+}
+.app[data-layout="desktop"] .mg-call .live-grid > .left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding: 6px 22px 18px;
+}
+.app[data-layout="desktop"] .mg-call .avatar-stage,
+.app[data-layout="desktop"] .mg-call[data-mode="pronuncia"] .avatar-stage {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 300px;
+}
+.app[data-layout="desktop"] .mg-call .avatar-stage .caption {
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+}
+.app[data-layout="desktop"] .mg-call .avatar-stage .caption .en {
+  font-size: 1.05rem;
+}
+.app[data-layout="desktop"] .mg-call .avatar-stage .caption .ptl span {
+  font-size: 0.92rem;
+}
+.app[data-layout="desktop"] .mg-note {
+  flex: none;
+}
+.app[data-layout="desktop"] .mg-call .transcript {
+  padding: 12px 22px 16px;
+}
+.app[data-layout="desktop"] .mg-call .dock {
+  padding: 12px 22px 16px;
+  box-shadow: none;
+}
+.app[data-layout="desktop"] .mg-call .help {
+  flex-wrap: wrap;
+  overflow: visible;
+  padding-right: 0;
+  margin-right: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+/* Desktop pronunciation: the card and its nav, centred in the column beside the full-height stage. */
+.app[data-layout="desktop"] .mg-pron {
+  justify-content: center;
+  padding-bottom: 32px;
+}
+.app[data-layout="desktop"] .mg-pron-scroll,
+.app[data-layout="desktop"] .mg-pnav {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+.app[data-layout="desktop"] .mg-pron-scroll {
+  flex: 0 1 auto;
+  padding: 6px 22px 12px;
+}
+.app[data-layout="desktop"] .mg-pcard {
+  padding: 22px 26px 24px;
+  --gap: 14px;
+}
+.app[data-layout="desktop"] .on-navy .mg-pcard .h1.mg-phrase {
+  font-size: 2.3rem;
+}
+.app[data-layout="desktop"] .mg-pnav {
+  background: transparent;
+  border-top: 0;
+  padding: 0 22px 18px;
+}

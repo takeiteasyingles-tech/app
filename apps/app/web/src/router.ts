@@ -22,7 +22,10 @@ export type RouteName =
   | 'relatorio'
   | 'revisao'
   | 'perfil'
-  | 'conquistas';
+  | 'conquistas'
+  // v1 (spec 07, feature B; PROD routes, no prototype counterpart).
+  | 'temporadaTeste'
+  | 'certificado';
 
 export const ROUTES: readonly (readonly [RegExp, RouteName, (readonly string[])?])[] = [
   [/^$/, 'raiz'],
@@ -44,6 +47,8 @@ export const ROUTES: readonly (readonly [RegExp, RouteName, (readonly string[])?
   [/^revisao$/, 'revisao'],
   [/^perfil$/, 'perfil'],
   [/^conquistas$/, 'conquistas'],
+  [/^temporada\/(\d+)\/teste$/, 'temporadaTeste', ['n']],
+  [/^certificado\/([\w-]+)$/, 'certificado', ['code']],
 ];
 
 /** Params are undefined when an optional group did not match (cadastro without a step). */

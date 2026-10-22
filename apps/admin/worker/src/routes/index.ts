@@ -7,6 +7,7 @@ import apiTokens from './apiTokens';
 import auth from './auth';
 import content from './content';
 import feedback from './feedback';
+import mcp from './mcp';
 import media from './media';
 import moderation from './moderation';
 import ops from './ops';
@@ -24,5 +25,7 @@ const routes = new Hono<AppEnv>();
 for (const r of [auth, users, plans, publish, content, ai, media, moderation, ops, seasonTest, feedback, apiTokens]) {
   routes.route('/', r);
 }
+// The MCP endpoint (D): Bearer API tokens instead of a staff session, so it is not an adminApi route.
+routes.route('/', mcp);
 
 export default routes;

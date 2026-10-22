@@ -100,6 +100,8 @@ export const PROMPT_FILES = {
   tutor_system: 'tutor_system.md',
   report_system: 'recap_system.md',
   guard: 'guard.md',
+  /** tie-admin's AI draft of season test questions (spec 07, feature B). */
+  season_test_draft: 'season_test_draft.md',
 } as const;
 const PROMPTS_DIR = fileURLToPath(new URL('../../prompts/', import.meta.url));
 

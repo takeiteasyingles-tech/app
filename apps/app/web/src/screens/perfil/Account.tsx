@@ -16,7 +16,7 @@ import { todayIso } from '../cadastro/onb';
 import { PassInput } from '../entrada/Entrar';
 import { SHEET_FOCUS, useModal } from '../entrada/legal';
 
-function Sheet({
+export function Sheet({
   title,
   kicker,
   onClose,
@@ -76,8 +76,8 @@ function ResetSheet({ onClose }: { onClose: () => void }) {
     <Sheet kicker="Seus dados" title="Zerar o seu progresso?" onClose={onClose}>
       <div class="stack mt12" style={{ '--gap': '12px' }}>
         <p class="p">
-          Episódios, Flashcards, pontos, medalhas, Extras e conversas no Mic voltam do zero. A sua conta, o seu
-          perfil e as preferências continuam como estão.
+          Episódios, Flashcards, pontos, medalhas, Extras e conversas no Mic voltam do zero. A sua conta, o seu perfil e
+          as preferências continuam como estão.
         </p>
         <Btn
           label={busy ? 'Zerando…' : 'Zerar o progresso'}
@@ -180,7 +180,7 @@ async function exportData(): Promise<void> {
 const DANGER = '#B3362C';
 
 /** One action of the "Seus dados" card: a full-width row, named by its title. */
-function ActionRow({
+export function ActionRow({
   icon,
   t,
   sub,

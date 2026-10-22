@@ -19,6 +19,7 @@ import { useBusy, useLoad } from '../ui/async';
 import { Icon } from '../ui/icons';
 import { Async, Button, Card, Empty, ErrorBox, Kpi, LinkButton, Page, Pill, Skeleton } from '../ui/kit';
 import { wide } from '../ui/layout';
+import { LearningSection } from './learning';
 import type { ScreenProps } from './registry';
 
 function hello(): string {
@@ -306,6 +307,8 @@ export function Dashboard(_: ScreenProps) {
           <Skeleton rows={3} height={110} />
         )
       ) : null}
+      {/* spec 07 (C): course funnel, test pass rates and active learners per day. */}
+      {can('users.read') ? <LearningSection /> : null}
       <div class="ad-cols">
         {can('content.publish') ? <PublishCard current={stats.data?.content} /> : null}
         {can('moderation.manage') && !can('stats.read') ? (

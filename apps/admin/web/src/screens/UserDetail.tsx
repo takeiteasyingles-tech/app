@@ -50,6 +50,7 @@ import {
 import { confirmAction } from '../ui/modal';
 import { type Col, Table } from '../ui/table';
 import { toast } from '../ui/toast';
+import { UserLearning } from './learning';
 import type { ScreenProps } from './registry';
 import { MODE_LABEL, TranscriptModal } from './Transcript';
 import { RolePills, STATUS_LABEL, STATUS_TONE } from './Users';
@@ -530,6 +531,8 @@ export function UserDetail({ params }: ScreenProps) {
                 ) : null}
               </div>
             </div>
+            {/* spec 07 (C): progress, tests, study time and ratings. The screen already needs users.read. */}
+            <UserLearning userId={u.id} />
             {can('transcripts.read') ? <MicSessions userId={u.id} /> : null}
           </>
         )}

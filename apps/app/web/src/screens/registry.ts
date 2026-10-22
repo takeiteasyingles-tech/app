@@ -33,6 +33,12 @@ export const SCREENS: Readonly<Record<ScreenName, ScreenDef>> = {
   revisao: { component: lazy(() => import('./revisao/Revisao')), chrome: { tabs: true } },
   perfil: { component: lazy(() => import('./perfil/Perfil')), chrome: { tabs: true } },
   conquistas: { component: lazy(() => import('./conquistas/Conquistas')), chrome: { tabs: true } },
+  // v1 (spec 07, feature B).
+  temporadaTeste: {
+    component: lazy(() => import('./temporada/SeasonTest')),
+    chrome: { tabs: true, nav: 'trilha' },
+  },
+  certificado: { component: lazy(() => import('./certificado/Certificado')), chrome: { theme: 'cream' } },
 };
 
 export function screenFor(name: RouteName): ScreenDef | undefined {
@@ -57,4 +63,5 @@ export const SECTION: Readonly<Partial<Record<RouteName, string>>> = {
   revisao: 'revisao',
   perfil: 'perfil',
   conquistas: 'conquistas',
+  temporadaTeste: 'trilha',
 };

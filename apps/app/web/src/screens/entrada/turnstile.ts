@@ -64,7 +64,7 @@ export interface TurnstileHandle {
 }
 
 /** One Turnstile widget for a form, with the server-side `action` it is verified against. */
-export function useTurnstile(action: 'login' | 'signup' | 'reset'): TurnstileHandle {
+export function useTurnstile(action: 'login' | 'signup' | 'reset' | 'reset_request'): TurnstileHandle {
   const ref = useRef<HTMLDivElement | null>(null);
   const st = useRef({
     started: false,
