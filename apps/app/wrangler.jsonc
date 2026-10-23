@@ -3,6 +3,8 @@
   // The Worker only runs for /api/* and /m/*; everything else is served from assets (SPA fallback to index.html).
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "tie-app",
+  "account_id": "b8dcb559961c08f99e89db62e8b4c747",
+  "routes": [{ "pattern": "takeiteasyingles.com.br", "custom_domain": true }],
   "main": "worker/src/index.ts",
   "compatibility_date": "2026-09-15",
   "workers_dev": true,
@@ -47,7 +49,7 @@
   // the e-mail is logged to the Worker console instead.
   "vars": {
     "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
-    "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev",
+    "APP_ORIGIN": "https://takeiteasyingles.com.br",
     "MAIL_FROM": "Take It Easy <onboarding@resend.dev>"
   },
   "env": {

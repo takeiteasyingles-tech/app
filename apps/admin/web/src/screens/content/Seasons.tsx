@@ -8,22 +8,22 @@ import {
   type SeasonRow,
   SeasonEdit as SeasonSchema,
 } from '@tie/shared/contracts/admin';
-import { adminSeasonTestApi, type SeasonTestAdmin } from '@tie/shared/contracts/seasonTest';
 import { useState } from 'preact/hooks';
 import { call, errorMessage } from '../../api';
 import { fmtAgo, fmtDateTime } from '../../format';
 import { useEmails } from '../../people';
-import { go, parseHash } from '../../router';
+import { go } from '../../router';
 import { useLoad } from '../../ui/async';
 import type { Obj, Spec } from '../../ui/form';
-import { Async, Button, Card, Empty, LinkButton, Page, Pill, Sel } from '../../ui/kit';
+import { Async, Button, Card, Empty, Page, Sel } from '../../ui/kit';
 import { wide } from '../../ui/layout';
 import { type Col, Table } from '../../ui/table';
 import { toast } from '../../ui/toast';
 import { zodErrors } from '../../ui/validate';
-import { SCREENS, type ScreenProps } from '../registry';
+import type { ScreenProps } from '../registry';
 import { CreateModal, type CrudApi, crud, DraftNote, keysOf, patchOf, pick, StatusPill } from './common';
 import { DocEditor } from './DocEditor';
+import { blankEpisode } from './Episodes';
 
 const C = adminContentApi;
 const KEYS = keysOf(SeasonSchema.create);
@@ -42,90 +42,12 @@ const SPECS: Record<string, readonly Spec[]> = {
       wide: true,
       hint: 'O que acontece nesta temporada, em poucas frases.',
     },
-    {
-      t: 'int',
-      k: 'testPassPct',
-      label: 'Nota para passar no teste (%)',
-      min: 0,
-      max: 100,
-      hint: 'Percentual de acertos que aprova o aluno e emite o certificado. Padrão: 70.',
-    },
-    {
-      t: 'int',
-      k: 'testQuestionCount',
-      label: 'Questões do teste',
-      min: 1,
-      max: 100,
-      hint: 'Meta de questões aprovadas: o teste só abre com pelo menos esse número. Padrão: 20.',
-    },
   ],
 };
 const ALL = SPECS[''] ?? [];
 
-/** Hash path of the season test editor (feature B) when that screen is registered, else null. */
-export function seasonTestHref(n: number): string | null {
-  for (const path of [`conteudo/temporadas/${n}/teste`, `conteudo/temporadas/${n}/test`, `temporadas/${n}/teste`]) {
-    const r = parseHash(`#/${path}`);
-    if (r.name !== 'notFound' && r.name !== 'season' && SCREENS[r.name]) return path;
-  }
-  return null;
-}
-
-/** The season test summary (feature B's endpoint); null while it is not available. */
-function useSeasonTest(n: number) {
-  return useLoad<SeasonTestAdmin | null>(
-    (signal) => call(adminSeasonTestApi.get, { params: { n }, query: {}, signal }).catch(() => null),
-    [n],
-  );
-}
-
-function TestPill({ t }: { t: SeasonTestAdmin | null | undefined }) {
-  if (t === undefined) return <span class="xs">…</span>;
-  if (t === null) return <span class="xs">—</span>;
-  return t.season.published ? (
-    <Pill label="Teste publicado" tone="gr" icon="check" />
-  ) : (
-    <Pill label="Teste fechado" tone="" icon="lock" />
-  );
-}
-
-// ---------- Season page ----------
-
-function TestCard({ n, row }: { n: number; row: SeasonRow }) {
-  const test = useSeasonTest(n);
-  const href = seasonTestHref(n);
-  const t = test.data;
-  return (
-    <Card
-      title="Teste da temporada"
-      sub="A nota e o número de questões ficam acima. As questões e a abertura do teste ficam no editor do teste."
-      actions={href ? <LinkButton href={href} label="Abrir o editor do teste" icon="list" kind="navy" /> : null}
-    >
-      <div class="row wrapx" style={{ '--gap': '8px' }}>
-        <TestPill t={t} />
-        <Pill label={`Passa com ${row.testPassPct}%`} tone="navy" />
-        <Pill label={`Meta: ${row.testQuestionCount} questões`} tone="" />
-        {t ? (
-          <>
-            <Pill label={`${t.counts.approved} aprovadas`} tone="gr" />
-            <Pill label={`${t.counts.draft} rascunhos`} tone="gold" />
-            {t.counts.rejected ? <Pill label={`${t.counts.rejected} recusadas`} tone="" /> : null}
-          </>
-        ) : null}
-      </div>
-      {t?.publishProblems.length ? (
-        <ul class="sm mt8">
-          {t.publishProblems.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
-      ) : null}
-      {!href ? <p class="xs mt8">O editor de questões do teste ainda não está disponível neste painel.</p> : null}
-    </Card>
-  );
-}
-
 function EpisodesCard({ n }: { n: number }) {
+  const [creating, setCreating] = useState(false);
   const load = useLoad((signal) => call(C.episodes.list, { query: {}, signal }), [n]);
   const seasons = useLoad((signal) => call(C.seasons.list, { query: {}, signal }), []);
   const [busy, setBusy] = useState<number | null>(null);
@@ -195,6 +117,7 @@ function EpisodesCard({ n }: { n: number }) {
     <Card
       title="Episódios da temporada"
       sub="A ordem na trilha segue o número do episódio. Mudar a temporada vale para os alunos depois da próxima publicação."
+      actions={<Button label="Novo episódio" icon="plus" onClick={() => setCreating(true)} />}
     >
       <Async load={load} rows={4}>
         {() =>
@@ -211,6 +134,20 @@ function EpisodesCard({ n }: { n: number }) {
           )
         }
       </Async>
+      {creating ? (
+        <CreateModal
+          noun="Episódio"
+          idLabel="Número"
+          idHint="A posição do episódio na trilha."
+          numeric
+          suggestId={String(all.reduce((max, e) => Math.max(max, e.num), 0) + 1)}
+          onClose={() => setCreating(false)}
+          create={async (id, title) => {
+            await call(C.episodes.create, { body: { ...blankEpisode(Number(id), title), seasonN: n } });
+            go(`conteudo/episodios/${id}`);
+          }}
+        />
+      ) : null}
       {others.length ? (
         <form
           class="ad-inlineform mt8"
@@ -273,9 +210,8 @@ export function SeasonEdit({ params }: ScreenProps) {
         if (!Object.keys(patch).length) return d;
         return pick((await crud.update<Obj>(C.seasons as CrudApi, n, patch)).item, [...KEYS, 'updatedAt']);
       }}
-      after={(d) => (
+      after={() => (
         <>
-          <TestCard n={n} row={d as unknown as SeasonRow} />
           <EpisodesCard n={n} />
         </>
       )}
@@ -290,11 +226,6 @@ export function SeasonEdit({ params }: ScreenProps) {
 }
 
 // ---------- List ----------
-
-function SeasonTestCell({ n }: { n: number }) {
-  const t = useSeasonTest(n);
-  return <TestPill t={t.data} />;
-}
 
 export function Seasons(_: ScreenProps) {
   const load = useLoad((signal) => call(C.seasons.list, { query: {}, signal }), []);
@@ -337,13 +268,6 @@ export function Seasons(_: ScreenProps) {
           </span>
         );
       },
-    },
-    { key: 'test', label: 'Teste', cell: (s) => <SeasonTestCell n={s.n} /> },
-    {
-      key: 'rules',
-      label: 'Regras do teste',
-      cell: (s) => `${s.testPassPct}% · ${s.testQuestionCount} questões`,
-      desktopOnly: true,
     },
     {
       key: 'upd',

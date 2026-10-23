@@ -45,6 +45,7 @@ import {
   useLeaveGuard,
   useSaveShortcut,
 } from './common';
+import { EpisodeMaterials } from './EpisodeMaterials';
 import { EpisodePreview } from './EpisodePreview';
 import { ALL_SPECS, TAB_SPECS, TABS, type TabId, tabOf } from './episodeSpecs';
 
@@ -280,7 +281,7 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
       if (ok) {
         setLeaveGuard(null);
         toast('Episódio excluído.');
-        go('conteudo/episodios');
+        go(draft?.seasonN ? `conteudo/temporadas/${draft.seasonN}` : 'conteudo/temporadas');
       }
     });
 
@@ -291,7 +292,7 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
     <Page
       title={title}
       kicker="Episódio"
-      back="conteudo/episodios"
+      back={draft?.seasonN ? `conteudo/temporadas/${draft.seasonN}` : 'conteudo/temporadas'}
       actions={
         draft ? (
           <Button
@@ -355,6 +356,12 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
             ) : null}
           </div>
           <DraftNote />
+          <EpisodeMaterials
+            num={num}
+            ebookNum={draft.ebookNum as number | null}
+            extraId={draft.extraId as string | null}
+            seasonN={draft.seasonN as number | null}
+          />
           <ErrorSummary errors={errors} specs={ALL_SPECS} idp="ep" />
           <div class="ad-split with-preview">
             {showEditor ? (

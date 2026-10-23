@@ -12,7 +12,7 @@ import { call } from '../../api';
 import { fmtAgo, fmtDateTime } from '../../format';
 import { go } from '../../router';
 import { useLoad } from '../../ui/async';
-import type { Obj, Spec } from '../../ui/form';
+import type { CustomProps, Obj, Spec } from '../../ui/form';
 import { Async, Button, Empty, Page, Pill } from '../../ui/kit';
 import { type Col, Table } from '../../ui/table';
 import { prefixErrors, zodErrors } from '../../ui/validate';
@@ -36,6 +36,44 @@ const C = adminContentApi;
 const EB_KEYS = keysOf(EbookSchema.create);
 const TQ_KEYS = keysOf(TestQuestionEdit.create);
 
+function RequiredEpisodes({ value, set, id, err }: CustomProps) {
+  const eps = useLoad((signal) => call(C.episodes.list, { query: {}, signal }), []);
+  const selected = (value as number[]) ?? [];
+  return (
+    <fieldset id={id} class="stack ad-span" style={{ '--gap': '8px', border: 0, padding: 0, margin: 0 }}>
+      <legend class="lbl">Episódios que contam para liberar</legend>
+      <p class="xs">
+        Sem seleção, vale a conclusão do próprio episódio. Selecione outros para regras como “concluir 2 episódios”.
+      </p>
+      <Async load={eps}>
+        {({ items }) => (
+          <div class="ad-grid">
+            {items.map((e) => (
+              <label key={e.num} class="row" style={{ '--gap': '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(e.num)}
+                  onChange={(ev) =>
+                    set(ev.currentTarget.checked ? [...selected, e.num] : selected.filter((n) => n !== e.num))
+                  }
+                />
+                <span>
+                  {e.num} · {e.title}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </Async>
+      {err ? (
+        <span class="err" role="alert">
+          {err}
+        </span>
+      ) : null}
+    </fieldset>
+  );
+}
+
 type Doc = Obj & { num: number; tq: TestQuestionRow[] };
 
 const BI = (label: string): Spec[] => [
@@ -54,7 +92,6 @@ const SPECS: Record<string, readonly Spec[]> = {
     { t: 'text', k: 'title', label: 'Título' },
     { t: 'text', k: 'epsLabel', label: 'Episódios cobertos', opt: 'null', hint: 'Ex.: "Episódios 01 e 02".' },
     { t: 'text', k: 'scope', label: 'O que o e-book cobre', opt: 'null', rows: 3 },
-    { t: 'int', k: 'passScore', label: 'Acertos para passar no teste', min: 0 },
     { t: 'media', k: 'pdfMedia', label: 'PDF do e-book', kind: 'pdf', opt: 'null' },
   ],
   five: [
@@ -133,6 +170,26 @@ const SPECS: Record<string, readonly Spec[]> = {
       ],
     },
   ],
+  regras: [
+    { t: 'bool', k: 'testEnabled', label: 'Teste habilitado' },
+    { t: 'int', k: 'passScore', label: 'Acertos para passar no teste', min: 0 },
+    {
+      t: 'custom',
+      k: 'testRequiredEpisodes',
+      label: 'Episódios que contam para liberar',
+      wide: true,
+      render: (p) => <RequiredEpisodes {...p} />,
+    },
+    {
+      t: 'int',
+      k: 'testMinCompleted',
+      label: 'Quantidade de episódios completos',
+      opt: 'null',
+      min: 1,
+      max: 200,
+      hint: 'Vazio exige todos os selecionados. Conte apenas episódios com as 10 etapas concluídas.',
+    },
+  ],
   teste: [
     {
       t: 'list',
@@ -184,6 +241,7 @@ const TABS = [
   ['lead', 'Take the Lead'],
   ['chat', 'Conversa'],
   ['extras', 'Extras'],
+  ['regras', 'Regra de liberação'],
   ['teste', 'Teste'],
 ] as const;
 
@@ -301,18 +359,21 @@ function Preview({ d, tab }: { d: Doc; tab: string }) {
   );
 }
 
-export function EbookEdit({ params, q }: ScreenProps) {
+export function EbookEdit({ params, q, testOnly = false }: ScreenProps & { testOnly?: boolean }) {
   const num = Number(params.num);
+  const tabs = params.ep
+    ? TABS.filter(([id]) => (testOnly ? id === 'regras' || id === 'teste' : id !== 'regras' && id !== 'teste'))
+    : TABS;
   return (
     <DocEditor<Doc>
       load={(signal) => loadDoc(num, signal)}
-      deps={[num]}
-      title={(d) => `E-book ${d.num} · ${String(d.title || '')}`}
-      kicker="E-book"
-      back="conteudo/ebooks"
-      noun="E-book"
-      tabs={TABS}
-      tab={q.aba}
+      deps={[num, testOnly]}
+      title={(d) => (testOnly ? `Teste do episódio ${params.ep}` : `E-book ${d.num} · ${String(d.title || '')}`)}
+      kicker={testOnly ? 'Teste do episódio' : 'E-book do episódio'}
+      back={params.ep ? `conteudo/episodios/${params.ep}` : 'conteudo/temporadas'}
+      noun={testOnly ? 'Teste' : 'E-book'}
+      tabs={tabs}
+      tab={tabs.some(([id]) => id === q.aba) ? q.aba : tabs[0]?.[0]}
       specs={SPECS}
       allSpecs={ALL}
       validate={validate}
@@ -320,13 +381,39 @@ export function EbookEdit({ params, q }: ScreenProps) {
       persist={persist}
       tabOf={tabOf}
       idp="eb"
-      preview={(d, tab) => <Preview d={d} tab={tab} />}
-      remove={{
-        id: String(num),
-        body: 'Some do rascunho. Se houver episódios ligados a ele ou alunos com download ou teste, o servidor recusa.',
-        run: () => call(C.ebooks.remove, { params: { id: String(num) } }),
-        after: 'conteudo/ebooks',
-      }}
+      preview={(d, tab) =>
+        testOnly ? (
+          <aside class="ad-preview">
+            <span class="lbl">Teste do episódio {params.ep}</span>
+            <div class="card stack" style={{ '--gap': '10px' }}>
+              <span class="pill">{d.testEnabled ? 'Habilitado' : 'Em preparação'}</span>
+              <h2 class="h2">{d.tq.length} questões</h2>
+              <p class="sm">Passa com {String(d.passScore)} acertos.</p>
+              <p class="sm">
+                Libera após concluir {String(d.testMinCompleted ?? ((d.testRequiredEpisodes as number[]).length || 1))}{' '}
+                episódio(s) com as 10 etapas.
+              </p>
+              {d.tq.slice(0, 3).map((question) => (
+                <p key={question.id} class="xs">
+                  {question.n}. {question.q}
+                </p>
+              ))}
+            </div>
+          </aside>
+        ) : (
+          <Preview d={d} tab={tab} />
+        )
+      }
+      remove={
+        testOnly
+          ? undefined
+          : {
+              id: String(num),
+              body: 'Some do rascunho. Se houver episódios ligados a ele ou alunos com download ou teste, o servidor recusa.',
+              run: () => call(C.ebooks.remove, { params: { id: String(num) } }),
+              after: params.ep ? `conteudo/episodios/${params.ep}` : 'conteudo/temporadas',
+            }
+      }
     />
   );
 }

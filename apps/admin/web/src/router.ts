@@ -10,9 +10,15 @@ export type RouteName =
   | 'dashboard'
   | 'users'
   | 'user'
+  | 'students'
+  | 'student'
   | 'plans'
   | 'episodes'
   | 'episode'
+  | 'episodeBook'
+  | 'episodeExtra'
+  | 'episodeTest'
+  | 'episodeSeasonTest'
   | 'ebooks'
   | 'ebook'
   | 'extras'
@@ -46,9 +52,15 @@ export const ROUTES: readonly (readonly [RegExp, RouteName, (readonly string[])?
   [/^convite\/([\w-]{16,200})$/, 'invite', ['token']],
   [/^usuarios$/, 'users'],
   [new RegExp(`^usuarios/${ID}$`), 'user', ['id']],
+  [/^alunos$/, 'students'],
+  [new RegExp(`^alunos/${ID}$`), 'student', ['id']],
   [/^planos$/, 'plans'],
   [/^conteudo(?:\/episodios)?$/, 'episodes'],
   [/^conteudo\/episodios\/(\d{1,9})$/, 'episode', ['num']],
+  [/^conteudo\/episodios\/(\d{1,9})\/ebook$/, 'episodeBook', ['ep']],
+  [/^conteudo\/episodios\/(\d{1,9})\/extra$/, 'episodeExtra', ['ep']],
+  [/^conteudo\/episodios\/(\d{1,9})\/teste$/, 'episodeTest', ['ep']],
+  [/^conteudo\/episodios\/(\d{1,9})\/teste-temporada$/, 'episodeSeasonTest', ['ep']],
   [/^conteudo\/ebooks$/, 'ebooks'],
   [/^conteudo\/ebooks\/(\d{1,9})$/, 'ebook', ['num']],
   [/^conteudo\/extras$/, 'extras'],

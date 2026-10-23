@@ -516,7 +516,7 @@ function CourseCard({
   // prototype's "Episódio de hoje feito" read as the whole episode finished next to "6/10").
   const kick = epDone ? ' Etapa de hoje feita' : cur.started ? ' Continue o curso' : ' Comece o curso';
   const cta = epDone
-    ? 'Seguir para a próxima etapa'
+    ? 'Próxima Etapa'
     : cur.started
       ? `Continuar em ${stepName}`
       : `Começar o episódio ${cur.num}`;

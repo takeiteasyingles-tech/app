@@ -129,7 +129,7 @@ function RatingItem({ r }: { r: AdminFeedbackRow }) {
       {r.comment ? <p class="ad-fb-item-c">{r.comment}</p> : <p class="xs ad-fb-item-none">Sem comentário.</p>}
       <div class="xs ad-fb-item-f">
         {can('users.read') ? (
-          <a class="ad-linkbtn" href={`#/usuarios/${r.userId}`}>
+          <a class="ad-linkbtn" href={`#/alunos/${r.userId}`}>
             {name}
           </a>
         ) : (

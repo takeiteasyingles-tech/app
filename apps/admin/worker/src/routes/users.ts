@@ -107,6 +107,8 @@ route(routes, api.list, async (c) => {
     return `?${binds.length}`;
   };
   const where: string[] = [];
+  if (query.audience === 'students') where.push('NOT EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = x.id)');
+  if (query.audience === 'staff') where.push('EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = x.id)');
   if (query.q) {
     const like = p(`%${likeEscape(query.q)}%`);
     where.push(

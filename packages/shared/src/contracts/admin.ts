@@ -116,6 +116,7 @@ export const AdminUserRow = z.object({
 export type AdminUserRow = z.infer<typeof AdminUserRow>;
 
 export const UsersQuery = PageQuery.extend({
+  audience: z.enum(['students', 'staff']).optional(),
   q: z.string().trim().max(200).optional(),
   status: UserStatus.optional(),
   role: Role.optional(),
@@ -259,6 +260,7 @@ export const EpisodeRow = z.object({
   seasonN: z.int().positive().nullable(),
   status: EpisodeStatus,
   ebookNum: z.int().positive().nullable(),
+  extraId: z.string().nullable().default(null),
   synopsis: z.string().nullable(),
   introMedia: MediaId,
   songMedia: MediaId,
@@ -329,6 +331,9 @@ export const EbookRow = z.object({
   extrasCards: z.array(EbookExtraCard),
   pdfMedia: MediaId,
   passScore: z.int().min(0),
+  testEnabled: z.boolean().default(true),
+  testRequiredEpisodes: z.array(z.int().positive()).max(200).default([]),
+  testMinCompleted: z.int().min(1).max(200).nullable().default(null),
   updatedAt: Timestamp,
 });
 export type EbookRow = z.infer<typeof EbookRow>;
@@ -538,13 +543,25 @@ export const SeasonEdit = editable(
     synopsis: z.string().trim().max(2000).nullable(),
   }),
 );
-export const EpisodeEdit = editable(
+const EpisodeEditable = editable(
   EpisodeRow.omit({ updatedAt: true, updatedBy: true }).extend({ title: RequiredTitle }),
 );
+export const EpisodeEdit = {
+  ...EpisodeEditable,
+  update: EpisodeEditable.update.extend({ extraId: EpisodeRow.shape.extraId.removeDefault().optional() }),
+};
 export const MicPhraseEdit = editable(MicPhraseRow);
 export const ExerciseEdit = editable(ExerciseRow);
 export const ExerciseItemEdit = editable(ExerciseItemRow);
-export const EbookEdit = editable(EbookRow.omit({ updatedAt: true }).extend({ title: RequiredTitle }));
+const EbookEditable = editable(EbookRow.omit({ updatedAt: true }).extend({ title: RequiredTitle }));
+export const EbookEdit = {
+  ...EbookEditable,
+  update: EbookEditable.update.extend({
+    testEnabled: EbookRow.shape.testEnabled.removeDefault().optional(),
+    testRequiredEpisodes: EbookRow.shape.testRequiredEpisodes.removeDefault().optional(),
+    testMinCompleted: EbookRow.shape.testMinCompleted.removeDefault().optional(),
+  }),
+};
 export const TestQuestionEdit = editable(TestQuestionRow);
 export const ExtraEdit = editable(ExtraRow.extend({ title: RequiredTitle }));
 export const AlbumEdit = editable(AlbumRow.extend({ title: RequiredTitle }));

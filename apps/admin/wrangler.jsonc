@@ -3,6 +3,8 @@
   // Same D1/R2/AI resources as tie-app; the Worker only runs for /admin-api/* and /m/*.
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "tie-admin",
+  "account_id": "b8dcb559961c08f99e89db62e8b4c747",
+  "routes": [{ "pattern": "admin.takeiteasyingles.com.br", "custom_domain": true }],
   "main": "worker/src/index.ts",
   "compatibility_date": "2026-09-15",
   "workers_dev": true,
@@ -38,7 +40,8 @@
   // (see .dev.vars.example). Secrets as in tie-app.
   "vars": {
     "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
-    "APP_ORIGIN": "https://tie-admin.takeiteasyingles.workers.dev"
+    "APP_ORIGIN": "https://admin.takeiteasyingles.com.br",
+    "STUDENT_APP_ORIGIN": "https://takeiteasyingles.com.br"
   },
   "env": {
     // `npm run dev` (wrangler dev --env local): the same bindings WITHOUT the remote-only `ai`, so

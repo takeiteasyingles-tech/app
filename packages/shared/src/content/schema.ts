@@ -37,6 +37,7 @@ export const EpisodeIndexEntry = z.object({
   status: EpisodeStatus,
   season: z.int().positive().nullable(),
   ebook: z.int().positive().nullable(),
+  extra: z.string().nullable().default(null),
 });
 export type EpisodeIndexEntry = z.infer<typeof EpisodeIndexEntry>;
 
@@ -47,6 +48,10 @@ export const EbookIndexEntry = z.object({
   scope: z.string().nullable(),
   episodes: z.array(z.int().positive()),
   available: z.boolean(),
+  testQuestionCount: z.int().min(0).default(0),
+  testEnabled: z.boolean().default(true),
+  testRequiredEpisodes: z.array(z.int().positive()).default([]),
+  testMinCompleted: z.int().positive().nullable().default(null),
 });
 export type EbookIndexEntry = z.infer<typeof EbookIndexEntry>;
 
@@ -526,6 +531,9 @@ export const Ebook = z.object({
   extrasCards: z.array(EbookExtraCard),
   pdf: OptMedia,
   passScore: z.int().min(0),
+  testEnabled: z.boolean().default(true),
+  testRequiredEpisodes: z.array(z.int().positive()).default([]),
+  testMinCompleted: z.int().positive().nullable().default(null),
   test: z.array(TestPart),
   /** "Na próxima" teaser card. */
   teaser: z.object({ title: z.string(), sub: z.string() }).nullable(),

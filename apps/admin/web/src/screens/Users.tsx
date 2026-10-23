@@ -1,5 +1,5 @@
-// Usuários: search (e-mail, name, id) and filters kept in the URL, a paginated list, and the staff
-// invite (admins: editor/moderator; the super_admin also invites admins).
+// Separate student and staff lists, with search and filters kept in the URL. Staff invitations
+// belong to Usuários (admins: editor/moderator; the super_admin also invites admins).
 import type { Role } from '@tie/shared/authz';
 import { type AdminUserRow, adminPlansApi, adminUsersApi, type LinkRes } from '@tie/shared/contracts/admin';
 import { useState } from 'preact/hooks';
@@ -201,9 +201,17 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Users({ q }: ScreenProps) {
+  return <PeopleList q={q} students={false} />;
+}
+
+export function Students({ q }: ScreenProps) {
+  return <PeopleList q={q} students />;
+}
+
+function PeopleList({ q, students }: Pick<ScreenProps, 'q'> & { students: boolean }) {
   const search = q.q ?? '';
   const status = (q.status ?? '') as AdminUserRow['status'] | '';
-  const role = (q.role ?? '') as Role | '';
+  const role = (students ? '' : (q.role ?? '')) as Role | '';
   const plan = q.plan ?? '';
   const [inviting, setInviting] = useState(false);
   const plans = useLoad(
@@ -214,6 +222,7 @@ export function Users({ q }: ScreenProps) {
     (cursor, signal) =>
       call(adminUsersApi.list, {
         query: {
+          audience: students ? 'students' : 'staff',
           q: search || undefined,
           status: status || undefined,
           role: role || undefined,
@@ -223,15 +232,15 @@ export function Users({ q }: ScreenProps) {
         },
         signal,
       }),
-    [search, status, role, plan],
+    [search, status, role, plan, students],
   );
   const filtered = !!(search || status || role || plan);
   return (
     <Page
-      title="Usuários"
+      title={students ? 'Alunos' : 'Usuários'}
       kicker="Pessoas"
       actions={
-        can('roles.grant_staff') ? (
+        !students && can('roles.grant_staff') ? (
           <Button label="Convidar para a equipe" icon="mail" onClick={() => setInviting(true)} />
         ) : null
       }
@@ -253,18 +262,20 @@ export function Users({ q }: ScreenProps) {
               ['suspended', 'Suspensas'],
             ]}
           />
-          <Sel
-            ariaLabel="Papel"
-            value={role}
-            onValue={(v) => setQuery({ role: v })}
-            options={[
-              ['', 'Todos os papéis'],
-              ['super_admin', 'Super admin'],
-              ['admin', 'Admin'],
-              ['editor', 'Editor'],
-              ['moderator', 'Moderador'],
-            ]}
-          />
+          {!students ? (
+            <Sel
+              ariaLabel="Papel"
+              value={role}
+              onValue={(v) => setQuery({ role: v })}
+              options={[
+                ['', 'Todos os papéis'],
+                ['super_admin', 'Super admin'],
+                ['admin', 'Admin'],
+                ['editor', 'Editor'],
+                ['moderator', 'Moderador'],
+              ]}
+            />
+          ) : null}
           {plans.data?.length ? (
             <Sel
               ariaLabel="Plano"
@@ -286,19 +297,29 @@ export function Users({ q }: ScreenProps) {
       ) : !page.items.length ? (
         <Empty
           icon="users"
-          title={filtered ? 'Ninguém com esses filtros.' : 'Ainda não há usuários.'}
+          title={
+            filtered
+              ? 'Ninguém com esses filtros.'
+              : students
+                ? 'Ainda não há alunos.'
+                : 'Ainda não há usuários na equipe.'
+          }
           body={
-            filtered ? 'Tente outra busca ou limpe os filtros.' : 'Os alunos aparecem aqui quando criam conta no app.'
+            filtered
+              ? 'Tente outra busca ou limpe os filtros.'
+              : students
+                ? 'Os alunos aparecem aqui quando criam conta no app.'
+                : 'Convide pessoas para administrar o conteúdo e o aplicativo.'
           }
         />
       ) : (
         <>
           <Table
             rows={page.items}
-            cols={cols(plans.data)}
+            cols={students ? cols(plans.data).filter((col) => col.key !== 'roles') : cols(plans.data)}
             rowKey={(u) => u.id}
-            href={(u) => `usuarios/${u.id}`}
-            caption="Usuários"
+            href={(u) => `${students ? 'alunos' : 'usuarios'}/${u.id}`}
+            caption={students ? 'Alunos' : 'Usuários da equipe'}
           />
           {page.hasMore ? <MoreButton loading={page.loadingMore} onClick={page.more} /> : null}
           {page.error ? <ErrorBox error={page.error} retry={page.more} /> : null}

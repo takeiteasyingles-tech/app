@@ -35,6 +35,8 @@ export interface TableSpec {
   /** Primary-key columns (the ON CONFLICT target). */
   key: readonly string[];
   mode: ConflictMode;
+  /** Keep episode-owned materials when reapplying the original prototype seed. */
+  keepExisting?: readonly string[];
 }
 
 const bytes = (s: string): number => Buffer.byteLength(s, 'utf8');
@@ -54,7 +56,7 @@ export function insertStatements(spec: TableSpec, rows: readonly Row[]): string[
   const tail =
     spec.mode === 'ignore' || updates.length === 0
       ? `\nON CONFLICT(${spec.key.map(ident).join(', ')}) DO NOTHING;`
-      : `\nON CONFLICT(${spec.key.map(ident).join(', ')}) DO UPDATE SET ${updates.map((c) => `${c} = excluded.${c}`).join(', ')};`;
+      : `\nON CONFLICT(${spec.key.map(ident).join(', ')}) DO UPDATE SET ${updates.map((c) => (spec.keepExisting?.includes(c) ? `${c} = COALESCE(${ident(spec.table)}.${c}, excluded.${c})` : `${c} = excluded.${c}`)).join(', ')};`;
 
   const out: string[] = [];
   let batch: string[] = [];
@@ -84,7 +86,7 @@ export const CONTENT_SPECS: readonly TableSpec[] = [
   { table: 'steps', key: ['n'], mode: 'upsert' },
   { table: 'seasons', key: ['n'], mode: 'upsert' },
   { table: 'cast_members', key: ['name'], mode: 'upsert' },
-  { table: 'episodes', key: ['num'], mode: 'upsert' },
+  { table: 'episodes', key: ['num'], mode: 'upsert', keepExisting: ['ebook_num', 'extra_id'] },
   { table: 'mic_phrases', key: ['id'], mode: 'upsert' },
   { table: 'exercises', key: ['id'], mode: 'upsert' },
   { table: 'exercise_items', key: ['id'], mode: 'upsert' },

@@ -3,6 +3,7 @@
 // staff (approve / reject, one by one or in bulk), edited, and the test opened to learners once enough
 // questions are approved. Learners only ever see approved questions of a published test, live.
 import { LIMITS } from '@tie/shared/constants';
+import { adminContentApi } from '@tie/shared/contracts/admin';
 import {
   adminSeasonTestApi,
   type SeasonTestAdmin,
@@ -421,6 +422,45 @@ function QuestionCard({
 
 // ---------- Screen ----------
 
+function SeasonTestSettings({ t, onSaved }: { t: SeasonTestAdmin; onSaved: () => void }) {
+  const [passPct, setPassPct] = useState(String(t.season.passPct));
+  const [count, setCount] = useState(String(t.season.questionCount));
+  const [busy, run] = useBusy();
+  return (
+    <Card
+      title="Configuração da avaliação da temporada"
+      sub="Esta avaliação existente também é gerenciada dentro do episódio."
+    >
+      <form
+        class="ad-grid"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void run(async () => {
+            try {
+              await call(adminContentApi.seasons.update, {
+                params: { id: String(t.season.n) },
+                body: { testPassPct: Number(passPct), testQuestionCount: Number(count) },
+              });
+              toast('Configuração salva.');
+              onSaved();
+            } catch (error) {
+              toast(errorMessage(error), 'err');
+            }
+          });
+        }}
+      >
+        <Field id="season-test-pass" label="Nota para passar (%)">
+          <TextIn id="season-test-pass" type="number" min="0" max="100" value={passPct} onValue={setPassPct} />
+        </Field>
+        <Field id="season-test-count" label="Questões aprovadas necessárias">
+          <TextIn id="season-test-count" type="number" min="1" max="100" value={count} onValue={setCount} />
+        </Field>
+        <Button label="Salvar configuração" type="submit" busy={busy} />
+      </form>
+    </Card>
+  );
+}
+
 export function SeasonTestEditor({ params, q }: ScreenProps) {
   const n = Number(params.n) || 1;
   const filter = (['draft', 'approved', 'rejected'].includes(q.status ?? '') ? q.status : '') as Status | '';
@@ -503,7 +543,7 @@ export function SeasonTestEditor({ params, q }: ScreenProps) {
     <Page
       title={`Teste da Temporada ${n}`}
       kicker={t ? `Conteúdo · ${t.season.title}` : 'Conteúdo'}
-      back={`conteudo/temporadas/${n}`}
+      back={params.ep ? `conteudo/episodios/${params.ep}` : `conteudo/temporadas/${n}`}
       actions={actions}
       width={1080}
       bar={
@@ -531,6 +571,11 @@ export function SeasonTestEditor({ params, q }: ScreenProps) {
         <Skeleton rows={4} height={120} />
       ) : (
         <>
+          <SeasonTestSettings
+            key={`${t.season.n}:${t.season.passPct}:${t.season.questionCount}`}
+            t={t}
+            onSaved={load.reload}
+          />
           <Card
             title={
               <span class="row wrapx" style={{ '--gap': '8px' }}>

@@ -214,7 +214,17 @@ function RolesCard({ u, onRoles }: { u: UD; onRoles: (r: Role[]) => void }) {
   );
 }
 
-function ActionsCard({ u, reload, onLink }: { u: UD; reload: () => void; onLink: (l: LinkRes) => void }) {
+function ActionsCard({
+  u,
+  reload,
+  onLink,
+  back,
+}: {
+  u: UD;
+  reload: () => void;
+  onLink: (l: LinkRes) => void;
+  back: string;
+}) {
   const self = u.id === auth.value?.user.id;
   const manage = canManage(u.roles);
   const blocked = self
@@ -274,7 +284,7 @@ function ActionsCard({ u, reload, onLink }: { u: UD; reload: () => void; onLink:
     }).then((ok) => {
       if (ok) {
         toast('Conta excluída.');
-        go('usuarios');
+        go(back);
       }
     });
   const any = can('users.suspend') || can('users.reset_link') || can('users.progress_reset') || can('users.delete');
@@ -379,7 +389,12 @@ function MicSessions({ userId }: { userId: string }) {
   );
 }
 
-export function UserDetail({ params }: ScreenProps) {
+export function StudentDetail(props: ScreenProps) {
+  return <UserDetail {...props} students />;
+}
+
+export function UserDetail({ params, students = false }: ScreenProps & { students?: boolean }) {
+  const back = students ? 'alunos' : 'usuarios';
   const id = params.id ?? '';
   const load = useLoad(
     async (signal) => {
@@ -391,9 +406,9 @@ export function UserDetail({ params }: ScreenProps) {
   );
   const [link, setLink] = useState<LinkRes | null>(null);
   const u = load.data;
-  const title = u ? u.profile?.name || u.email : 'Usuário';
+  const title = u ? u.profile?.name || u.email : students ? 'Aluno' : 'Usuário';
   return (
-    <Page title={title} kicker="Usuário" back="usuarios">
+    <Page title={title} kicker={students ? 'Aluno' : 'Usuário'} back={back}>
       <Async load={load} rows={6}>
         {(u) => (
           <>
@@ -504,7 +519,7 @@ export function UserDetail({ params }: ScreenProps) {
                 </Card>
               </div>
               <div class="stack" style={{ '--gap': '18px' }}>
-                <ActionsCard u={u} reload={load.reload} onLink={setLink} />
+                <ActionsCard u={u} reload={load.reload} onLink={setLink} back={back} />
                 <PlanCard u={u} onChange={load.reload} />
                 {can('roles.grant_staff') ? (
                   <RolesCard u={u} onRoles={(roles) => load.setData((prev) => ({ ...(prev as UD), roles }))} />

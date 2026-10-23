@@ -119,6 +119,8 @@ describe('stats', () => {
     const admin = await staff(['admin']);
     const a = await learner();
     const b = await learner();
+    const suspendedStaff = await staff(['editor']);
+    await exec("UPDATE users SET status = 'suspended' WHERE id = ?", suspendedStaff.id);
     await exec("UPDATE users SET status = 'suspended' WHERE id = ?", b.id);
     await exec('UPDATE users SET last_login_at = NULL, created_at = 1 WHERE id = ?', b.id);
     await exec('DELETE FROM sessions WHERE user_id = ?', b.id);

@@ -256,7 +256,7 @@ export function Plans(_: ScreenProps) {
         p.users ? (
           <a
             class="ad-countlink"
-            href={`#/usuarios?plan=${encodeURIComponent(p.slug)}`}
+            href={`#/alunos?plan=${encodeURIComponent(p.slug)}`}
             aria-label={`Ver ${plural(p.users, 'pessoa', 'pessoas')} no plano ${p.name}`}
           >
             {fmtInt(p.users)}

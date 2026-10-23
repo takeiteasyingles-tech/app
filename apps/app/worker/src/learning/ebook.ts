@@ -8,8 +8,9 @@ import {
   type TestResult,
   type TestSubmitBody,
 } from '@tie/shared';
-import { batch, batchRun, fail, one, type Query, q, run } from '@tie/worker-core';
-import { ebookOpen } from './content';
+import { testGate } from '@tie/shared/domain/testGate';
+import { all, batch, batchRun, fail, one, type Query, q, run } from '@tie/worker-core';
+import { contentSource, ebookOpen } from './content';
 import type { LearningDeps } from './deps';
 import { checkAnswer, type GradableQuestion, isCorrect, type TestQuestionRow, toGradable } from './grade';
 
@@ -23,6 +24,9 @@ interface EbookRow {
   num: number;
   pass_score: number;
   pdf_key: string | null;
+  test_enabled?: number;
+  test_required_episodes?: string;
+  test_min_completed?: number | null;
 }
 
 interface AnswerRow {
@@ -87,7 +91,11 @@ async function loadTest(d: LearningDeps, n: number) {
   const [availability, [ebooks, questions, answers, doneRows, resultRows]] = await Promise.all([
     ebookOpen(d, n),
     batch(d.db, [
-      q<EbookRow>(d.db, 'SELECT num, pass_score, NULL AS pdf_key FROM ebooks WHERE num = ?', n),
+      q<EbookRow>(
+        d.db,
+        'SELECT num, pass_score, test_enabled, test_required_episodes, test_min_completed, NULL AS pdf_key FROM ebooks WHERE num = ?',
+        n,
+      ),
       q<TestQuestionRow>(
         d.db,
         'SELECT id, n, opts, answer_idx, accept, show FROM ebook_test_questions WHERE ebook_num = ? ORDER BY n',
@@ -116,12 +124,35 @@ async function loadTest(d: LearningDeps, n: number) {
   const row = ebooks[0];
   if (!row) throw fail('not_found');
   if (!availability.open) throw fail('content_unavailable');
-  // The trilha opens the test once every published episode of the e-book is done (Trilha.tsx
-  // ExtrasNode); the endpoints hold the same line (spec 06 "Progress and e-book tests").
-  const done = new Set(doneRows.map((r) => r.episode_num));
-  const missing = availability.episodes.filter((e) => !done.has(e));
-  if (missing.length) {
-    throw fail('gated', `Termine os episódios do e-book ${n} para fazer o teste.`, { episodes: missing });
+  // Use exactly the published release rule rendered in the trail. Older snapshots keep the
+  // original all-episodes rule; unpublished edits to the live row must never leak into that gate.
+  const snapshot = availability.source === 'snapshot' ? availability.snapshot : null;
+  const required: number[] = snapshot
+    ? (snapshot.testRequiredEpisodes ?? [])
+    : JSON.parse(row.test_required_episodes ?? '[]');
+  const enabled = snapshot ? (snapshot.testEnabled ?? true) : row.test_enabled !== 0;
+  if (!enabled) throw fail('content_unavailable', 'O teste deste episódio ainda não está disponível.');
+  const source = await contentSource(d);
+  const published =
+    source.kind === 'snapshot'
+      ? source.catalog.episodes
+      : await all<{ num: number; status: string }>(d.db, "SELECT num, status FROM episodes WHERE status='published'");
+  const availableEpisodes = new Set(published.filter((e) => e.status === 'published').map((e) => e.num));
+  const done = Object.fromEntries(
+    doneRows.filter((r) => availableEpisodes.has(r.episode_num)).map((r) => [String(r.episode_num), true]),
+  );
+  const gate = testGate(
+    availability.episodes,
+    done,
+    required,
+    snapshot ? (snapshot.testMinCompleted ?? null) : (row.test_min_completed ?? null),
+    enabled,
+    [...availableEpisodes],
+  );
+  if (!gate.unlocked) {
+    throw fail('gated', `Conclua mais ${gate.remaining} episódio(s) para fazer este teste.`, {
+      episodes: gate.episodes.filter((ep) => !done[String(ep)]),
+    });
   }
 
   let passScore = row.pass_score;

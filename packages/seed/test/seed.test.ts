@@ -1,5 +1,7 @@
 // The whole prototype → rows → SQL → compiled snapshot pipeline, without touching wrangler.
 import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { type CompiledContent, compileContent } from '@tie/shared/content/compile';
 import { Catalog, Ebook, Episode } from '@tie/shared/content/schema';
 import { BadgeRule } from '@tie/shared/contracts/game';
@@ -115,6 +117,31 @@ describe('extraction and transform', () => {
 });
 
 describe('SQL', () => {
+  it('keeps episode-owned books and extras when seeding a populated database twice', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      db.exec('PRAGMA foreign_keys=ON');
+      const migrations = new URL('../../db/migrations/', import.meta.url);
+      for (const file of readdirSync(migrations)
+        .filter((name) => name.endsWith('.sql'))
+        .sort())
+        db.exec(readFileSync(new URL(file, migrations), 'utf8'));
+      const provisioning = `-- BEGIN EPISODE MATERIALS${readFileSync(new URL('0009_episode_materials.sql', migrations), 'utf8').split('-- BEGIN EPISODE MATERIALS')[1]}`;
+      const sql = seedStatements(S.content, S.config).join('\n');
+      db.exec(sql);
+      db.exec(provisioning);
+      const first = db.prepare('SELECT num,ebook_num,extra_id FROM episodes ORDER BY num').all();
+      expect(new Set(first.map((row) => row.ebook_num)).size).toBe(20);
+      const count = db.prepare('SELECT COUNT(*) AS n FROM ebook_test_questions').get();
+      db.exec(sql);
+      db.exec(provisioning);
+      expect(db.prepare('SELECT num,ebook_num,extra_id FROM episodes ORDER BY num').all()).toEqual(first);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM ebook_test_questions').get()).toEqual(count);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
   it('keeps every statement under the D1 limit and upserts content', () => {
     const stmts = seedStatements(S.content, S.config);
     for (const s of stmts) expect(Buffer.byteLength(s)).toBeLessThanOrEqual(MAX_STATEMENT_BYTES);

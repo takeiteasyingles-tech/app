@@ -16,6 +16,41 @@ describe('content CRUD', () => {
     editor = await staff(['editor']);
   });
 
+  it('creates an episode with exclusive book and draft extra and rejects reusing its materials', async () => {
+    const { updatedAt: _at, updatedBy: _by, ...body } = (await editor.client.json(p(C.episodes.get.path, 1))).body.item;
+    const created = await editor.client.json(C.episodes.create.path, {
+      json: { ...body, num: 3, title: 'Novo episódio', ebookNum: null, extraId: null },
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.item.ebookNum).not.toBe(1);
+    expect(created.body.item.extraId).toBe('episode-3-extra');
+    expect(await one('SELECT status FROM extras WHERE id=?', created.body.item.extraId)).toEqual({ status: 'draft' });
+    const reuse = await editor.client.json(p(C.episodes.update.path, 2), {
+      method: 'PUT',
+      json: { ebookNum: created.body.item.ebookNum },
+    });
+    expect(reuse.status).toBe(400);
+    expect(reuse.body.error.details.issues).toContainEqual(
+      expect.objectContaining({ path: 'ebookNum', code: 'shared' }),
+    );
+  });
+
+  it('validates test release rules and preserves them when only the book title changes', async () => {
+    const path = p(C.ebooks.update.path, 1);
+    expect(
+      (await editor.client.json(path, { method: 'PUT', json: { testRequiredEpisodes: [1, 2], testMinCompleted: 3 } }))
+        .status,
+    ).toBe(400);
+    expect((await editor.client.json(path, { method: 'PUT', json: { testRequiredEpisodes: [999] } })).status).toBe(400);
+    const set = await editor.client.json(path, {
+      method: 'PUT',
+      json: { testEnabled: false, testRequiredEpisodes: [1, 2], testMinCompleted: 2 },
+    });
+    expect(set.status).toBe(200);
+    const rename = await editor.client.json(path, { method: 'PUT', json: { title: 'Livro do episódio' } });
+    expect(rename.body.item).toMatchObject({ testEnabled: false, testRequiredEpisodes: [1, 2], testMinCompleted: 2 });
+  });
+
   it('lists, filters by parent and reads items in API shape', async () => {
     const eps = await editor.client.json(C.episodes.list.path);
     expect(eps.body.items.map((e: { num: number }) => e.num)).toEqual([1, 2]);

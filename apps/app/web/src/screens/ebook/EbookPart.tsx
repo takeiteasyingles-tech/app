@@ -2,8 +2,10 @@
 // five = bilingual culture pages (TIE.blocks), real = book vs street, lead = scripted chat with
 // Margaret, teste = the 20-question test graded on the server.
 import type { Ebook } from '@tie/shared/content/schema';
+import { testGate } from '@tie/shared/domain/testGate';
 import { type ScreenProps, useChrome } from '../../frame';
-import { EB, isDesk, LoadFailed, PartFrame, pad2, useEbook } from './common';
+import { catalog, state } from '../../store';
+import { ebookNumber, isDesk, LoadFailed, PartFrame, pad2, useEbook } from './common';
 import { Five } from './Five';
 import { Lead } from './Lead';
 import { Teste } from './Teste';
@@ -142,6 +144,7 @@ function Real({ eb, desk }: { eb: Ebook; desk: boolean }) {
 }
 
 export default function EbookPart({ params }: ScreenProps) {
+  const EB = ebookNumber();
   const part = params.part ?? '';
   const head = HEAD[part] ?? { kick: 'Extra', title: '' };
   // Unlike the prototype (a bare full-screen page), the parts keep the side nav / tab bar of the
@@ -151,7 +154,35 @@ export default function EbookPart({ params }: ScreenProps) {
   const { data: eb, error } = useEbook();
   if (error) return <LoadFailed back={`ebook/${EB}`} kicker={`E-book ${pad2(EB)} · ${head.kick}`} title={head.title} />;
   if (!eb) return <PartFrame kick={head.kick} title={head.title} />;
-  if (part === 'teste') return <Teste eb={eb} />;
+  if (part === 'teste') {
+    const published = new Set(
+      catalog.value?.episodes.filter((e) => e.status === 'published').map((e) => String(e.num)) ?? [],
+    );
+    const done = Object.fromEntries(Object.entries(state.value.epsDone).filter(([key]) => published.has(key)));
+    const gate = testGate(
+      eb.episodes,
+      done,
+      eb.testRequiredEpisodes,
+      eb.testMinCompleted,
+      eb.testEnabled,
+      [...published].map(Number),
+    );
+    if (!gate.unlocked || !eb.test.length)
+      return (
+        <PartFrame kick={head.kick} title={head.title}>
+          <div class="card stack">
+            <h2 class="h2">Teste bloqueado</h2>
+            <p>
+              {!eb.testEnabled || !eb.test.length
+                ? 'O teste deste episódio está em preparação.'
+                : `Conclua mais ${gate.remaining} episódio(s) com as 10 etapas para liberar este teste.`}
+            </p>
+            <a href="#/trilha">Voltar à trilha</a>
+          </div>
+        </PartFrame>
+      );
+    return <Teste key={eb.num} eb={eb} />;
+  }
   return (
     <PartFrame kick={head.kick} title={head.title} intro={head.intro}>
       {part === 'five' ? <Five list={eb.five} desk={desk} /> : null}

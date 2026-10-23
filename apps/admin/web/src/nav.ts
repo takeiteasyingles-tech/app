@@ -19,6 +19,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: 'Pessoas',
     items: [
+      { href: 'alunos', label: 'Alunos', icon: 'users', perm: 'users.read' },
       { href: 'usuarios', label: 'Usuários', icon: 'users', perm: 'users.read' },
       { href: 'moderacao', label: 'Moderação', icon: 'flag', perm: 'moderation.manage' },
       { href: 'feedbacks', label: 'Feedbacks', icon: 'star', perm: 'feedback.read' },
@@ -30,9 +31,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: 'Conteúdo',
     items: [
       { href: 'conteudo/temporadas', label: 'Temporadas', icon: 'layers', perm: 'content.edit' },
-      { href: 'conteudo/episodios', label: 'Episódios', icon: 'trail', perm: 'content.edit' },
-      { href: 'conteudo/ebooks', label: 'E-books', icon: 'book', perm: 'content.edit' },
-      { href: 'conteudo/extras', label: 'Extras', icon: 'tv', perm: 'content.edit' },
       { href: 'conteudo/albuns', label: 'Álbuns', icon: 'music', perm: 'content.edit' },
       { href: 'conteudo/assistentes', label: 'Assistentes', icon: 'mic', perm: 'content.edit' },
       { href: 'conteudo/missoes', label: 'Missões do Mic', icon: 'target', perm: 'content.edit' },

@@ -88,7 +88,7 @@ export function Certificates({ q }: ScreenProps) {
         <span class="stack" style={{ '--gap': '2px' }}>
           <span>{c.fullName}</span>
           {c.userEmail ? (
-            <a class="ad-linkbtn xs" href={`#/usuarios/${c.userId}`}>
+            <a class="ad-linkbtn xs" href={`#/alunos/${c.userId}`}>
               {c.userEmail}
             </a>
           ) : (

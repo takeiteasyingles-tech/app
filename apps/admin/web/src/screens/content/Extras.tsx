@@ -213,7 +213,7 @@ export function ExtraEdit({ params, q }: ScreenProps) {
       deps={[id]}
       title={(d) => String(d.title || id)}
       kicker="Extra"
-      back="conteudo/extras"
+      back={params.ep ? `conteudo/episodios/${params.ep}` : 'conteudo/temporadas'}
       noun="Extra"
       tabs={TABS}
       tab={q.aba}
@@ -239,7 +239,7 @@ export function ExtraEdit({ params, q }: ScreenProps) {
         id,
         body: 'Some do rascunho. Se algum aluno já assistiu, o servidor recusa: mude para Rascunho em vez de excluir.',
         run: () => crud.remove(C.extras as CrudApi, id),
-        after: 'conteudo/extras',
+        after: params.ep ? `conteudo/episodios/${params.ep}` : 'conteudo/temporadas',
       }}
     />
   );

@@ -1,6 +1,7 @@
 // Form specs of the episode editor, one list per tab. The document edited is the episode row plus its
 // child rows: `mic` (Take the Mic phrases) and `ex` (Take Action exercises, each with its `items`).
 import type { Spec } from '../../ui/form';
+import { EpisodeExtraPicker } from './EpisodeReferences';
 
 export type TabId =
   | 'geral'
@@ -45,9 +46,17 @@ const GERAL: Spec[] = [
     t: 'int',
     k: 'ebookNum',
     label: 'E-book',
+    ro: true,
     opt: 'null',
     min: 1,
     hint: 'O e-book que cobre este episódio (etapa 2).',
+  },
+  {
+    t: 'custom',
+    k: 'extraId',
+    label: 'Extra do episódio',
+    hint: 'Escolha um extra exclusivo. Os materiais já vinculados a outro episódio não aparecem.',
+    render: EpisodeExtraPicker,
   },
   { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3, hint: 'Mostrada na Intro (etapa 3).' },
   {

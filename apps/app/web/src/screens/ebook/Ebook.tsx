@@ -1,6 +1,8 @@
 // E-book hub (#/ebook/1): port of TIE.screens.ebook in prototipo/js/screens/curso.js. Scope card, the
 // two episodes, the optional extras (Take Five, Take the Lead, Take it for Real, Take It Out "Em
 // produção"), the test card with the last score, and the "Na próxima" teaser.
+
+import { testGate } from '@tie/shared/domain/testGate';
 import { Btn, Icon, Topbar } from '@tie/ui';
 import { type ScreenProps, useChrome } from '../../frame';
 import { layoutOf } from '../../shell';
@@ -8,7 +10,7 @@ import { catalog, state } from '../../store';
 import {
   DESK_WRAP,
   DeskHead,
-  EB,
+  ebookNumber,
   ebookSeason,
   LoadFailed,
   lessonsLabel,
@@ -26,6 +28,7 @@ import {
 const DASH = { '--gap': '6px', borderWidth: '1.5px', borderColor: '#A3946B', background: '#fff' };
 
 export default function Ebook(_props: ScreenProps) {
+  const EB = ebookNumber();
   useChrome({ title: `E-book ${EB}` });
   const s = state.value;
   const c = catalog.value;
@@ -89,26 +92,46 @@ export default function Ebook(_props: ScreenProps) {
   );
   // Desktop: one full-width card, the text on the left and the button (its own width, centred on the
   // text block) on the right, with the same padding all round. Phone: the prototype's stack.
-  const testCard = eb ? (
-    desk ? (
-      <div class="card navy row" style={{ '--gap': '32px', padding: '24px', alignItems: 'center' }}>
-        <div class="stack grow" style={{ '--gap': '8px', minWidth: '0' }}>
+  const gate = eb
+    ? testGate(
+        eb.episodes,
+        s.epsDone,
+        eb.testRequiredEpisodes,
+        eb.testMinCompleted,
+        eb.testEnabled,
+        c?.episodes.filter((e) => e.status === 'published').map((e) => e.num),
+      )
+    : null;
+  const testCard =
+    eb && (!gate?.unlocked || !eb.test.length) ? (
+      <div class="card stack">
+        <div class="lbl">Teste do episódio</div>
+        <p class="sm">
+          {!eb.testEnabled || !eb.test.length
+            ? 'Teste em preparação.'
+            : `Conclua mais ${gate?.remaining ?? 0} episódio(s) para liberar o teste.`}
+        </p>
+      </div>
+    ) : eb ? (
+      desk ? (
+        <div class="card navy row" style={{ '--gap': '32px', padding: '24px', alignItems: 'center' }}>
+          <div class="stack grow" style={{ '--gap': '8px', minWidth: '0' }}>
+            {testText}
+          </div>
+          <div style={{ flex: 'none' }}>
+            <Btn
+              label={last != null ? 'Refazer o teste' : `Fazer o teste · +${testPts} pontos`}
+              go={`ebook/${EB}/teste`}
+            />
+          </div>
+        </div>
+      ) : (
+        <div class="card navy stack" style={{ '--gap': '12px' }}>
           {testText}
+          {testBtn}
         </div>
-        <div style={{ flex: 'none' }}>
-          <Btn
-            label={last != null ? 'Refazer o teste' : `Fazer o teste · +${testPts} pontos`}
-            go={`ebook/${EB}/teste`}
-          />
-        </div>
-      </div>
-    ) : (
-      <div class="card navy stack" style={{ '--gap': '12px' }}>
-        {testText}
-        {testBtn}
-      </div>
-    )
-  ) : null;
+      )
+    ) : null;
   // "Na próxima": the prototype's dashed card (what is still to come), on white with a clearly visible
   // edge and a book mark, as wide as the test card above it and only as tall as its text.
   const teaser = eb?.teaser ? (
@@ -234,7 +257,12 @@ export default function Ebook(_props: ScreenProps) {
                     </>
                   );
                   return x.go ? (
-                    <a key={x.name} href={`#/${x.go}`} class="card stack" style={{ '--gap': '6px' }}>
+                    <a
+                      key={x.name}
+                      href={`#/${x.go.replace(/^ebook\/\d+\//, `ebook/${EB}/`)}`}
+                      class="card stack"
+                      style={{ '--gap': '6px' }}
+                    >
                       {inner}
                     </a>
                   ) : (

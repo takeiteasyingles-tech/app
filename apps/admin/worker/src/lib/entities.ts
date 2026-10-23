@@ -153,6 +153,7 @@ const episodes: Entity = {
     f('seasonN', 'season_n', 'int'),
     f('status', 'status'),
     f('ebookNum', 'ebook_num', 'int'),
+    f('extraId', 'extra_id'),
     f('synopsis', 'synopsis'),
     f('introMedia', 'intro_media', 'media', ['audio']),
     f('songMedia', 'song_media', 'media', ['audio']),
@@ -177,6 +178,7 @@ const episodes: Entity = {
   refs: [
     { key: 'seasonN', table: 'seasons', col: 'n', label: 'temporada' },
     { key: 'ebookNum', table: 'ebooks', col: 'num', label: 'e-book' },
+    { key: 'extraId', table: 'extras', col: 'id', label: 'extra' },
   ],
   inUse: [
     { label: 'progresso de alunos', sql: 'SELECT COUNT(*) AS n FROM episode_progress WHERE episode_num = ?' },
@@ -282,6 +284,9 @@ const ebooks: Entity = {
     f('extrasCards', 'extras_cards', 'json'),
     f('pdfMedia', 'pdf_media', 'media', ['pdf']),
     f('passScore', 'pass_score', 'int'),
+    f('testEnabled', 'test_enabled', 'bool'),
+    f('testRequiredEpisodes', 'test_required_episodes', 'json'),
+    f('testMinCompleted', 'test_min_completed', 'int'),
   ],
   orderBy: 'num',
   stamp: { updatedAt: true, updatedBy: false },
@@ -379,7 +384,10 @@ const extras: Entity = {
   ],
   orderBy: 'sort, id',
   api: C.extras,
-  inUse: [{ label: 'progresso de alunos', sql: 'SELECT COUNT(*) AS n FROM user_extras WHERE extra_id = ?' }],
+  inUse: [
+    { label: 'episódios', sql: 'SELECT COUNT(*) AS n FROM episodes WHERE extra_id = ?' },
+    { label: 'progresso de alunos', sql: 'SELECT COUNT(*) AS n FROM user_extras WHERE extra_id = ?' },
+  ],
 };
 
 const albums: Entity = {

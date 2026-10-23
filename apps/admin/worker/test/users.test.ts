@@ -45,6 +45,28 @@ describe('users', () => {
     expect((await moderator.client.send(`${U.list.path}?cursor=lixo`)).status).toBe(400);
   });
 
+  it('separates students from staff before filtering and pagination', async () => {
+    const a = await learner({ email: 'ana@test.local', name: 'Ana' });
+    const b = await learner({ email: 'bruno@test.local', name: 'Bruno' });
+    await exec("UPDATE users SET status = 'suspended' WHERE id = ?", b.id);
+    const ids = (items: { id: string }[]) => items.map((u) => u.id).sort();
+    const first = await moderator.client.json(`${U.list.path}?audience=students&limit=1`);
+    expect(first.body.items).toHaveLength(1);
+    expect(first.body.nextCursor).toBeTruthy();
+    const second = await moderator.client.json(
+      `${U.list.path}?audience=students&limit=1&cursor=${first.body.nextCursor}`,
+    );
+    expect(ids([...first.body.items, ...second.body.items])).toEqual([a.id, b.id].sort());
+    expect(second.body.nextCursor).toBeNull();
+    const team = await moderator.client.json(`${U.list.path}?audience=staff`);
+    expect(ids(team.body.items)).toEqual([admin.id, moderator.id].sort());
+    const suspended = await moderator.client.json(`${U.list.path}?audience=students&status=suspended`);
+    expect(ids(suspended.body.items)).toEqual([b.id]);
+    expect((await moderator.client.json(`${U.list.path}?audience=staff&q=${a.id}`)).body.items).toEqual([]);
+    expect((await moderator.client.json(`${U.list.path}?audience=students&role=admin`)).body.items).toEqual([]);
+    expect((await moderator.client.send(`${U.list.path}?audience=invalid`)).status).toBe(400);
+  });
+
   it('shows the detail with plan, quota, photo and counts', async () => {
     const l = await learner();
     await exec("UPDATE user_plans SET plan_id = 'P1', expires_at = ? WHERE user_id = ?", Date.now() + 86_400_000, l.id);

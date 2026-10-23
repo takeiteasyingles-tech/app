@@ -93,6 +93,54 @@ export async function checkItem(db: D1Database, e: Entity, item: Item): Promise<
     issues.push({ path: e.pk.key, code: 'invalid_id', message: 'Número inválido.' });
   }
   issues.push(...(e.check?.(item) ?? []));
+  if (e.name === 'episodes') {
+    for (const [key, col] of [
+      ['ebookNum', 'ebook_num'],
+      ['extraId', 'extra_id'],
+    ] as const) {
+      if (item[key] == null) continue;
+      const shared = await all(
+        db,
+        `SELECT num FROM episodes WHERE ${col}=? AND num<>?
+           AND NOT EXISTS(SELECT 1 FROM episodes current WHERE current.num=? AND current.${col}=?)`,
+        item[key] as string | number,
+        pk as number,
+        pk as number,
+        item[key] as string | number,
+      );
+      if (shared.length)
+        issues.push({
+          path: key,
+          code: 'shared',
+          message: 'Este material já pertence a outro episódio. Escolha um material exclusivo.',
+        });
+    }
+  }
+  if (e.name === 'ebooks') {
+    const required = item.testRequiredEpisodes as number[];
+    if (new Set(required).size !== required.length)
+      issues.push({ path: 'testRequiredEpisodes', code: 'duplicate', message: 'Não repita episódios na regra.' });
+    if (item.testMinCompleted != null && required.length && Number(item.testMinCompleted) > required.length)
+      issues.push({
+        path: 'testMinCompleted',
+        code: 'unreachable',
+        message: 'A quantidade exigida não pode superar os episódios selecionados.',
+      });
+    for (const num of required) {
+      const found = await all(db, 'SELECT num FROM episodes WHERE num=?', num);
+      if (!found.length)
+        issues.push({ path: 'testRequiredEpisodes', code: 'unknown_ref', message: `O episódio ${num} não existe.` });
+    }
+    if (!required.length && item.testMinCompleted != null) {
+      const linked = await all(db, 'SELECT num FROM episodes WHERE ebook_num=?', pk as number);
+      if (Number(item.testMinCompleted) > Math.max(1, linked.length))
+        issues.push({
+          path: 'testMinCompleted',
+          code: 'unreachable',
+          message: 'Selecione os episódios que contam para liberar este teste.',
+        });
+    }
+  }
   const lookups: { path: string; label: string; query: Query<{ n: number }> }[] = [];
   if (e.parent) {
     const v = item[e.parent.key];

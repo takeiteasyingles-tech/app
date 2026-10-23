@@ -49,7 +49,7 @@ function StatsBlock({ s }: { s: AdminStats }) {
             sub={`${fmtInt(u.new7d)} novos em 7 dias`}
             icon="users"
             tone="navy"
-            href="usuarios"
+            href="alunos"
           />
           <Kpi label="Ativos hoje" value={fmtInt(u.activeToday)} sub="desde a meia-noite" icon="fire" tone="or" />
           <Kpi
@@ -60,7 +60,7 @@ function StatsBlock({ s }: { s: AdminStats }) {
             tone="bl"
           />
           <Kpi label="Ativos em 30 dias" value={fmtInt(u.active30d)} icon="clock" />
-          <Kpi label="Suspensos" value={fmtInt(u.suspended)} icon="lock" href="usuarios?status=suspended" />
+          <Kpi label="Suspensos" value={fmtInt(u.suspended)} icon="lock" href="alunos?status=suspended" />
         </div>
       </section>
       <div class="ad-cols">

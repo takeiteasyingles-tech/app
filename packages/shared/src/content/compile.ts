@@ -71,6 +71,7 @@ export interface EpisodeRowDb {
   season_n: Num;
   status: string;
   ebook_num: Num;
+  extra_id?: Text;
   synopsis: Text;
   intro_media: Text;
   song_media: Text;
@@ -133,6 +134,9 @@ export interface EbookRowDb {
   extras_cards: string;
   pdf_media: Text;
   pass_score: number;
+  test_enabled?: number;
+  test_required_episodes?: string;
+  test_min_completed?: Num;
   updated_at: number;
 }
 export interface TestQuestionRowDb {
@@ -461,6 +465,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
 
   /** An e-book is available when it has its own pages or a test (the prototype only has e-book 1). */
   const ebookAvailable = (e: EbookRowDb): boolean =>
+    e.pdf_media != null ||
     (questionsByEbook.get(e.num)?.length ?? 0) > 0 ||
     J<unknown[]>(e.five, [], `ebooks.${e.num}.five`).length > 0 ||
     J<unknown[]>(e.lead, [], `ebooks.${e.num}.lead`).length > 0;
@@ -471,6 +476,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     status: e.status as EpisodeIndexEntry['status'],
     season: e.season_n,
     ebook: e.ebook_num,
+    extra: e.extra_id ?? null,
   }));
   const ebookIndex: EbookIndexEntry[] = ebooksSorted.map((e) => ({
     num: e.num,
@@ -479,6 +485,10 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     scope: e.scope,
     episodes: epsOfEbook(e.num),
     available: ebookAvailable(e),
+    testQuestionCount: questionsByEbook.get(e.num)?.length ?? 0,
+    testEnabled: e.test_enabled !== 0,
+    testRequiredEpisodes: J<number[]>(e.test_required_episodes ?? '[]', [], `ebooks.${e.num}.test_required_episodes`),
+    testMinCompleted: e.test_min_completed ?? null,
   }));
 
   // ----- Onboarding option lists -----
@@ -789,6 +799,13 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       extrasCards: J(eb.extras_cards, [], `ebooks.${eb.num}.extras_cards`),
       pdf: url(eb.pdf_media, `ebooks.${eb.num}.pdf_media`),
       passScore: eb.pass_score,
+      testEnabled: eb.test_enabled !== 0,
+      testRequiredEpisodes: J<number[]>(
+        eb.test_required_episodes ?? '[]',
+        [],
+        `ebooks.${eb.num}.test_required_episodes`,
+      ),
+      testMinCompleted: eb.test_min_completed ?? null,
       test: parts.filter(Boolean),
       teaser: teasers[String(eb.num)] ?? null,
     };

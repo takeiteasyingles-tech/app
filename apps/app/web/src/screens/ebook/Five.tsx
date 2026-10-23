@@ -7,7 +7,7 @@
 import type { Block, BlockRow } from '@tie/shared/content/schema';
 import { activator, Btn, Icon } from '@tie/ui';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { EB } from './common';
+import { ebookNumber } from './common';
 
 const BAD = 'EVITE';
 
@@ -281,7 +281,7 @@ function Index({
 }
 
 /** The e-book's other parts, after the last page, so the reading leads somewhere next. */
-const MORE: readonly { go: string; name: string; meta: string; icon: string }[] = [
+const more = (EB: number): readonly { go: string; name: string; meta: string; icon: string }[] => [
   { go: `ebook/${EB}/lead`, name: 'Take the Lead', meta: 'Conversa com a Margaret', icon: 'chat' },
   { go: `ebook/${EB}/real`, name: 'Take it for Real', meta: 'O livro × a rua', icon: 'bulb' },
   { go: `ebook/${EB}/teste`, name: 'Take the episode test', meta: '20 questões', icon: 'pen' },
@@ -300,7 +300,7 @@ function More({ desk }: { desk: boolean }) {
             : { padding: '4px 16px' }
         }
       >
-        {MORE.map((x, j) => (
+        {more(ebookNumber()).map((x, j) => (
           <a
             key={x.go}
             href={`#/${x.go}`}

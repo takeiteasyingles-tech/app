@@ -4,11 +4,12 @@ import { norm } from '@tie/shared/domain/norm';
 import type { TestAnswer } from '@tie/shared/state';
 import { activator, Icon, Topbar } from '@tie/ui';
 import type { ComponentChildren } from 'preact';
+import { route } from '../../router';
 import { layoutOf } from '../../shell';
 import { loadEbook, state, useContent } from '../../store';
 
 /** The only e-book with screens (ROUTES: #/ebook/1 and #/ebook/1/:part). */
-export const EB = 1;
+export const ebookNumber = (): number => Number(route.value.params.num ?? 1);
 
 export const pad2 = (n: number): string => String(n).padStart(2, '0');
 
@@ -20,7 +21,8 @@ export const sub = (t: string | undefined, name: string | undefined): string =>
 
 /** ebook/1.json, shared with every screen that asked for it. */
 export function useEbook() {
-  return useContent<Ebook>(() => loadEbook(EB), []);
+  const num = ebookNumber();
+  return useContent<Ebook>(() => loadEbook(num), [num]);
 }
 
 /** "Lições 1 e 2" from the e-book's episodes. */
@@ -139,6 +141,7 @@ export function PartFrame({
   children?: ComponentChildren;
 }) {
   const desk = isDesk();
+  const EB = ebookNumber();
   const kicker = `E-book ${pad2(EB)} · ${kick}`;
   return (
     <>

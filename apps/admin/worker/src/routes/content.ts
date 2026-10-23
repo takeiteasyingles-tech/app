@@ -89,6 +89,35 @@ function mountEntity(e: Entity): void {
     const stmts: Query<unknown>[] = [
       q(db, `INSERT INTO ${e.table}(${cols.join(', ')}) VALUES(${cols.map(() => '?').join(', ')})`, ...vals),
     ];
+    if (e.name === 'episodes') {
+      if (item.ebookNum == null) {
+        stmts.push(
+          q(
+            db,
+            `INSERT INTO ebooks(num,title,eps_label,pass_score,updated_at)
+            SELECT COALESCE(MAX(num),0)+1,?, ?,0,? FROM ebooks`,
+            `E-book · ${String(item.title)}`,
+            `Episódio ${id}`,
+            now,
+          ),
+          q(db, 'UPDATE episodes SET ebook_num=(SELECT MAX(num) FROM ebooks) WHERE num=?', id),
+        );
+      }
+      if (item.extraId == null) {
+        const extraId = `episode-${id}-extra`;
+        stmts.push(
+          q(
+            db,
+            `INSERT INTO extras(id,title,format,genres,themes,cast_list,lines,vocab,sort,status)
+            VALUES(?,?,'series','[]','[]','[]','[]','[]',?,'draft')`,
+            extraId,
+            `Extra · ${String(item.title)}`,
+            id,
+          ),
+          q(db, 'UPDATE episodes SET extra_id=? WHERE num=?', extraId, id),
+        );
+      }
+    }
     if (e.virtual) stmts.push(...e.virtual.writes(db, id, item[e.virtual.key]));
     stmts.push(
       await auditStmt(

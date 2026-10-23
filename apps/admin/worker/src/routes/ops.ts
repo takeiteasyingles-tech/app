@@ -325,7 +325,7 @@ route(routes, api.stats, async (c) => {
       q<{ n: number }>(db, activeSql, d7, localDate(d7, tz)),
       q<{ n: number }>(db, activeSql, d30, localDate(d30, tz)),
       q<{ n: number }>(db, `SELECT COUNT(*) AS n FROM users WHERE ${learner} AND created_at >= ?`, d7),
-      q<{ n: number }>(db, "SELECT COUNT(*) AS n FROM users WHERE status = 'suspended'"),
+      q<{ n: number }>(db, `SELECT COUNT(*) AS n FROM users WHERE ${learner} AND status = 'suspended'`),
       // From the events, not ai_usage_monthly: those periods are keyed in each learner's own timezone,
       // so near a month boundary they would not match the dashboard's São Paulo month.
       q<{ s: number | null }>(

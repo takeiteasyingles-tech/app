@@ -150,6 +150,29 @@ describe('e-book test unlock (trilha)', () => {
     const third = await submitTest(w.deps(), 1, {});
     expect(third.results.every((r) => r.show === '')).toBe(true);
   });
+
+  it('enforces an episode-count rule on both answer saves and submit, including disabled tests', async () => {
+    w.db.exec("UPDATE ebooks SET test_required_episodes='[1,2]', test_min_completed=1 WHERE num=1");
+    expect(await code(saveAnswers(w.deps(), 1, { answers: { 'eb1-t1': 0 } }))).toBe('gated');
+    w.db.exec(
+      'INSERT INTO episode_progress(user_id,episode_num,furthest_step,done_at,updated_at) VALUES(?,1,10,1,1)',
+      USER,
+    );
+    expect(await code(saveAnswers(w.deps(), 1, { answers: { 'eb1-t1': 0 } }))).toBe('ok');
+    expect(await code(submitTest(w.deps(), 1, { answers: ALL_RIGHT }))).toBe('ok');
+    w.db.exec('UPDATE ebooks SET test_enabled=0 WHERE num=1');
+    expect(await code(saveAnswers(w.deps(), 1, { answers: { 'eb1-t1': 0 } }))).toBe('content_unavailable');
+    expect(await code(submitTest(w.deps(), 1, {}))).toBe('content_unavailable');
+  });
+
+  it('does not apply draft release rules to a published snapshot, including older snapshots', async () => {
+    finishEbook(w, USER);
+    const content = publish(w);
+    w.db.exec("UPDATE ebooks SET test_enabled=0,test_required_episodes='[3]',test_min_completed=3 WHERE num=1");
+    const d = { ...w.deps(), content };
+    expect(await code(saveAnswers(d, 1, { answers: { 'eb1-t1': 0 } }))).toBe('ok');
+    expect(await code(submitTest(d, 1, { answers: ALL_RIGHT }))).toBe('ok');
+  });
 });
 
 describe('e-book test', () => {
