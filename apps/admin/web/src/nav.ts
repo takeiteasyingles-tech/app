@@ -31,6 +31,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: 'Conteúdo',
     items: [
       { href: 'conteudo/temporadas', label: 'Temporadas', icon: 'layers', perm: 'content.edit' },
+      { href: 'conteudo/extras', label: 'Extras', icon: 'tv', perm: 'content.edit' },
       { href: 'conteudo/albuns', label: 'Álbuns', icon: 'music', perm: 'content.edit' },
       { href: 'conteudo/assistentes', label: 'Assistentes', icon: 'mic', perm: 'content.edit' },
       { href: 'conteudo/missoes', label: 'Missões do Mic', icon: 'target', perm: 'content.edit' },

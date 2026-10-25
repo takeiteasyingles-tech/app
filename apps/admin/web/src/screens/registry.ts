@@ -59,8 +59,8 @@ export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
   },
   ebooks: { load: m(() => import('./content/Ebooks'), 'Ebooks'), perm: 'content.edit', nav: 'conteudo/temporadas' },
   ebook: { load: m(() => import('./content/Ebooks'), 'EbookEdit'), perm: 'content.edit', nav: 'conteudo/temporadas' },
-  extras: { load: m(() => import('./content/Extras'), 'Extras'), perm: 'content.edit', nav: 'conteudo/temporadas' },
-  extra: { load: m(() => import('./content/Extras'), 'ExtraEdit'), perm: 'content.edit', nav: 'conteudo/temporadas' },
+  extras: { load: m(() => import('./content/Extras'), 'Extras'), perm: 'content.edit', nav: 'conteudo/extras' },
+  extra: { load: m(() => import('./content/Extras'), 'ExtraEdit'), perm: 'content.edit', nav: 'conteudo/extras' },
   albums: { load: m(() => import('./content/Albums'), 'Albums'), perm: 'content.edit', nav: 'conteudo/albuns' },
   album: { load: m(() => import('./content/Albums'), 'AlbumEdit'), perm: 'content.edit', nav: 'conteudo/albuns' },
   assistants: {
