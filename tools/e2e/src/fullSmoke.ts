@@ -109,7 +109,7 @@ async function main() {
     const id = randomBytes(4).toString('hex');
     const email = `smoke-${id}@e2e.test`;
     await page.goto('/#/entrar');
-    await page.getByText('Criar conta grátis').first().click();
+    await page.getByText('Crie sua conta e garanta 4 episódios grátis').first().click();
     await page.locator('#onb-fullname').fill('Sofia Smoke');
     await page.locator('#onb-name').fill('Sofia');
     await page.locator('#onb-birth').fill('1994-05-10');

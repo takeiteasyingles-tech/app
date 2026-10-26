@@ -47,7 +47,10 @@
     // `npm run dev` (wrangler dev --env local): the same bindings WITHOUT the remote-only `ai`, so
     // local dev needs no CLOUDFLARE_API_TOKEN (the AI test screen answers "IA indisponível").
     // `npm run dev:ai` keeps it. Kept in step by tools/parity/test/wrangler.test.ts.
+    // `routes` is cleared: with the custom domain, wrangler dev rewrites every request's host to it,
+    // and the config guard then refuses them all (500) as non-local traffic.
     "local": {
+      "routes": [],
       "d1_databases": [
         {
           "binding": "DB",
@@ -65,7 +68,8 @@
       ],
       "vars": {
         "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
-        "APP_ORIGIN": "https://tie-admin.takeiteasyingles.workers.dev"
+        "APP_ORIGIN": "https://admin.takeiteasyingles.com.br",
+        "STUDENT_APP_ORIGIN": "https://takeiteasyingles.com.br"
       }
     }
   }

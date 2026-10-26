@@ -58,7 +58,10 @@
     // Without it every AI path runs in demo mode (/api/health → {ai:false}), offline. `npm run
     // dev:ai` keeps the binding (export CLOUDFLARE_API_TOKEN first). Bindings are not inherited by
     // environments, so they are repeated here; tools/parity/test/wrangler.test.ts keeps them in step.
+    // `routes` is cleared: with the custom domain, wrangler dev rewrites every request's host to it,
+    // and the config guard then refuses them all (500) as non-local traffic.
     "local": {
+      "routes": [],
       "d1_databases": [
         {
           "binding": "DB",
@@ -76,7 +79,7 @@
       ],
       "vars": {
         "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
-        "APP_ORIGIN": "https://tie-app.takeiteasyingles.workers.dev",
+        "APP_ORIGIN": "https://takeiteasyingles.com.br",
         "MAIL_FROM": "Take It Easy <onboarding@resend.dev>"
       }
     }

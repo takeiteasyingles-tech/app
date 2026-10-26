@@ -107,6 +107,7 @@ export function PassInput({
   onEnterKey,
   autocomplete,
   placeholder = `Mínimo de ${LIMITS.passwordMin} caracteres`,
+  label,
   readOnly,
 }: {
   id: string;
@@ -117,6 +118,8 @@ export function PassInput({
   onEnterKey?: () => void;
   autocomplete: string;
   placeholder?: string;
+  /** Accessible name, for a field shown without a visible label. */
+  label?: string;
   readOnly?: boolean;
 }) {
   return (
@@ -127,6 +130,7 @@ export function PassInput({
         type={show ? 'text' : 'password'}
         autocomplete={autocomplete}
         placeholder={placeholder}
+        aria-label={label}
         value={value}
         readOnly={readOnly}
         maxLength={LIMITS.passwordMax}
@@ -193,20 +197,17 @@ function LoginForm({ desk }: { desk: boolean }) {
         <div class="h2" style={desk ? { fontSize: '1.9rem' } : undefined}>
           Entrar
         </div>
-        {/* Phone: the short form fits one line of the card (the full one broke after "de novo."). */}
-        <p class="sm mt4" style={desk ? { ...SUB_STYLE, fontSize: '1rem' } : SUB_STYLE}>
-          {desk ? 'Que bom ver você de novo. A história continua.' : 'Que bom ver você de novo.'}
-        </p>
       </div>
+      {/* No visible labels: the placeholders name the fields, aria-label keeps them named once typed in. */}
       <label class="field">
-        <span>E-mail</span>
         <input
           class="input"
           id="login-email"
           type="email"
           inputmode="email"
           autocomplete="email"
-          placeholder="voce@email.com"
+          placeholder="e-mail"
+          aria-label="E-mail"
           value={email}
           maxLength={LIMITS.emailMax}
           onInput={(e) => {
@@ -218,7 +219,6 @@ function LoginForm({ desk }: { desk: boolean }) {
       <FieldErr msg={err.email} />
       {/* biome-ignore lint/a11y/noLabelWithoutControl: the input is inside, rendered by a child component */}
       <label class="field">
-        <span>Senha</span>
         <PassInput
           id="login-pass"
           value={pass}
@@ -227,6 +227,8 @@ function LoginForm({ desk }: { desk: boolean }) {
           onInput={setPass}
           onEnterKey={() => void login()}
           autocomplete="current-password"
+          placeholder="senha"
+          label="Senha"
         />
       </label>
       <FieldErr msg={err.pass} />
@@ -239,9 +241,9 @@ function LoginForm({ desk }: { desk: boolean }) {
       <div ref={ts.ref} style={{ display: 'contents' }} />
       <div class="stack" style={{ ...SIGNUP_ROW, '--gap': '10px' }}>
         <p class="sm" style={{ fontWeight: '700', color: 'var(--navy)' }}>
-          Ainda não tem conta? O 1º episódio é grátis.
+          Confiamos tanto no nosso método que as 4 primeiras aulas são por nossa conta.
         </p>
-        <Btn label="Criar conta grátis" kind="ghost" go="cadastro/1" cls="block" />
+        <Btn label="Crie sua conta e garanta 4 episódios grátis" kind="ghost" go="cadastro/1" cls="block signup" />
       </div>
       <Legal desk={desk} />
     </div>
@@ -460,7 +462,7 @@ export default function Entrar({ q }: ScreenProps) {
             Você não faz lições. Você acompanha uma história.
           </h1>
           <p class="p" style={{ color: 'var(--onNavy)', marginTop: desk ? '8px' : '8px', textWrap: 'pretty' }}>
-            Uma série do zero ao B2, com a Maggie para conversar quando você quiser.
+            Do zero à fluência com avatares da família Woods para conversar.
           </p>
         </div>
         <div class="formwrap" style={desk ? WRAP_DESKTOP : undefined}>

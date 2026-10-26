@@ -26,3 +26,12 @@
     rgba(10, 30, 63, 0.9) 100%
   );
 }
+
+/* The sign-up button: its label breaks in two on a phone, so the lines are balanced and the button
+   grows with some padding instead of the text touching its border. */
+[data-u1="entrar"] .btn.signup {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  line-height: 1.3;
+  text-wrap: balance;
+}

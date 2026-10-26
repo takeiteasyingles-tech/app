@@ -4,6 +4,8 @@
 
 # --- Local-dev vars (production values live in wrangler.jsonc `vars`) ---
 APP_ORIGIN=http://localhost:8788
+# The student app the invite and reset links point to.
+STUDENT_APP_ORIGIN=http://localhost:8787
 TURNSTILE_SITEKEY=1x00000000000000000000AA
 COOKIE_PREFIX=
 

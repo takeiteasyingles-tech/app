@@ -171,7 +171,7 @@ async function signup(page: Page, name = 'Bia'): Promise<string> {
   const id = randomBytes(4).toString('hex');
   const email = `u6-${id}@e2e.test`;
   await page.goto('/#/entrar');
-  await page.getByText('Criar conta grátis').first().click();
+  await page.getByText('Crie sua conta e garanta 4 episódios grátis').first().click();
   await expect(page).toHaveURL(/#\/cadastro\/1$/);
   await page.locator('#onb-fullname').fill(`${name} Mic`);
   await page.locator('#onb-name').fill(name);

@@ -118,16 +118,16 @@ async function signup(page: Page, w?: Watch): Promise<string> {
   const id = randomBytes(4).toString('hex');
   const email = `u5x-${id}@e2e.test`;
   await page.goto('/#/entrar');
-  await page.getByText('Criar conta grátis').first().click();
+  await page.getByText('Crie sua conta e garanta 4 episódios grátis').first().click();
   // Known (U1-auth, not this slice): right after "Sair" in the same tab the first click on
-  // "Criar conta grátis" is swallowed; a second click works. Recorded, then retried once.
+  // The sign-up button's first click is swallowed; a second click works. Recorded, then retried once.
   const moved = await expect(page)
     .toHaveURL(/#\/cadastro\/1$/, { timeout: 3000 })
     .then(() => true)
     .catch(() => false);
   if (!moved) {
-    test.info().annotations.push({ type: 'u1-first-click-lost', description: 'Criar conta grátis needed 2 clicks' });
-    await page.getByText('Criar conta grátis').first().click();
+    test.info().annotations.push({ type: 'u1-first-click-lost', description: 'sign-up button needed 2 clicks' });
+    await page.getByText('Crie sua conta e garanta 4 episódios grátis').first().click();
   }
   await expect(page).toHaveURL(/#\/cadastro\/1$/);
   await page.locator('#onb-fullname').fill('Bia Extra');

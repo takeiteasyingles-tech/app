@@ -293,10 +293,11 @@ for (const vp of VPS) {
         timeout: 20_000,
       });
       await expect(v.locator('.auth .hero')).toContainText(
-        'Uma série do zero ao B2, com a Maggie para conversar quando você quiser.',
+        'Do zero à fluência com avatares da família Woods para conversar.',
       );
       await expect(v.locator('.formcard .h2')).toHaveText('Entrar');
-      await expect(v.locator('#login-email')).toHaveAttribute('placeholder', 'voce@email.com');
+      await expect(v.locator('#login-email')).toHaveAttribute('placeholder', 'e-mail');
+      await expect(v.locator('#login-pass')).toHaveAttribute('placeholder', 'senha');
       await expect(v.locator('#login-pass')).toHaveAttribute('type', 'password');
       // PROD: no social, no demo, no prototype footer
       await expect(v.getByText(/Google|Apple/)).toHaveCount(0);
@@ -330,8 +331,8 @@ for (const vp of VPS) {
       await expect(page.getByRole('dialog', { name: 'Política de Privacidade' })).toContainText('não fica guardado');
       await page.keyboard.press('Escape');
       await page.goto('/#/entrar');
-      // Criar conta grátis → cadastro/1
-      await btn(page, /^Criar conta grátis$/).click();
+      // Sign-up button → cadastro/1
+      await btn(page, /^Crie sua conta e garanta 4 episódios grátis$/).click();
       await expect(page).toHaveURL(/#\/cadastro\/1$/);
       await expect(view(page).locator('.wiz-head .lbl')).toHaveText('Etapa 1 de 7 · Sua conta');
       expect(await unnamedControls(page), 'unnamed controls').toEqual([]);

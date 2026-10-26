@@ -27,7 +27,7 @@ test('signup → onboarding → Hoje', async ({ page }) => {
   const pass = `e2e-${randomBytes(6).toString('hex')}`;
 
   await page.goto('/#/entrar');
-  await page.getByText('Criar conta grátis').first().click();
+  await page.getByText('Crie sua conta e garanta 4 episódios grátis').first().click();
   await expect(page).toHaveURL(/#\/cadastro\/1$/);
 
   // 1 · Sua conta (Turnstile renders here or on submit; the stub answers either way)

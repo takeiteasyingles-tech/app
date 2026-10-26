@@ -143,7 +143,7 @@ async function apiState(page: Page): Promise<Record<string, unknown> & { game: {
 async function signupFresh(page: Page, name = 'Carla') {
   const id = randomBytes(4).toString('hex');
   await page.goto('/#/entrar');
-  await page.getByText('Criar conta grátis').first().click();
+  await page.getByText('Crie sua conta e garanta 4 episódios grátis').first().click();
   await page.locator('#onb-fullname').fill(`${name} Teste`);
   await page.locator('#onb-name').fill(name);
   await page.locator('#onb-birth').fill('1996-03-21');
