@@ -174,6 +174,8 @@ export const SETTINGS = {
   modelAsr: 'ai.model.asr',
   modelTts: 'ai.model.tts',
   modelGuard: 'ai.model.guard',
+  /** JSON BackupConfig (contracts/backups.ts): the automatic backup schedule of tie-admin. */
+  backupConfig: 'backup.config',
 } as const;
 
 export const DEFAULT_MODELS = {
@@ -226,3 +228,36 @@ export const TTS_SPEAKERS: Readonly<Record<string, string>> = {
   zach: 'arcas',
   barbara: 'athena',
 };
+
+// ---------- Backups (tie-admin, docs/MCP.md § Backup) ----------
+
+/**
+ * Database backups: a gzip JSON dump of D1 tables in R2 under BACKUP_R2_PREFIX, indexed in the
+ * backups table. 'content' holds the course (what a restore can put back), 'full' every table
+ * except the ones below.
+ */
+export const BACKUP = {
+  formatName: 'tie-backup',
+  formatVersion: 1,
+  /** Rows read per query while dumping a table. */
+  pageRows: 2000,
+  /** Max size of one JSON chunk bound to a restore statement (D1 caps a value at 2 MB). */
+  restoreChunkBytes: 800_000,
+  keepMin: 1,
+  keepMax: 365,
+  noteMax: 200,
+} as const;
+export const BACKUP_R2_PREFIX = 'backups/';
+
+/**
+ * Never dumped: short-lived secrets and caches (sessions, one-time tokens, idempotency replays),
+ * the backup index itself and SQLite/D1 internals (matched by prefix in lib/backups).
+ */
+export const BACKUP_EXCLUDED_TABLES: readonly string[] = [
+  'sessions',
+  'one_time_tokens',
+  'idempotency_keys',
+  'backups',
+  'd1_migrations',
+  '_episode_books',
+];

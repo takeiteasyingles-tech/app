@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import ai from './ai';
 import apiTokens from './apiTokens';
 import auth from './auth';
+import backups from './backups';
 import content from './content';
 import feedback from './feedback';
 import mcp from './mcp';
@@ -22,7 +23,22 @@ const routes = new Hono<AppEnv>();
 // with the per-entity routes, but registering them early keeps the intent obvious.
 // v1 (spec 07): seasonTest (B), feedback + stats (C), apiTokens (D). Their paths never overlap the
 // older ones (/admin-api/users/:id/stats is one segment longer than /admin-api/users/:id).
-for (const r of [auth, users, plans, publish, content, ai, media, moderation, ops, seasonTest, feedback, apiTokens]) {
+// backups: Operação → Backup (/admin-api/backups*).
+for (const r of [
+  auth,
+  users,
+  plans,
+  publish,
+  content,
+  ai,
+  media,
+  moderation,
+  ops,
+  seasonTest,
+  feedback,
+  apiTokens,
+  backups,
+]) {
   routes.route('/', r);
 }
 // The MCP endpoint (D): Bearer API tokens instead of a staff session, so it is not an adminApi route.

@@ -10,10 +10,12 @@ import { endpoint } from './http';
 // CURRENT roles must hold the matching permission (a demoted or deleted creator disables it).
 
 /**
- * content.read: list/get tools and preview_release. content.edit: the update and draft tools.
- * No scope can publish: humans publish in the admin.
+ * content.read: list/get/describe tools and preview_release. content.edit: create, update, delete
+ * and draft tools, plus content backups. content.publish (added after spec 07 D, see docs/MCP.md):
+ * episode status, season test review/publish, releases (publish and rollback), so an agent can take
+ * a change all the way to learners.
  */
-export const API_TOKEN_SCOPES = ['content.read', 'content.edit'] as const;
+export const API_TOKEN_SCOPES = ['content.read', 'content.edit', 'content.publish'] as const;
 export const ApiTokenScope = z.enum(API_TOKEN_SCOPES);
 export type ApiTokenScope = z.infer<typeof ApiTokenScope>;
 
@@ -21,6 +23,7 @@ export type ApiTokenScope = z.infer<typeof ApiTokenScope>;
 export const SCOPE_PERMISSION: Readonly<Record<ApiTokenScope, Permission>> = {
   'content.read': 'content.edit',
   'content.edit': 'content.edit',
+  'content.publish': 'content.publish',
 };
 
 export const ApiTokenRow = z.object({

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file guides Claude Code (claude.ai/code) when it works in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this is
 
@@ -15,8 +15,9 @@ Specs live in `docs/spec/`:
 - `04-architecture.md`: **authoritative** for architecture, API, schema and security.
 - `05-foundation-notes.md`: conventions, plus the **accepted deviations** from the prototype.
 - `06-open-issues.md`: issues resolved and accepted.
+- `07-v1.md`: **authoritative for the v1 features** (password-recovery e-mail, season test + PDF certificates, episode NPS + learning stats, admin MCP server + API tokens + season editor, Mic redesign). All are PROD additions. Its foundation (migration 0007, contracts, permissions) is frozen: change it only additively and record the change there.
 
-Deployment is in `docs/DEPLOY.md`.
+Other docs: `docs/DEPLOY.md` (production runbook), `docs/MCP.md` (using the admin MCP endpoint), `docs/EPISODE-MATERIALS.md` (admin per-episode organization: e-book, extra, test unlock rule).
 
 ## Ground rules
 
@@ -50,7 +51,7 @@ packages/
   worker-core/ @tie/worker-core: Hono app factory, security headers, CSRF, rate limits, config guard,
                validation, D1 helpers, audit, idempotency, auth (pbkdf2, sessions, cookies, turnstile,
                media token), R2 serveObject/upload, service interfaces
-  db/          migrations/0001_auth … 0006_step_order.sql (one history, shared by both Workers)
+  db/          migrations/0001_auth … 0010_backups.sql (one history, shared by both Workers)
   seed/        @tie/seed: loads prototipo/ in node:vm, extracts constants with acorn, emits SQL,
                uploads media to R2, publishes content snapshots; bootstrapAdmin.ts
 apps/
@@ -86,6 +87,8 @@ Run everything from the repo root (PowerShell 5.1: chain with `;`, not `&&`). Re
 | Bundle budgets / AI model check | `npm run budgets -w @tie/app` · `npm run check:models -w @tie/app` |
 | Deploy | see `docs/DEPLOY.md` (`npm run deploy -w @tie/app`, `npm run deploy -w @tie/admin`) |
 
+Before a deploy, `npm run e2e -- --force-seed` and `npm run smoke:full` must pass. `npm run seed -- --remote` only inserts missing content rows and publishes only if nothing is published yet, so production admin edits survive; `--remote --force` overwrites them from the prototype and republishes.
+
 Notes:
 - `npm run dev:*` uses `wrangler dev --env local`, which has every binding except the remote-only `AI`. Local dev therefore needs no Cloudflare token and runs the AI in demo mode (`/api/health` → `{ai:false}`).
 - `wrangler.jsonc` `vars` are **production** values. Local values come from `.dev.vars`: a localhost `APP_ORIGIN`, the Turnstile test keys, and `COOKIE_PREFIX=` (empty, because browsers drop `__Host-` cookies over plain http). The `env.local` block must mirror the top-level bindings and vars; `tools/parity/test/hardening.test.ts` enforces this. A deploy that still carries dev values answers 500 (`worker-core/src/config.ts`).
@@ -114,6 +117,8 @@ Notes:
   - admin: `__Host-tie_adm`, 8h absolute, 30 min idle.
 - Roles: `super_admin` > `admin` > `editor` (content) / `moderator` (users and UGC). Permissions are defined in `shared/authz.ts`.
 - The super_admin is created by `seed:bootstrap-admin` with no password and an invite link.
+- Self-service password-reset e-mails go through Resend (HTTP API); the request always answers 204.
+- Agents (Claude Code, Codex…) use tie-admin's MCP endpoint (`POST /admin-api/mcp`, stateless Streamable HTTP) with `Authorization: Bearer tie_pat_…` API tokens. Scopes: `content.read`, `content.edit` (create/update/delete any CMS entity, blobs, option lists, content backups) and `content.publish` (status to/from published, season test review/open, publish and roll back releases). Staff routes and MCP tools share one write path (`lib/entityCrud`, the exported functions of `routes/content|seasonTest|publish.ts`), so checks and audit actions match; deletes are refused while learner data points at a row (`routes/mcp.ts`, `lib/mcpTools.ts`; contracts `mcp.ts`, `apiTokens.ts`; docs/MCP.md).
 
 **Client state.**
 - `GET /api/me/state` builds `TieState` v7 in a single D1 batch. It has the prototype's `store.s` shape, with stable-id keys: `scores[phraseId]`, `exAns[itemId]`.
@@ -142,8 +147,11 @@ Notes:
 - `shared/domain/game.ts` and the app's `worker/src/game` hold the rules: points, sequência, meta, levels, medalhas and daily missions. Each award is keyed in a ledger, so repeats do not pay twice.
 - Finishing episode step 4 unlocks review cards for the episode's `visual` words; finishing step 8 unlocks cards for its `awayExp` expressions.
 
+**Seasons and certificates.** One test per season; its questions are drafted by AI or an MCP agent and approved by staff. It opens when every published episode of the season is done. Passing awards `season_pass:{n}` once and issues a certificate (`TIE-XXXX-XXXX`, publicly verifiable); the PDF renders on first download and is cached in R2.
+
 **Ops.**
 - The tie-app cron (`17 6 * * *`) removes old Mic transcripts (`retention.transcripts_days`), expired sessions and expired one-time tokens.
+- Backups (admin Operação → Backup, `backups.manage`; `lib/backups.ts`): gzip JSON dumps of D1 in R2 `backups/`, indexed in the `backups` table. The tie-admin cron (`5 * * * *`) makes the automatic one when the São Paulo hour matches `app_settings['backup.config']` and prunes old ones. Restore only touches the course content tables, in one batch: upsert (never delete + insert, which would cascade into learner answers), then delete newer rows nothing points at, after a `pre_restore` backup. See docs/DEPLOY.md §12.
 - The audit log is append-only and stores salted IP hashes.
 - Each Worker has four rate limiters (`RL_AUTH`, `RL_AI`, `RL_API`, `RL_UPLOAD`).
 

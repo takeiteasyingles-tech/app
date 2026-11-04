@@ -2674,3 +2674,11 @@ fieldset.ad-fchips {
 .ad-navsheet .ad-me {
   margin-top: 6px;
 }
+
+/* Backup list: keep the date and the note readable (.ad-cell2 .xs breaks anywhere). */
+.ad-table .ad-bk-at {
+  min-width: 190px;
+}
+.ad-table .ad-bk-note {
+  min-width: 220px;
+}

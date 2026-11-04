@@ -4,10 +4,14 @@
 // actions as PUT /admin-api/content/*), preview_release runs the publish compile without publishing.
 // Season test questions are written straight to the 0007 tables with the rules of
 // seasonTestQuestionIssues() (agent B's staff routes apply the same rules); an agent's question is
-// always a draft (source 'agent') until staff approve it. Errors are thrown as ApiError and become
-// tool results with isError: true in routes/mcp.ts.
+// always a draft (source 'agent') until staff approve it; approving and publishing go through the
+// content.publish tools, which call the staff routes' own functions (reviewQuestions,
+// publishSeasonTest, publishRelease, rollbackRelease). The generic *_content tools cover every CMS
+// entity with createEntity/updateEntity/removeEntity. Errors are thrown as ApiError and become tool
+// results with isError: true in routes/mcp.ts.
 import {
   ApiError,
+  CONTENT_ENTITIES,
   LIMITS,
   type McpToolInput,
   type McpToolName,
@@ -18,10 +22,24 @@ import {
   seasonTestQuestionIssues,
 } from '@tie/shared';
 import { all, batch, batchRun, fromJson, one, type Query, q, toJson } from '@tie/worker-core';
-import { previewContent } from '../routes/publish';
-import type { AgentToken } from './agent';
-import type { Issue, Item } from './entities';
-import { entityNamed, failIssues, loadOne, loadRows, updateEntity, type Writer } from './entityCrud';
+import { z } from 'zod';
+import { listBlobs, listOptionLists, putBlob, putOptionList } from '../routes/content';
+import { listReleases, previewContent, publishRelease, rollbackRelease } from '../routes/publish';
+import { publishSeasonTest, reviewQuestions } from '../routes/seasonTest';
+import { type AgentToken, tokenCan } from './agent';
+import { createBackup } from './backups';
+import type { Entity, Issue, Item } from './entities';
+import {
+  createEntity,
+  entityNamed,
+  failIssues,
+  loadOne,
+  loadRows,
+  parsePk,
+  removeEntity,
+  updateEntity,
+  type Writer,
+} from './entityCrud';
 import type { Ctx } from './http';
 
 export interface ToolCtx {
@@ -136,6 +154,42 @@ async function epNumIssues(db: D1Database, refs: readonly { path: string; epNum:
 }
 
 const QUESTION_SELECT = 'SELECT * FROM season_test_questions';
+
+// ---------- Generic content ----------
+
+/** A tool's numeric or text id as the entity's primary key (unknown shapes answer not_found). */
+const pkOf = (e: Entity, id: string | number): string | number => parsePk(e, String(id));
+
+/** Schema problems as the same validation_failed error the admin routes answer. */
+function parseWith(schema: z.ZodType, value: unknown, prefix: string): Item {
+  const r = schema.safeParse(value);
+  if (r.success) return r.data as Item;
+  throw new ApiError('validation_failed', r.error.issues[0]?.message, {
+    issues: r.error.issues.slice(0, 20).map((i) => ({
+      path: [prefix, ...i.path.map(String)].filter(Boolean).join('.'),
+      code: i.code,
+      message: i.message,
+    })),
+  });
+}
+
+const hasStatus = (e: Entity): boolean => e.fields.some((f) => f.key === 'status');
+
+/** Putting something in front of learners (or taking it away) needs the content.publish scope. */
+function requirePublishFor(t: ToolCtx, e: Entity, from: unknown, to: unknown): void {
+  if (!hasStatus(e) || from === to) return;
+  if ((to === 'published' || from === 'published') && !tokenCan(t.token, 'content.publish')) {
+    throw new ApiError(
+      'forbidden',
+      `Changing ${e.name} status ${from === undefined ? '' : `from "${String(from)}" `}to "${String(to)}" needs the content.publish scope.`,
+    );
+  }
+}
+
+const releaseSummary = <R extends { manifest: unknown }>(r: R): Omit<R, 'manifest'> => {
+  const { manifest: _m, ...rest } = r;
+  return rest;
+};
 
 // ---------- Handlers ----------
 
@@ -430,4 +484,142 @@ export const TOOL_HANDLERS: { [N in McpToolName]: Handler<N> } = {
   async preview_release(_args, { c }) {
     return previewContent(c);
   },
+
+  // ---------- Generic content CRUD ----------
+
+  async describe_content({ entity }, { db }) {
+    const e = entityNamed(entity);
+    const { $schema: _s, ...schema } = z.toJSONSchema(e.api.create.body, {
+      io: 'input',
+      unrepresentable: 'any',
+    }) as Record<string, unknown>;
+    const [example] = await loadRows(
+      db,
+      e,
+      `${e.pk.col} = (SELECT ${e.pk.col} FROM ${e.table} ORDER BY ${e.orderBy} LIMIT 1)`,
+    );
+    const parentEntity = e.parent ? entityNamedByTable(e.parent.table) : null;
+    return {
+      entity,
+      idKey: e.pk.key,
+      numericId: e.numericPk,
+      parent: e.parent && parentEntity ? { key: e.parent.key, entity: parentEntity } : null,
+      hasStatus: hasStatus(e),
+      schema,
+      example: example ?? null,
+    };
+  },
+
+  async list_content({ entity, parent }, { db }) {
+    const e = entityNamed(entity);
+    if (parent === undefined || !e.parent) return { items: await loadRows(db, e, '') };
+    const parentCol = e.fields.find((fd) => fd.key === e.parent?.key)?.col ?? e.parent.key;
+    const numeric = e.parent.table === 'episodes' || e.parent.table === 'ebooks';
+    const value = numeric ? Number(parent) : String(parent);
+    if (typeof value === 'number' && !Number.isInteger(value)) return { items: [] };
+    return { items: await loadRows(db, e, `${parentCol} = ?`, value) };
+  },
+
+  async get_content({ entity, id }, { db }) {
+    const e = entityNamed(entity);
+    const item = await loadOne(db, e, pkOf(e, id));
+    if (!item) throw notFound(`${entity} ${id}`);
+    return { item };
+  },
+
+  async create_content({ entity, item }, t) {
+    const e = entityNamed(entity);
+    const body = parseWith(e.api.create.body, item, 'item');
+    requirePublishFor(t, e, undefined, body.status ?? undefined);
+    return { item: await createEntity(t.db, e, body, t.writer) };
+  },
+
+  async update_content({ entity, id, patch, expectedUpdatedAt }, t) {
+    const e = entityNamed(entity);
+    const pk = pkOf(e, id);
+    const parsed = nonEmpty(parseWith(e.api.update.body, patch, 'patch'));
+    if (hasStatus(e) && parsed.status !== undefined) {
+      const current = await loadOne(t.db, e, pk);
+      if (!current) throw notFound(`${entity} ${id}`);
+      requirePublishFor(t, e, current.status, parsed.status);
+    }
+    return { item: await updateEntity(t.db, e, pk, parsed, t.writer, { expectedUpdatedAt }) };
+  },
+
+  async delete_content({ entity, id }, t) {
+    const e = entityNamed(entity);
+    const pk = pkOf(e, id);
+    if (hasStatus(e)) {
+      const current = await loadOne(t.db, e, pk);
+      if (current?.status === 'published') requirePublishFor(t, e, 'published', 'deleted');
+    }
+    return { ok: true as const, deleted: await removeEntity(t.db, e, pk, t.writer) };
+  },
+
+  // ---------- Blobs and option lists ----------
+
+  async list_blobs({ key }, { db }) {
+    const items = await listBlobs(db);
+    return { items: key ? items.filter((b) => b.key === key) : items };
+  },
+
+  async put_blob({ key, json }, { db, writer }) {
+    return { item: await putBlob(db, key, json, writer) };
+  },
+
+  async list_option_lists({ listKey }, { db }) {
+    return { items: await listOptionLists(db, listKey) };
+  },
+
+  async put_option_list({ listKey, items }, { db, writer }) {
+    return { items: await putOptionList(db, listKey, items, writer) };
+  },
+
+  // ---------- Backups ----------
+
+  async create_backup({ note }, { c, writer }) {
+    const item = await createBackup(c.env, {
+      kind: 'agent',
+      scope: 'content',
+      note: note ?? null,
+      actor: { userId: writer.userId, audit: writer.audit },
+    });
+    return { item };
+  },
+
+  // ---------- Publishing ----------
+
+  async set_episode_status({ num, status, expectedUpdatedAt }, { db, writer }) {
+    const item = await updateEntity(db, EPISODES, num, { status }, writer, { expectedUpdatedAt });
+    return { item: item as McpToolOutput<'set_episode_status'>['item'] };
+  },
+
+  async review_season_test_questions({ seasonN, ids, status }, { db, writer }) {
+    return { items: await reviewQuestions(db, seasonN, { ids, status }, writer) };
+  },
+
+  async publish_season_test({ seasonN, published }, { db, writer }) {
+    const cfg = await publishSeasonTest(db, seasonN, published, writer);
+    return { seasonN, published: cfg.published };
+  },
+
+  async list_releases(_args, { db }) {
+    const { items, current } = await listReleases(db);
+    return { items: items.map(releaseSummary), current };
+  },
+
+  async publish_release({ notes }, { c, writer }) {
+    const preview = await previewContent(c);
+    const release = await publishRelease(c, notes, writer);
+    return { release: releaseSummary(release), changed: preview.changed };
+  },
+
+  async rollback_release({ id }, { c, writer }) {
+    return { current: await rollbackRelease(c, id, writer) };
+  },
 };
+
+/** The entity name of a parent table ('episodes' → 'episodes', 'exercises' → 'exercises'…). */
+function entityNamedByTable(table: string): string | null {
+  return CONTENT_ENTITIES.find((name) => entityNamed(name).table === table) ?? null;
+}

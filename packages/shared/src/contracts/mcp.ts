@@ -1,7 +1,9 @@
 import { z } from 'zod';
-import { LIMITS } from '../constants';
+import { BACKUP, LIMITS } from '../constants';
 import { EpisodeStatus } from '../content/schema';
 import {
+  BLOB_KEYS,
+  BlobRow,
   EbookEdit,
   EbookRow,
   EpisodeEdit,
@@ -9,12 +11,17 @@ import {
   ExerciseItemRow,
   ExerciseRow,
   MicPhraseRow,
+  OptionListItemInput,
+  OptionListRow,
   PreviewRes,
+  PublishBody,
+  Release,
   SeasonEdit,
   SeasonRow,
   TestQuestionRow,
 } from './admin';
 import type { ApiTokenScope } from './apiTokens';
+import { BackupRow } from './backups';
 import { Timestamp } from './common';
 import { endpoint } from './http';
 import {
@@ -22,6 +29,7 @@ import {
   SeasonTestQuestionPatch,
   SeasonTestQuestionRow,
   SeasonTestQuestionStatus,
+  SeasonTestReviewBody,
 } from './seasonTest';
 
 // MCP server in tie-admin (spec 07, feature D): lets an AI agent (Claude) read and edit content
@@ -40,7 +48,13 @@ import {
 //
 // Every write reuses the admin route's rules (same checks, same audit action as the admin UI, e.g.
 // content.episodes.update) with actor_user_id = token creator, actor_role = AUDIT_AGENT_ROLE and the
-// diff extended with `_agent: { tokenId, tokenName, tool }`. There is deliberately NO publish tool.
+// diff extended with `_agent: { tokenId, tokenName, tool }`.
+//
+// Full autonomy (added after spec 07 D, docs/MCP.md): generic create/update/delete over every content
+// entity of the admin CMS (CONTENT_ENTITIES, same rules as /admin-api/content/*), blobs and option
+// lists and content backups (content.edit); with the content.publish scope also episode/extra status,
+// season test review and publish, and releases (publish, rollback). Deleting still refuses rows that
+// learner data points at (in_use): an agent never destroys learner progress.
 
 export const MCP_PATH = '/admin-api/mcp';
 /** Preferred first. initialize answers the client's version when listed here, else the first. */
@@ -139,6 +153,30 @@ export const AgentSeasonPatch = SeasonEdit.update.omit({ n: true });
 
 /** Optimistic concurrency: refuse the write (isError, conflict) when the row changed since this read. */
 const ExpectedUpdatedAt = Timestamp.optional();
+
+/** Every CMS entity of /admin-api/content/<name> (admin worker lib/entities ENTITIES). */
+export const CONTENT_ENTITIES = [
+  'seasons',
+  'episodes',
+  'mic-phrases',
+  'exercises',
+  'items',
+  'ebooks',
+  'test-questions',
+  'extras',
+  'albums',
+  'tracks',
+  'assistants',
+  'missions',
+] as const;
+export const ContentEntity = z.enum(CONTENT_ENTITIES);
+export type ContentEntity = z.infer<typeof ContentEntity>;
+/** A row id: a number for seasons, episodes and ebooks, a text id otherwise. */
+const ContentId = z.union([z.int().positive(), z.string().min(1).max(120)]);
+/** A content row in API shape; the server validates it with the entity's own strict schema. */
+const ContentItem = z.record(z.string(), z.unknown());
+const BlobKey = z.enum(BLOB_KEYS);
+const OptionListKey = z.string().regex(/^[a-z_]{1,40}$/);
 
 export const McpEpisodeSummary = EpisodeRow.pick({
   num: true,
@@ -294,6 +332,178 @@ export const MCP_TOOLS = {
     readOnly: true,
     input: z.strictObject({}),
     output: PreviewRes,
+  }),
+
+  // ---------- Generic content CRUD (every CMS table) ----------
+
+  describe_content: tool({
+    title: 'Describe content entity',
+    description:
+      'Explains one content entity before you create or edit it: its id key, its parent (e.g. exercises belong to an episode, items to an exercise), the JSON Schema of a full item and an example read from the database. Entities: seasons, episodes, mic-phrases, exercises, items (exercise items), ebooks, test-questions (e-book test), extras, albums, tracks, assistants, missions.',
+    scope: 'content.read',
+    readOnly: true,
+    input: z.strictObject({ entity: ContentEntity }),
+    output: z.object({
+      entity: ContentEntity,
+      idKey: z.string(),
+      numericId: z.boolean(),
+      parent: z.object({ key: z.string(), entity: z.string() }).nullable(),
+      hasStatus: z.boolean(),
+      schema: z.unknown(),
+      example: ContentItem.nullable(),
+    }),
+  }),
+  list_content: tool({
+    title: 'List content',
+    description:
+      'Lists every row of a content entity, or only the children of `parent` (an episode number for mic-phrases/exercises, an exercise id for items, an e-book number for test-questions, an album id for tracks).',
+    scope: 'content.read',
+    readOnly: true,
+    input: z.strictObject({ entity: ContentEntity, parent: ContentId.optional() }),
+    output: z.object({ items: z.array(ContentItem) }),
+  }),
+  get_content: tool({
+    title: 'Get content',
+    description: 'Returns one row of a content entity by its id (number for seasons, episodes and ebooks).',
+    scope: 'content.read',
+    readOnly: true,
+    input: z.strictObject({ entity: ContentEntity, id: ContentId }),
+    output: z.object({ item: ContentItem }),
+  }),
+  create_content: tool({
+    title: 'Create content',
+    description:
+      'Creates a row of any content entity (a season, an episode, an exercise and its items, a Mic phrase, an e-book test question, an extra…). `item` must be a FULL valid item: call describe_content first for its schema. A new episode also gets its own e-book and extra drafts. Creating something already "published" needs the content.publish scope.',
+    scope: 'content.edit',
+    readOnly: false,
+    input: z.strictObject({ entity: ContentEntity, item: ContentItem }),
+    output: z.object({ item: ContentItem }),
+  }),
+  update_content: tool({
+    title: 'Update content',
+    description:
+      'Edits a row of any content entity. `patch` replaces whole keys and keeps the others; the merged row must stay valid. The id never changes. Moving a status to or from "published" needs the content.publish scope. Pass expectedUpdatedAt from your last read when the entity has updatedAt.',
+    scope: 'content.edit',
+    readOnly: false,
+    input: z.strictObject({
+      entity: ContentEntity,
+      id: ContentId,
+      patch: ContentItem,
+      expectedUpdatedAt: ExpectedUpdatedAt,
+    }),
+    output: z.object({ item: ContentItem }),
+  }),
+  delete_content: tool({
+    title: 'Delete content',
+    description:
+      'Deletes a row of a content entity (children go with it: an exercise takes its items). Refused with in_use while learner data (progress, answers, ratings) points at it: unpublish or edit instead. Take a create_backup first when deleting a lot.',
+    scope: 'content.edit',
+    readOnly: false,
+    input: z.strictObject({ entity: ContentEntity, id: ContentId }),
+    output: z.object({ ok: z.literal(true), deleted: ContentItem }),
+  }),
+
+  // ---------- Blobs and option lists ----------
+
+  list_blobs: tool({
+    title: 'List content blobs',
+    description:
+      'Returns the JSON blobs that configure the app (focus cards, Mic modes/openers/follow-ups/pronunciation/help, Extras shelves, SRS grades, e-book teasers, scene and UI images, onboarding meta).',
+    scope: 'content.read',
+    readOnly: true,
+    input: z.strictObject({ key: BlobKey.optional() }),
+    output: z.object({ items: z.array(BlobRow) }),
+  }),
+  put_blob: tool({
+    title: 'Replace content blob',
+    description: 'Replaces one whole JSON blob (read it with list_blobs first; same validation as the admin).',
+    scope: 'content.edit',
+    readOnly: false,
+    input: z.strictObject({ key: BlobKey, json: z.unknown() }),
+    output: z.object({ item: BlobRow }),
+  }),
+  list_option_lists: tool({
+    title: 'List onboarding option lists',
+    description:
+      'Returns the onboarding option lists (goals, levels, formats, genres, themes, days, minutes…), optionally one list.',
+    scope: 'content.read',
+    readOnly: true,
+    input: z.strictObject({ listKey: OptionListKey.optional() }),
+    output: z.object({ items: z.array(OptionListRow) }),
+  }),
+  put_option_list: tool({
+    title: 'Replace an option list',
+    description: 'Replaces every item of one onboarding option list (same validation as the admin).',
+    scope: 'content.edit',
+    readOnly: false,
+    input: z.strictObject({ listKey: OptionListKey, items: z.array(OptionListItemInput).max(200) }),
+    output: z.object({ items: z.array(OptionListRow) }),
+  }),
+
+  // ---------- Backups ----------
+
+  create_backup: tool({
+    title: 'Back up the content',
+    description:
+      'Saves a backup of all course content (the draft tables) that staff can restore in Admin → Backup. Do it before large or destructive changes.',
+    scope: 'content.edit',
+    readOnly: false,
+    input: z.strictObject({ note: z.string().trim().max(BACKUP.noteMax).optional() }),
+    output: z.object({ item: BackupRow }),
+  }),
+
+  // ---------- Publishing (content.publish) ----------
+
+  set_episode_status: tool({
+    title: 'Set episode status',
+    description:
+      'Moves an episode between "title_only" (shown as coming soon), "draft" (hidden) and "published" (needs its done screen). Learners see it after the next publish_release.',
+    scope: 'content.publish',
+    readOnly: false,
+    input: z.strictObject({ num: EpisodeNum, status: EpisodeStatus, expectedUpdatedAt: ExpectedUpdatedAt }),
+    output: z.object({ item: EpisodeRow }),
+  }),
+  review_season_test_questions: tool({
+    title: 'Review season test questions',
+    description: 'Approves, rejects or sends back to draft season test questions (only approved ones reach learners).',
+    scope: 'content.publish',
+    readOnly: false,
+    input: z.strictObject({ seasonN: SeasonN, ...SeasonTestReviewBody.shape }),
+    output: z.object({ items: z.array(SeasonTestQuestionRow) }),
+  }),
+  publish_season_test: tool({
+    title: 'Publish season test',
+    description:
+      "Opens (published: true) or closes the season test for learners. Opening needs at least the season's question count of approved questions.",
+    scope: 'content.publish',
+    readOnly: false,
+    input: z.strictObject({ seasonN: SeasonN, published: z.boolean() }),
+    output: z.object({ seasonN: SeasonN, published: z.boolean() }),
+  }),
+  list_releases: tool({
+    title: 'List releases',
+    description: 'Lists the published releases, newest first, and which one learners get now.',
+    scope: 'content.read',
+    readOnly: true,
+    input: z.strictObject({}),
+    output: z.object({ items: z.array(Release.omit({ manifest: true })), current: z.string().nullable() }),
+  }),
+  publish_release: tool({
+    title: 'Publish release',
+    description:
+      'Publishes the current draft to every learner at once (same as Admin → Publicações). Run preview_release first: a release with problems is refused. Write short pt-BR notes saying what changed.',
+    scope: 'content.publish',
+    readOnly: false,
+    input: PublishBody,
+    output: z.object({ release: Release.omit({ manifest: true }), changed: z.array(z.string()) }),
+  }),
+  rollback_release: tool({
+    title: 'Roll back release',
+    description: 'Makes an earlier release (id from list_releases) the one learners get. The draft does not change.',
+    scope: 'content.publish',
+    readOnly: false,
+    input: z.strictObject({ id: z.string().min(1).max(120) }),
+    output: z.object({ current: z.string() }),
   }),
 } as const;
 

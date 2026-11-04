@@ -21,6 +21,7 @@ const m =
     imp().then((mod) => mod[name]);
 
 export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
+  backups: { load: m(() => import('./Backups'), 'Backups'), perm: 'backups.manage', nav: 'backup' },
   dashboard: { load: m(() => import('./Dashboard'), 'Dashboard'), nav: 'painel' },
   users: { load: m(() => import('./Users'), 'Users'), perm: 'users.read', nav: 'usuarios' },
   user: { load: m(() => import('./UserDetail'), 'UserDetail'), perm: 'users.read', nav: 'usuarios' },

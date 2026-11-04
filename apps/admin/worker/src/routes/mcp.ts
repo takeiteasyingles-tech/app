@@ -40,7 +40,9 @@ const INSTRUCTIONS = [
   'Take It Easy is an English course for Brazilian learners. These tools read and edit the course content in the admin database.',
   'Learner-facing copy is Brazilian Portuguese (pt-BR); English lines, dialog and vocabulary stay in English. Keep the placeholders {N} (learner name) and {A}/{oA} (assistant name). Never write "XP" or "ofensiva"; the brand words are pontos, sequência, meta, medalha.',
   'Read before you write: update_* tools replace whole sections and accept expectedUpdatedAt from your last read to avoid overwriting someone else.',
-  'Nothing you change reaches learners until a human publishes a release in the admin; there is no publish tool. Run preview_release after edits to check for problems. Season test questions you draft stay drafts until staff approve them.',
+  'Every CMS table is reachable: seasons, episodes (their "done" key is the Concluído screen), mic-phrases, exercises and their items, ebooks and their test-questions, extras, albums and tracks, assistants and missions, plus the JSON blobs and the onboarding option lists. Call describe_content before create_content to get the exact schema; the specialised tools (get_episode, update_episode…) stay available.',
+  'Edits land in the draft. Learners see them only after publish_release (content.publish scope), which refuses a draft with problems: run preview_release first and fix what it reports. Write release notes in pt-BR.',
+  'Take create_backup before large or destructive changes. Deleting is refused while learner data points at a row (in_use): unpublish or edit it instead.',
 ].join('\n');
 
 // ---------- JSON-RPC helpers ----------
@@ -80,7 +82,7 @@ function toolsList(): unknown[] {
     return {
       name,
       title: def.title,
-      description: `${def.description}${def.readOnly ? '' : ' (needs the content.edit scope)'}`,
+      description: `${def.description}${def.readOnly ? '' : ` (needs the ${def.scope} scope)`}`,
       inputSchema,
       annotations: { title: def.title, readOnlyHint: def.readOnly, openWorldHint: false },
     };

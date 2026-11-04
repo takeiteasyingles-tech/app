@@ -45,6 +45,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: 'Operação',
     items: [
       { href: 'auditoria', label: 'Auditoria', icon: 'history', perm: 'audit.read' },
+      { href: 'backup', label: 'Backup', icon: 'database', perm: 'backups.manage' },
       {
         href: 'config',
         label: 'Configurações',

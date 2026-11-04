@@ -55,6 +55,12 @@ describe('v1 endpoints', () => {
       'GET /admin-api/api-tokens api_tokens.manage',
       'POST /admin-api/api-tokens api_tokens.manage',
       'DELETE /admin-api/api-tokens/:id api_tokens.manage',
+      'GET /admin-api/backups backups.manage',
+      'POST /admin-api/backups backups.manage',
+      'PUT /admin-api/backups/config backups.manage',
+      'GET /admin-api/backups/:id/download backups.manage',
+      'POST /admin-api/backups/:id/restore backups.manage',
+      'DELETE /admin-api/backups/:id backups.manage',
     ]) {
       expect(admin).toContain(p);
     }
@@ -77,6 +83,8 @@ describe('v1 endpoints', () => {
     expect(can(['editor'], 'api_tokens.manage')).toBe(false);
     expect(can(['admin'], 'api_tokens.manage')).toBe(true);
     expect(can(['super_admin'], 'api_tokens.manage')).toBe(true);
+    expect(can(['editor'], 'backups.manage')).toBe(false);
+    expect(can(['admin'], 'backups.manage')).toBe(true);
   });
 
   it('queues the season test and NPS writes offline, nothing else new', () => {
@@ -126,13 +134,14 @@ describe('v1 schemas', () => {
     expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.read', 'content.read'] }).success).toBe(
       false,
     );
-    expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.publish'] }).success).toBe(false);
+    expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.publish'] }).success).toBe(true);
+    expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.delete'] }).success).toBe(false);
     expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.edit'], x: 1 }).success).toBe(false);
   });
 });
 
 describe('MCP tools', () => {
-  it('lists the agreed tools, no publish', () => {
+  it('lists the agreed tools; publishing needs its own scope', () => {
     expect(MCP_TOOL_NAMES).toEqual([
       'list_seasons',
       'get_season',
@@ -147,11 +156,29 @@ describe('MCP tools', () => {
       'draft_season_test_questions',
       'update_season_test_question',
       'preview_release',
+      'describe_content',
+      'list_content',
+      'get_content',
+      'create_content',
+      'update_content',
+      'delete_content',
+      'list_blobs',
+      'put_blob',
+      'list_option_lists',
+      'put_option_list',
+      'create_backup',
+      'set_episode_status',
+      'review_season_test_questions',
+      'publish_season_test',
+      'list_releases',
+      'publish_release',
+      'rollback_release',
     ]);
-    expect(MCP_TOOL_NAMES.some((n) => n.includes('publish') && n !== 'preview_release')).toBe(false);
     for (const n of MCP_TOOL_NAMES) {
       const t = MCP_TOOLS[n];
       expect(t.readOnly, n).toBe(t.scope === 'content.read');
+      // Anything that changes what learners get needs content.publish.
+      if (/^(publish_|rollback_|set_episode_status|review_)/.test(n)) expect(t.scope, n).toBe('content.publish');
     }
   });
 

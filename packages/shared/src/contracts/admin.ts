@@ -27,6 +27,7 @@ import {
 import { QuotaInfo } from '../state';
 import { Feedback, PronTip, ReportResult } from './ai';
 import { adminApiTokensApi } from './apiTokens';
+import { adminBackupsApi } from './backups';
 import { adminCertificatesApi } from './certificates';
 import {
   Email,
@@ -1246,6 +1247,8 @@ export const adminApi = {
   feedback: adminFeedbackApi,
   stats: adminStatsApi,
   apiTokens: adminApiTokensApi,
+  // Operação → Backup (contracts/backups.ts).
+  backups: adminBackupsApi,
 } as const;
 
 /** Flattens a nested endpoint map (for route tables and tests). */

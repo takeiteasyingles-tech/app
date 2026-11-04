@@ -147,6 +147,13 @@ const EXTRA: Record<string, () => JSX.Element> = {
       <path d="M19.5 4v5h-5" />
     </>
   ),
+  database: () => (
+    <>
+      <ellipse cx="12" cy="5.5" rx="7.5" ry="2.8" />
+      <path d="M4.5 5.5v13c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8v-13" />
+      <path d="M4.5 12c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8" />
+    </>
+  ),
 };
 
 export type AdminIconName = string;

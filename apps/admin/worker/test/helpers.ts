@@ -180,7 +180,15 @@ export async function learner(opts: { email?: string; name?: string; password?: 
   return { id, email, appToken: session.token };
 }
 
-const USER_TABLES = ['sessions', 'one_time_tokens', 'moderation_items', 'uploads', 'ai_usage_events', 'users'];
+const USER_TABLES = [
+  'backups',
+  'sessions',
+  'one_time_tokens',
+  'moderation_items',
+  'uploads',
+  'ai_usage_events',
+  'users',
+];
 const CONTENT_TABLES = [
   'assistant_clips',
   'album_tracks',

@@ -18,6 +18,7 @@ export * from './admin';
 export * from './ai';
 export * from './apiTokens';
 export * from './auth';
+export * from './backups';
 export * from './certificates';
 export * from './common';
 export * from './content';

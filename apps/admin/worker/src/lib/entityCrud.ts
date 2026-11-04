@@ -3,7 +3,7 @@
 // parents, references, media), the merge-and-revalidate update and the D1 error mapping. Both callers
 // share it so an agent's edit passes exactly the checks of a staff edit and writes the same audit
 // action. Who writes (the stamp's updated_by and the audit actor) comes from a Writer.
-import { ApiError } from '@tie/shared';
+import { ApiError, can, type Role } from '@tie/shared';
 import { type AuditEntry, all, batch, batchRun, type Query, q } from '@tie/worker-core';
 import { ENTITIES, type Entity, fromRow, type Issue, type Item, mediaRefs, TEXT_ID_RE, toCol } from './entities';
 import { actor, auditStmt, type Ctx, isConstraint } from './http';
@@ -12,12 +12,15 @@ import { mediaIssues } from './mediaRefs';
 /** Who a content write is recorded as: the stamp's updated_by and the audit row of the batch. */
 export interface Writer {
   userId: string;
+  /** The writer's current roles (role-gated parts of a write, e.g. an assistant's persona). */
+  roles: readonly Role[];
   audit(entry: AuditEntry, now: number): Promise<Query<never>>;
 }
 
 /** The signed-in staff member (admin UI routes). */
 export const staffWriter = (c: Ctx): Writer => ({
   userId: actor(c).userId,
+  roles: actor(c).roles,
   audit: (entry, now) => auditStmt(c, entry, now),
 });
 
@@ -208,6 +211,121 @@ export function stampCols(
     vals.push(userId);
   }
   return { cols, vals };
+}
+
+/**
+ * POST semantics of every entity: `body` (already parsed by the entity's strict create schema) is
+ * checked and inserted with its virtual state and the audit entry `content.<name>.create` in one
+ * batch. A new episode without an e-book or an extra gets its own drafts of both (spec: episode
+ * materials). A persona sent with a new assistant needs ai.persona (spec 05 note #1).
+ */
+export async function createEntity(db: D1Database, e: Entity, body: Item, writer: Writer): Promise<Item> {
+  const now = Date.now();
+  const persona = typeof body.persona === 'string' ? body.persona : undefined;
+  if (persona !== undefined && !can(writer.roles, 'ai.persona')) {
+    throw new ApiError('forbidden', 'Só admins definem a persona da assistente.');
+  }
+  let item = editable(e, body);
+  item = e.normalize ? e.normalize(item) : item;
+  await checkItem(db, e, item);
+  const id = item[e.pk.key] as string | number;
+
+  const stamp = stampCols(e, writer.userId, now);
+  const cols = [...e.fields.map((fd) => fd.col), ...stamp.cols];
+  const vals = [...e.fields.map((fd) => toCol(fd, item[fd.key])), ...stamp.vals];
+  if (e.name === 'assistants') {
+    cols.push('persona');
+    vals.push(persona ?? '');
+  }
+  const stmts: Query<unknown>[] = [
+    q(db, `INSERT INTO ${e.table}(${cols.join(', ')}) VALUES(${cols.map(() => '?').join(', ')})`, ...vals),
+  ];
+  if (e.name === 'episodes') {
+    if (item.ebookNum == null) {
+      stmts.push(
+        q(
+          db,
+          `INSERT INTO ebooks(num,title,eps_label,pass_score,updated_at)
+          SELECT COALESCE(MAX(num),0)+1,?, ?,0,? FROM ebooks`,
+          `E-book · ${String(item.title)}`,
+          `Episódio ${id}`,
+          now,
+        ),
+        q(db, 'UPDATE episodes SET ebook_num=(SELECT MAX(num) FROM ebooks) WHERE num=?', id),
+      );
+    }
+    if (item.extraId == null) {
+      const extraId = `episode-${id}-extra`;
+      stmts.push(
+        q(
+          db,
+          `INSERT INTO extras(id,title,format,genres,themes,cast_list,lines,vocab,sort,status)
+          VALUES(?,?,'series','[]','[]','[]','[]','[]',?,'draft')`,
+          extraId,
+          `Extra · ${String(item.title)}`,
+          id,
+        ),
+        q(db, 'UPDATE episodes SET extra_id=? WHERE num=?', extraId, id),
+      );
+    }
+  }
+  if (e.virtual) stmts.push(...e.virtual.writes(db, id, item[e.virtual.key]));
+  stmts.push(
+    await writer.audit(
+      {
+        action: `content.${e.name}.create`,
+        targetType: e.target,
+        targetId: String(id),
+        after: persona !== undefined ? { ...item, persona: '[set]' } : item,
+      },
+      now,
+    ),
+  );
+  try {
+    await batchRun(db, stmts);
+  } catch (err) {
+    writeError(err);
+  }
+  return (await loadOne(db, e, id)) as Item;
+}
+
+/**
+ * DELETE semantics of every entity: refused (409 in_use) while learner data or other content still
+ * points at the row; otherwise the row goes (with its ON DELETE CASCADE children) and the audit
+ * entry `content.<name>.delete` is written in the same batch. Returns the deleted item.
+ */
+export async function removeEntity(db: D1Database, e: Entity, id: string | number, writer: Writer): Promise<Item> {
+  const now = Date.now();
+  const current = await loadOne(db, e, id);
+  if (!current) throw new ApiError('not_found');
+  if (e.inUse?.length) {
+    const counts = await batch(
+      db,
+      e.inUse.map((u) => q<{ n: number }>(db, u.sql, id)),
+    );
+    const uses = e.inUse.map((u, i) => ({ label: u.label, count: counts[i]?.[0]?.n ?? 0 })).filter((u) => u.count > 0);
+    if (uses.length) {
+      throw new ApiError(
+        'in_use',
+        `Ainda em uso: ${uses.map((u) => `${u.count} ${u.label}`).join(', ')}. Edite ou despublique em vez de excluir.`,
+        { uses },
+      );
+    }
+  }
+  const before = editable(e, current);
+  try {
+    await batchRun(db, [
+      q(db, `DELETE FROM ${e.table} WHERE ${e.pk.col} = ?`, id),
+      await writer.audit(
+        { action: `content.${e.name}.delete`, targetType: e.target, targetId: String(id), before },
+        now,
+      ),
+    ]);
+  } catch (err) {
+    if (isConstraint(err, 'FOREIGN KEY')) throw new ApiError('in_use', 'Outro conteúdo ainda aponta para este item.');
+    throw err;
+  }
+  return before;
 }
 
 export interface UpdateOptions {

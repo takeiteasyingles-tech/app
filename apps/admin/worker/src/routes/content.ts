@@ -9,7 +9,6 @@ import {
   Bilingual,
   type BLOB_KEYS,
   type BlobRow,
-  can,
   FocusCard,
   IdString,
   MicModeCard,
@@ -20,23 +19,22 @@ import {
   Shelf,
   SrsGrade,
 } from '@tie/shared';
-import { type AppEnv, all, batch, batchRun, fromJson, one, type Query, q, toJson } from '@tie/worker-core';
+import { type AppEnv, all, batchRun, fromJson, one, q, toJson } from '@tie/worker-core';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ENTITIES, type Entity, type Issue, type Item, toCol } from '../lib/entities';
+import { ENTITIES, type Entity, type Issue, type Item } from '../lib/entities';
 import {
-  checkItem,
-  editable,
+  createEntity,
   failIssues,
   loadOne,
   loadRows,
   parsePk,
+  removeEntity,
   staffWriter,
-  stampCols,
   updateEntity,
-  writeError,
+  type Writer,
 } from '../lib/entityCrud';
-import { actor, auditStmt, bodyOf, isConstraint, paramsOf, queryOf, route } from '../lib/http';
+import { bodyOf, paramsOf, queryOf, route } from '../lib/http';
 import { blobMediaPaths, mediaIssues } from '../lib/mediaRefs';
 
 const routes = new Hono<AppEnv>();
@@ -45,7 +43,6 @@ const routes = new Hono<AppEnv>();
 
 function mountEntity(e: Entity): void {
   const api = e.api;
-  const auditName = (op: string) => `content.${e.name}.${op}`;
 
   route(routes, api.list, async (c) => {
     const { parent } = queryOf(c, api.list.query) as { parent?: string };
@@ -67,76 +64,7 @@ function mountEntity(e: Entity): void {
 
   route(routes, api.create, async (c) => {
     const body = (await bodyOf(c, api.create.body)) as Item;
-    const db = c.env.DB;
-    const now = Date.now();
-    // Spec 05 note #1: a persona sent with a new assistant needs the ai.persona permission.
-    const persona = typeof body.persona === 'string' ? body.persona : undefined;
-    if (persona !== undefined && !can(actor(c).roles, 'ai.persona')) {
-      throw new ApiError('forbidden', 'Só admins definem a persona da assistente.');
-    }
-    let item = editable(e, body);
-    item = e.normalize ? e.normalize(item) : item;
-    await checkItem(db, e, item);
-    const id = item[e.pk.key] as string | number;
-
-    const stamp = stampCols(e, actor(c).userId, now);
-    const cols = [...e.fields.map((fd) => fd.col), ...stamp.cols];
-    const vals = [...e.fields.map((fd) => toCol(fd, item[fd.key])), ...stamp.vals];
-    if (e.name === 'assistants') {
-      cols.push('persona');
-      vals.push(persona ?? '');
-    }
-    const stmts: Query<unknown>[] = [
-      q(db, `INSERT INTO ${e.table}(${cols.join(', ')}) VALUES(${cols.map(() => '?').join(', ')})`, ...vals),
-    ];
-    if (e.name === 'episodes') {
-      if (item.ebookNum == null) {
-        stmts.push(
-          q(
-            db,
-            `INSERT INTO ebooks(num,title,eps_label,pass_score,updated_at)
-            SELECT COALESCE(MAX(num),0)+1,?, ?,0,? FROM ebooks`,
-            `E-book · ${String(item.title)}`,
-            `Episódio ${id}`,
-            now,
-          ),
-          q(db, 'UPDATE episodes SET ebook_num=(SELECT MAX(num) FROM ebooks) WHERE num=?', id),
-        );
-      }
-      if (item.extraId == null) {
-        const extraId = `episode-${id}-extra`;
-        stmts.push(
-          q(
-            db,
-            `INSERT INTO extras(id,title,format,genres,themes,cast_list,lines,vocab,sort,status)
-            VALUES(?,?,'series','[]','[]','[]','[]','[]',?,'draft')`,
-            extraId,
-            `Extra · ${String(item.title)}`,
-            id,
-          ),
-          q(db, 'UPDATE episodes SET extra_id=? WHERE num=?', extraId, id),
-        );
-      }
-    }
-    if (e.virtual) stmts.push(...e.virtual.writes(db, id, item[e.virtual.key]));
-    stmts.push(
-      await auditStmt(
-        c,
-        {
-          action: auditName('create'),
-          targetType: e.target,
-          targetId: String(id),
-          after: persona !== undefined ? { ...item, persona: '[set]' } : item,
-        },
-        now,
-      ),
-    );
-    try {
-      await batchRun(db, stmts);
-    } catch (err) {
-      writeError(err);
-    }
-    return c.json({ item: await loadOne(c.env.DB, e, id) }, 201);
+    return c.json({ item: await createEntity(c.env.DB, e, body, staffWriter(c)) }, 201);
   });
 
   route(routes, api.update, async (c) => {
@@ -148,40 +76,7 @@ function mountEntity(e: Entity): void {
 
   route(routes, api.remove, async (c) => {
     const { id: rawId } = paramsOf(c, api.remove.params) as { id: string };
-    const id = parsePk(e, rawId);
-    const db = c.env.DB;
-    const now = Date.now();
-    const current = await loadOne(c.env.DB, e, id);
-    if (!current) throw new ApiError('not_found');
-    if (e.inUse?.length) {
-      const counts = await batch(
-        db,
-        e.inUse.map((u) => q<{ n: number }>(db, u.sql, id)),
-      );
-      const uses = e.inUse
-        .map((u, i) => ({ label: u.label, count: counts[i]?.[0]?.n ?? 0 }))
-        .filter((u) => u.count > 0);
-      if (uses.length) {
-        throw new ApiError(
-          'in_use',
-          `Ainda em uso: ${uses.map((u) => `${u.count} ${u.label}`).join(', ')}. Edite ou despublique em vez de excluir.`,
-          { uses },
-        );
-      }
-    }
-    try {
-      await batchRun(db, [
-        q(db, `DELETE FROM ${e.table} WHERE ${e.pk.col} = ?`, id),
-        await auditStmt(
-          c,
-          { action: auditName('delete'), targetType: e.target, targetId: String(id), before: editable(e, current) },
-          now,
-        ),
-      ]);
-    } catch (err) {
-      if (isConstraint(err, 'FOREIGN KEY')) throw new ApiError('in_use', 'Outro conteúdo ainda aponta para este item.');
-      throw err;
-    }
+    await removeEntity(c.env.DB, e, parsePk(e, rawId), staffWriter(c));
     return c.json({ ok: true as const });
   });
 }
@@ -229,10 +124,7 @@ const blobRow = (r: BlobDb): BlobRow => ({
 
 const B = adminApi.content.blobs;
 
-route(routes, B.list, async (c) => {
-  const rows = await all<BlobDb>(c.env.DB, 'SELECT key, json, updated_at, updated_by FROM content_blobs ORDER BY key');
-  return c.json({ items: rows.map(blobRow) });
-});
+route(routes, B.list, async (c) => c.json({ items: await listBlobs(c.env.DB) }));
 
 route(routes, B.get, async (c) => {
   const { key } = paramsOf(c, B.get.params);
@@ -245,10 +137,20 @@ route(routes, B.get, async (c) => {
   return c.json({ item: blobRow(row) });
 });
 
-route(routes, B.put, async (c) => {
-  const { key } = paramsOf(c, B.put.params);
-  const body = await bodyOf(c, B.put.body);
-  const parsed = BLOB_SCHEMAS[key].safeParse(body.json);
+/** Every blob in API shape (also the MCP list_blobs tool). */
+export async function listBlobs(db: D1Database): Promise<BlobRow[]> {
+  const rows = await all<BlobDb>(db, 'SELECT key, json, updated_at, updated_by FROM content_blobs ORDER BY key');
+  return rows.map(blobRow);
+}
+
+/** Validates and replaces one blob, audited as content.blobs.put (admin route and MCP put_blob). */
+export async function putBlob(
+  db: D1Database,
+  key: (typeof BLOB_KEYS)[number],
+  value: unknown,
+  writer: Writer,
+): Promise<BlobRow> {
+  const parsed = BLOB_SCHEMAS[key].safeParse(value);
   if (!parsed.success) {
     throw new ApiError('validation_failed', undefined, {
       issues: parsed.error.issues
@@ -258,10 +160,9 @@ route(routes, B.put, async (c) => {
   }
   const json = parsed.data;
   const media = blobMediaPaths(key, json).map((m) => ({ id: m.id, path: `json.${m.path}`, kinds: ['image'] as const }));
-  const issues = await mediaIssues(c.env.DB, media);
+  const issues = await mediaIssues(db, media);
   if (issues.length) failIssues(issues);
 
-  const db = c.env.DB;
   const now = Date.now();
   const before = await one<BlobDb>(
     db,
@@ -276,10 +177,9 @@ route(routes, B.put, async (c) => {
       key,
       toJson(json),
       now,
-      actor(c).userId,
+      writer.userId,
     ),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'content.blobs.put',
         targetType: 'content_blob',
@@ -290,7 +190,13 @@ route(routes, B.put, async (c) => {
     ),
   ]);
   const row = await one<BlobDb>(db, 'SELECT key, json, updated_at, updated_by FROM content_blobs WHERE key = ?', key);
-  return c.json({ item: blobRow(row as BlobDb) });
+  return blobRow(row as BlobDb);
+}
+
+route(routes, B.put, async (c) => {
+  const { key } = paramsOf(c, B.put.params);
+  const body = await bodyOf(c, B.put.body);
+  return c.json({ item: await putBlob(c.env.DB, key, body.json, staffWriter(c)) });
 });
 
 // ---------- Option lists ----------
@@ -345,14 +251,30 @@ const optionRow = (r: OptionDb): OptionListRow => ({
 const O = adminApi.content.optionLists;
 const OPTION_SELECT = 'SELECT list_key, scope, item_key, sort, label, sub, icon, img_media, extra FROM option_lists';
 
-route(routes, O.list, async (c) => {
-  const rows = await all<OptionDb>(c.env.DB, `${OPTION_SELECT} ORDER BY list_key, scope, sort, item_key`);
-  return c.json({ items: rows.map(optionRow) });
-});
+/** Every option list item, or one list's (also the MCP list_option_lists tool). */
+export async function listOptionLists(db: D1Database, listKey?: string): Promise<OptionListRow[]> {
+  const rows = listKey
+    ? await all<OptionDb>(db, `${OPTION_SELECT} WHERE list_key = ? ORDER BY scope, sort, item_key`, listKey)
+    : await all<OptionDb>(db, `${OPTION_SELECT} ORDER BY list_key, scope, sort, item_key`);
+  return rows.map(optionRow);
+}
+
+route(routes, O.list, async (c) => c.json({ items: await listOptionLists(c.env.DB) }));
 
 route(routes, O.put, async (c) => {
   const { listKey } = paramsOf(c, O.put.params);
   const body = await bodyOf(c, O.put.body);
+  return c.json({ items: await putOptionList(c.env.DB, listKey, body.items, staffWriter(c)) });
+});
+
+/** Validates and replaces one option list, audited as content.option_lists.put (admin and MCP). */
+export async function putOptionList(
+  db: D1Database,
+  listKey: string,
+  items: z.output<typeof O.put.body>['items'],
+  writer: Writer,
+): Promise<OptionListRow[]> {
+  const body = { items };
   // Own keys only: `in` would also accept inherited names ('constructor', '__proto__').
   if (!Object.hasOwn(LIST_EXTRA, listKey)) {
     failIssues([
@@ -390,7 +312,7 @@ route(routes, O.put, async (c) => {
   }
   issues.push(
     ...(await mediaIssues(
-      c.env.DB,
+      db,
       body.items.flatMap((it, i) =>
         it.imgMedia ? [{ id: it.imgMedia, path: `items.${i}.imgMedia`, kinds: ['image'] as const }] : [],
       ),
@@ -398,7 +320,6 @@ route(routes, O.put, async (c) => {
   );
   if (issues.length) failIssues(issues);
 
-  const db = c.env.DB;
   const now = Date.now();
   const before = await all<OptionDb>(db, `${OPTION_SELECT} WHERE list_key = ? ORDER BY scope, sort, item_key`, listKey);
   await batchRun(db, [
@@ -419,8 +340,7 @@ route(routes, O.put, async (c) => {
         it.extra == null ? null : toJson(it.extra),
       ),
     ),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'content.option_lists.put',
         targetType: 'option_list',
@@ -430,9 +350,8 @@ route(routes, O.put, async (c) => {
       now,
     ),
   ]);
-  const rows = await all<OptionDb>(db, `${OPTION_SELECT} WHERE list_key = ? ORDER BY scope, sort, item_key`, listKey);
-  return c.json({ items: rows.map(optionRow) });
-});
+  return listOptionLists(db, listKey);
+}
 
 // Literal paths (blobs, option-lists) are registered above, before the per-entity `/:id` routes.
 for (const e of ENTITIES) mountEntity(e);

@@ -2,6 +2,7 @@
 import { adminApi } from '@tie/shared/contracts/admin';
 import { MCP_PATH } from '@tie/shared/contracts/mcp';
 import { createApp, type Env, fail } from '@tie/worker-core';
+import { runScheduledBackup } from './lib/backups';
 import routes from './routes/index';
 
 const MULTIPART = new Set([`POST ${adminApi.media.upload.path}`]);
@@ -26,4 +27,18 @@ const app = buildAdminApp();
 
 export default {
   fetch: app.fetch,
+  // Hourly (wrangler.jsonc triggers): makes the automatic backup when its configured slot comes.
+  scheduled(controller, env, ctx) {
+    ctx.waitUntil(
+      runScheduledBackup(env, controller.scheduledTime).catch((err: unknown) => {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            msg: 'scheduled backup failed',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }),
+    );
+  },
 } satisfies ExportedHandler<Env>;

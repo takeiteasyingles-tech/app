@@ -42,6 +42,10 @@ const FIXED: Record<string, string> = {
   'season_test.publish': 'Abriu ou fechou o teste da temporada',
   'certificate.revoke': 'Revogou um certificado',
   'certificate.reinstate': 'Reativou um certificado',
+  'backup.create': 'Fez um backup',
+  'backup.delete': 'Excluiu um backup',
+  'backup.restore': 'Restaurou o conteúdo de um backup',
+  'backup.config': 'Mudou o backup automático',
 };
 
 const ENTITY: Record<string, string> = {
@@ -94,6 +98,8 @@ const TARGET: Record<string, string> = {
   prompt: 'Prompt da IA',
   game_rules: 'Gamificação',
   season: 'Temporada',
+  backup: 'Backup',
+  app_setting: 'Configuração',
   api_token: 'Token de API',
   season_test_question: 'Questão do teste da temporada',
   certificate: 'Certificado',
@@ -134,6 +140,7 @@ export function auditIcon(action: string): string {
   if (action.startsWith('ai.')) return 'mic';
   if (action.startsWith('game.') || action.startsWith('certificate.')) return 'trophy';
   if (action.startsWith('season_test.')) return 'pen';
+  if (action.startsWith('backup.')) return 'database';
   return 'history';
 }
 

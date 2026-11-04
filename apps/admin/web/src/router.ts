@@ -41,6 +41,7 @@ export type RouteName =
   | 'audit'
   | 'releases'
   | 'settings'
+  | 'backups'
   | 'account'
   | 'notFound';
 
@@ -78,6 +79,7 @@ export const ROUTES: readonly (readonly [RegExp, RouteName, (readonly string[])?
   [/^conteudo\/temporadas\/(\d{1,9})\/teste$/, 'seasonTest', ['n']],
   [/^certificados$/, 'certificates'],
   [/^midia$/, 'media'],
+  [/^backup$/, 'backups'],
   [/^moderacao$/, 'moderation'],
   [/^feedbacks$/, 'feedbacks'],
   [/^auditoria$/, 'audit'],

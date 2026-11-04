@@ -27,7 +27,8 @@ import {
 } from '@tie/shared/content/compile';
 import { type AppEnv, all, batch, batchRun, fromJson, one, q } from '@tie/worker-core';
 import { Hono } from 'hono';
-import { actor, auditStmt, bodyOf, type Ctx, paramsOf, route } from '../lib/http';
+import { staffWriter, type Writer } from '../lib/entityCrud';
+import { bodyOf, type Ctx, paramsOf, route } from '../lib/http';
 import { missingReleaseMedia, writeReleaseIndex } from '../lib/releaseMedia';
 
 const routes = new Hono<AppEnv>();
@@ -219,6 +220,12 @@ const releaseId = (version: string) => `rel-${version.slice(0, 16)}`;
 
 route(routes, C.publish, async (c) => {
   const body = await bodyOf(c, C.publish.body);
+  return c.json({ release: await publishRelease(c, body.notes, staffWriter(c)) });
+});
+
+/** Compiles, uploads and points learners at a new release (staff route and MCP publish_release). */
+export async function publishRelease(c: Ctx, notes: string | undefined, writer: Writer): Promise<Release> {
+  const body = { notes };
   const db = c.env.DB;
   const now = Date.now();
   let compiled: CompiledContent;
@@ -248,7 +255,7 @@ route(routes, C.publish, async (c) => {
       ver,
       JSON.stringify(compiled.manifest),
       body.notes ?? null,
-      actor(c).userId,
+      writer.userId,
       compiled.manifest.publishedAt,
     ),
     q(
@@ -257,11 +264,10 @@ route(routes, C.publish, async (c) => {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
       SETTINGS.contentCurrent,
       ver,
-      actor(c).userId,
+      writer.userId,
       now,
     ),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'content.publish',
         targetType: 'content_release',
@@ -276,20 +282,27 @@ route(routes, C.publish, async (c) => {
     ),
   ]);
   const row = await one<ReleaseDb>(db, 'SELECT * FROM content_releases WHERE version = ?', ver);
-  return c.json({ release: releaseOf(row as ReleaseDb) });
-});
+  return releaseOf(row as ReleaseDb);
+}
 
-route(routes, R.list, async (c) => {
-  const db = c.env.DB;
+/** Every release (newest first) and the one learners get (staff route and MCP list_releases). */
+export async function listReleases(db: D1Database): Promise<{ items: Release[]; current: string | null }> {
   const [rows, cur] = await Promise.all([
     all<ReleaseDb>(db, 'SELECT * FROM content_releases ORDER BY published_at DESC, id DESC LIMIT 200'),
     currentVersion(db),
   ]);
-  return c.json({ items: rows.map(releaseOf), current: cur });
-});
+  return { items: rows.map(releaseOf), current: cur };
+}
+
+route(routes, R.list, async (c) => c.json(await listReleases(c.env.DB)));
 
 route(routes, R.rollback, async (c) => {
   const { id } = paramsOf(c, R.rollback.params);
+  return c.json({ current: await rollbackRelease(c, id, staffWriter(c)) });
+});
+
+/** Points learners back at an earlier release (staff route and MCP rollback_release). */
+export async function rollbackRelease(c: Ctx, id: string, writer: Writer): Promise<string> {
   const db = c.env.DB;
   const now = Date.now();
   const rel = await one<ReleaseDb>(db, 'SELECT * FROM content_releases WHERE id = ?', id);
@@ -314,11 +327,10 @@ route(routes, R.rollback, async (c) => {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
       SETTINGS.contentCurrent,
       rel.version,
-      actor(c).userId,
+      writer.userId,
       now,
     ),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'content.rollback',
         targetType: 'content_release',
@@ -328,7 +340,7 @@ route(routes, R.rollback, async (c) => {
       now,
     ),
   ]);
-  return c.json({ current: rel.version });
-});
+  return rel.version;
+}
 
 export default routes;
