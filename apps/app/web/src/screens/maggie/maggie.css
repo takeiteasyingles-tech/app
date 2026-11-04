@@ -28,6 +28,17 @@
 .mg .av2d[data-a="barbara"] {
   --av-x: 57%;
 }
+/* 3D avatar (Avatar3D.tsx): the engine cover-fits the photo itself, keeping the face in the frame. */
+.mg .av2d.av3d {
+  background: #8f8b87;
+}
+.mg .av2d.av3d .av3d-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 
 /* In the call there is no tab bar: a toast at its usual place (above the tab bar) covered the mic and
    swallowed the tap that stops a take. It drops from under the topbar instead and lets taps through. */

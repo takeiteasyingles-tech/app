@@ -183,6 +183,44 @@ export async function synthesize(
   return bytes;
 }
 
+/** ElevenLabs voice of an assistant (env.ELEVENLABS_VOICES), or null to use the Workers AI voice. */
+export function elevenVoice(
+  env: Pick<Env, 'ELEVENLABS_API_KEY' | 'ELEVENLABS_VOICES'>,
+  assistantKey: string | null,
+): string | null {
+  if (!assistantKey || !env.ELEVENLABS_API_KEY || !env.ELEVENLABS_VOICES) return null;
+  try {
+    const id = (JSON.parse(env.ELEVENLABS_VOICES) as Record<string, unknown>)[assistantKey];
+    return typeof id === 'string' && /^[A-Za-z0-9]{8,40}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export const DEFAULT_ELEVEN_MODEL = 'eleven_turbo_v2_5';
+
+/** Text → mp3 with an ElevenLabs (cloned) voice. */
+export async function synthesizeEleven(
+  env: Pick<Env, 'ELEVENLABS_API_KEY'>,
+  model: string,
+  voiceId: string,
+  text: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'xi-api-key': env.ELEVENLABS_API_KEY ?? '', 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+    body: JSON.stringify({
+      text,
+      model_id: model,
+      voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true },
+    }),
+  });
+  if (!r.ok) throw new AiCallError(`ElevenLabs TTS ${r.status}`, model);
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (bytes.length === 0) throw new AiCallError('TTS returned no audio', model);
+  return bytes;
+}
+
 export interface GuardVerdict {
   safe: boolean;
   categories: string[];

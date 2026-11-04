@@ -27,6 +27,13 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** Var. Sender, e.g. 'Take It Easy <no-reply@example.com>' (a domain verified in Resend). */
   MAIL_FROM?: string;
+  // ElevenLabs TTS for assistants with a cloned voice (tie-app only).
+  /** Secret. Unset → every assistant uses the Workers AI voice. */
+  ELEVENLABS_API_KEY?: string;
+  /** Var. JSON {assistantKey: voiceId}, e.g. '{"margaret":"abc123"}'. */
+  ELEVENLABS_VOICES?: string;
+  /** Var. ElevenLabs model id; default eleven_turbo_v2_5. */
+  ELEVENLABS_MODEL?: string;
 }
 
 export type Audience = 'app' | 'admin';

@@ -105,8 +105,28 @@ interface Job {
 
 let current: Job | null = null;
 
+/**
+ * What a 3D avatar follows while a line plays: the decoded HD audio and when it started (for text +
+ * audio lip sync), the browser voice's flap visemes (no audio to analyse), and the end of the line.
+ */
+export type SpeechEvent =
+  | { type: 'audio'; text: string; buffer: AudioBuffer; ctx: AudioContext; startAt: number; rate: number }
+  | { type: 'mouth'; v: Viseme }
+  | { type: 'end' };
+const taps = new Set<(e: SpeechEvent) => void>();
+export function onSpeech(fn: (e: SpeechEvent) => void): () => void {
+  taps.add(fn);
+  return () => {
+    taps.delete(fn);
+  };
+}
+function emit(e: SpeechEvent): void {
+  for (const fn of taps) fn(e);
+}
+
 /** Stops whatever is speaking (browser or HD voice) and resolves its say(). */
 export function stop(): void {
+  if (current) emit({ type: 'end' });
   if (current) {
     const job = current;
     job.cancelled = true;
@@ -152,9 +172,10 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   current = job;
   if (state.value.settings.hd && aiOnline.value) {
     try {
-      const buf = await tts(text, gender, vo?.tts || (gender === 'male' ? 'orion' : 'asteria'));
+      // An assistant is sent by key, so the server can pick its own voice (a cloned one, see /api/tts).
+      const buf = await tts(text, gender, prof?.k || vo?.tts || (gender === 'male' ? 'orion' : 'asteria'));
       if (job.cancelled) return;
-      if (buf) return await playBuffer(buf, job, o);
+      if (buf) return await playBuffer(buf, job, o, text);
     } catch {
       // Falls back to the browser voice.
     }
@@ -165,6 +186,7 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
       if (job.cancelled) return;
       clearInterval(job.timer);
       o.mouth?.('rest');
+      emit({ type: 'end' });
       if (current === job) current = null;
       resolve();
     };
@@ -172,10 +194,11 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
     let base = 0;
     let t0 = 0;
     const flap = () => {
-      if (!o.mouth) return;
       const pos = Math.floor(base + ((performance.now() - t0) / 1000) * cps);
       const ch = text[pos];
-      o.mouth(ch == null ? 'rest' : pos % 3 === 2 ? 'm' : VIS(ch));
+      const v: Viseme = ch == null ? 'rest' : pos % 3 === 2 ? 'm' : VIS(ch);
+      o.mouth?.(v);
+      emit({ type: 'mouth', v });
     };
     const startFlap = () => {
       t0 = performance.now();
@@ -219,7 +242,7 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
 }
 
 /** HD voice through the shared AudioContext; the mouth follows the RMS level. */
-function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: number }): Promise<void> {
+function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: number }, text: string): Promise<void> {
   return new Promise<void>((resolve) => {
     const c = ac();
     if (!c) return resolve();
@@ -250,11 +273,16 @@ function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: num
         src.onended = () => {
           cancelAnimationFrame(job.raf || 0);
           o.mouth?.('rest');
-          if (current === job) current = null;
+          if (current === job) {
+            emit({ type: 'end' });
+            current = null;
+          }
           resolve();
         };
         o.onStart?.();
-        src.start();
+        const startAt = c.currentTime;
+        emit({ type: 'audio', text, buffer: audio, ctx: c, startAt, rate: o.rate });
+        src.start(startAt);
         loop();
       },
       () => resolve(),

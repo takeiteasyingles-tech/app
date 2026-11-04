@@ -81,7 +81,17 @@ import {
   turnAppend,
 } from '../ai/context';
 import { background, flagSubject } from '../ai/http';
-import { aiEnabled, hasAiBinding, loadModels, runJson, synthesize, transcribe } from '../ai/models';
+import {
+  aiEnabled,
+  DEFAULT_ELEVEN_MODEL,
+  elevenVoice,
+  hasAiBinding,
+  loadModels,
+  runJson,
+  synthesize,
+  synthesizeEleven,
+  transcribe,
+} from '../ai/models';
 import { moderateTurn } from '../ai/moderation';
 import {
   buildTutorMessages,
@@ -623,9 +633,13 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
   const text = cleanText(body.text, LIMITS.ttsTextMax);
   if (!text) throw fail('validation_failed', undefined, { field: 'text' });
 
-  const { speaker } = await resolveSpeaker(db, body.voice, body.gender);
+  const { speaker, assistantKey } = await resolveSpeaker(db, body.voice, body.gender);
   const models = await loadModels(db);
-  const hash = await ttsKey(models.tts, speaker, text);
+  // An assistant with a cloned voice speaks through ElevenLabs; everyone else through Workers AI.
+  const eleven = elevenVoice(c.env, assistantKey);
+  const ttsModel = eleven ? (c.env.ELEVENLABS_MODEL ?? DEFAULT_ELEVEN_MODEL) : models.tts;
+  const voiceTag = eleven ? `eleven:${eleven}` : speaker;
+  const hash = await ttsKey(ttsModel, voiceTag, text);
   const quota = quotaOf(c.env, c.get('services'));
 
   let source: 'cache' | 'r2' | 'ai' = 'cache';
@@ -637,10 +651,12 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
   }
   if (!audio) {
     if (!(await aiEnabled(c.env, flagSubject(s)))) throw fail('ai_unavailable');
-    const r = await reserveOrThrow(quota, s.userId, ttsSeconds(text), { kind: 'tts', model: models.tts });
+    const r = await reserveOrThrow(quota, s.userId, ttsSeconds(text), { kind: 'tts', model: ttsModel });
     const started = Date.now();
     try {
-      audio = await synthesize(c.env, models.tts, text, speaker);
+      audio = eleven
+        ? await synthesizeEleven(c.env, ttsModel, eleven, text)
+        : await synthesize(c.env, models.tts, text, speaker);
     } catch (err) {
       logWarn('tts failed', err);
       // The client falls back to browser TTS: nothing delivered, nothing billed.
@@ -648,13 +664,13 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
       throw fail('ai_unavailable');
     }
     source = 'ai';
-    background(c, quota.finish(r.eventId, { ok: true, latencyMs: Date.now() - started, model: models.tts }));
+    background(c, quota.finish(r.eventId, { ok: true, latencyMs: Date.now() - started, model: ttsModel }));
     // The audio is delivered (and billed) whether or not the caches can be written.
     const bytes = audio;
-    background(c, r2Put(c.env.MEDIA, hash, bytes, speaker));
+    background(c, r2Put(c.env.MEDIA, hash, bytes, voiceTag));
     background(c, cachePut(hash, bytes));
   } else {
-    background(c, quota.log(s.userId, 'tts', { ok: true, model: models.tts }));
+    background(c, quota.log(s.userId, 'tts', { ok: true, model: ttsModel }));
   }
 
   const headers: Record<string, string> = {

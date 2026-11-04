@@ -11,6 +11,7 @@ export const CACHE_NAMES = {
   manifest: 'tie-content-manifest-v1',
   me: 'tie-api-me-v1',
   media: 'tie-media-v1',
+  avatars: 'tie-avatars-v1',
 } as const;
 
 export const USER_CACHES: readonly string[] = Object.values(CACHE_NAMES);

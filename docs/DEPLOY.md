@@ -143,6 +143,16 @@ Confirm with `npx wrangler secret list` in each app dir.
 
 Without `RESEND_API_KEY` the app still works: the request answers as usual, nothing is sent, and the Worker logs a warning (`mail not sent: RESEND_API_KEY is not set`, without the link). Staff can still issue a reset link from Admin → Usuários. Locally (`npm run dev:app`) leave the key unset: the reset link is printed in the wrangler console.
 
+## 5b. Cloned assistant voices (ElevenLabs)
+
+An assistant listed in `ELEVENLABS_VOICES` speaks the HD voice (`/api/tts`) with an ElevenLabs voice (a clone of the character); every other assistant keeps the Workers AI voice. The audio is cached in R2 like any TTS and billed against the same Mic quota.
+
+1. ElevenLabs account on a plan with Instant Voice Cloning (Starter or above). Profile → API Keys → create a key.
+2. Clone the voice from the character's sample (`prototipo/personagens/<Name>/voz.mp3`): ElevenLabs → Voices → Add a new voice → Instant Voice Clone, or `node tools/avatar/eleven.mjs clone <Name> <voz.mp3> <out.json>` with `ELEVENLABS_API_KEY` in the root `.env`. Note the voice id.
+3. Store the key as a secret of tie-app (paste when prompted): `cd apps/app; npx wrangler secret put ELEVENLABS_API_KEY`.
+4. Set `ELEVENLABS_VOICES` in `apps/app/wrangler.jsonc`, in **both** the top-level `vars` and `env.local.vars`, e.g. `"{\"margaret\":\"<voice id>\"}"`. `ELEVENLABS_MODEL` (optional) picks the model; the default is `eleven_turbo_v2_5` (low latency).
+5. Deploy tie-app. If ElevenLabs fails, `/api/tts` answers `ai_unavailable` and the app falls back to the browser voice, as for any TTS failure.
+
 ## 6. Migrations (remote)
 
 ```powershell

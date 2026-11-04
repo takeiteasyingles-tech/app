@@ -16,6 +16,7 @@ coverage/
 # Tooling output
 tools/parity/out/
 tools/e2e/out/
+tools/avatar/out/
 playwright-report/
 test-results/
 packages/seed/out/

@@ -25,7 +25,7 @@ import { addCards, endMicSession, send as sendAction } from '../../store/actions
 import { catalog, catalogImage, loadCatalog } from '../../store/content';
 import { set, state } from '../../store/state';
 import { AiBadge } from '../../ui-blocks/chrome';
-import { AvatarVideo } from './Avatar';
+import { MicAvatar } from './Avatar3D';
 import {
   assistant,
   fmt,
@@ -689,7 +689,7 @@ function MicStage(c: Catalog, m: Session) {
           ) : null}
         </div>
       ) : null}
-      <AvatarVideo key={A.k} a={A} talking={talking} mood={m.mood} />
+      <MicAvatar key={A.k} a={A} talking={talking} mood={m.mood} />
     </Stage>
   );
 }

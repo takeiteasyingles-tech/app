@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:admin"],
       "port": 8788
+    },
+    {
+      "name": "avatar-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "http-server@14.1.1", "tools/avatar/out", "-p", "8790", "-c-1", "-s"],
+      "port": 8790
     }
   ]
 }

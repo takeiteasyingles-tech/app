@@ -45,6 +45,12 @@ Screens that knowingly depart from the prototype's markup (the golden rule's "sa
 | White card on a navy screen | `tie-ext.css` resets `.h1`, `.lbl` and `.btn.ghost` inside `.on-navy .card.paper`. | The Mic pronunciation card showed the phrase and the "Ouvir" button white on white (the prototype had the same gap). |
 | Staff accounts in the student app | `PUT /api/me/profile` and `POST /api/me/profile/complete` create the learner rows (profile, settings, stats) when they are missing. | Accounts created by an admin invite had none, so onboarding failed with "Não encontrado". |
 
+### 3D Mic avatar (2026-11-01)
+
+| Area | Deviation | Why |
+|---|---|---|
+| Mic avatar | Assistants with a model in `MODELS` (`screens/maggie/Avatar3D.tsx`; today only `margaret`) render a 2.5D rigged model with three.js instead of the prototype's video clips (`.av2d.av3d` with a canvas). The model lives in `web/public/avatars/<k>/` (glTF with separate JPEG textures, so the CSP's `connect-src 'self'` allows them; the SW caches `/avatars/*` on first use in `tie-avatars-v1`, nothing is precached). three.js and the engine load with `import()` only for such an assistant, outside the Mic chunk. Idle ↔ talk is a skeleton crossfade (talk clip by the reply mood); the mouth moves only with the voice: for the HD voice, `core/speech.ts` emits the decoded audio and its start (`onSpeech`) and `avatar3d/lipsync.ts` turns the reply text into visemes timed over the voiced parts of the audio; the browser voice drives it with its flap visemes. Without WebGL2, or if the model fails to load, the video avatar is shown. | Product request: the generated video clips drifted from the character's face and could not follow the words; the photo-based rig keeps the face exact and lip-syncs any reply. |
+
 ### v1 features (2026-10-18, spec 07)
 
 PROD additions with no prototype counterpart. Each feature agent adds its screen-level rows here.

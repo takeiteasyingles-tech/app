@@ -47,7 +47,11 @@ async function repSave(c: Catalog, sess: MicSession): Promise<void> {
   );
   if (!r) return;
   const n = r.added;
-  toast(n ? `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} nos Flashcards.` : 'Essas palavras já estavam nos seus Flashcards.');
+  toast(
+    n
+      ? `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} nos Flashcards.`
+      : 'Essas palavras já estavam nos seus Flashcards.',
+  );
 }
 
 const say = (t: string) => () => void speech.say(t);

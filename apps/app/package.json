@@ -24,6 +24,7 @@
     "hono": "^4.13.13",
     "idb-keyval": "^6.3.0",
     "preact": "^10.29.8",
+    "three": "0.170.0",
     "workbox-background-sync": "^7.4.1",
     "workbox-cacheable-response": "^7.4.1",
     "workbox-expiration": "^7.4.1",
@@ -38,6 +39,7 @@
     "@cloudflare/workers-types": "^5.20261007.1",
     "@preact/preset-vite": "^2.10.6",
     "@tie/db": "*",
+    "@types/three": "0.170.0",
     "vite": "^8.3.3",
     "vite-plugin-pwa": "^2.0.0",
     "wrangler": "^4.148.0"
