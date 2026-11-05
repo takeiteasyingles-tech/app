@@ -15,6 +15,7 @@ import ops from './ops';
 import plans from './plans';
 import publish from './publish';
 import seasonTest from './seasonTest';
+import songLyrics from './songLyrics';
 import users from './users';
 import voices from './voices';
 
@@ -40,6 +41,7 @@ for (const r of [
   apiTokens,
   backups,
   voices,
+  songLyrics,
 ]) {
   routes.route('/', r);
 }

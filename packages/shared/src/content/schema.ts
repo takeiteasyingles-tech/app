@@ -358,6 +358,11 @@ export const LyricLine = z.object({
   en: z.string(),
   pt: z.string(),
   gap: z.string().optional(),
+  /**
+   * PROD: start of the line in the episode recording, in seconds. The player follows these times when
+   * set (domain/songSync.ts) and the prototype's proportional highlight when no line has one.
+   */
+  t: z.number().min(0).max(3600).optional(),
 });
 export type LyricLine = z.infer<typeof LyricLine>;
 

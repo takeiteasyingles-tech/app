@@ -112,6 +112,39 @@ export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = 
   return (await res.json()) as ResOf<E>;
 }
 
+/** POST a multipart endpoint (the browser sets the boundary and Content-Length). */
+export async function callForm<E extends EndpointDef>(
+  ep: E,
+  form: FormData,
+  opts: Pick<CallOptions<E>, 'params' | 'query' | 'signal'> = {},
+): Promise<ResOf<E>> {
+  let res: Response;
+  try {
+    res = await fetch(urlFor(ep, opts), {
+      method: ep.method,
+      headers: { Accept: 'application/json' },
+      body: form,
+      credentials: 'same-origin',
+      signal: opts.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new NetworkError(err);
+  }
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Non-JSON error page (platform, proxy): the status decides.
+  }
+  if (!res.ok) {
+    const err = errorFrom(res.status, data);
+    notifyAuth(err);
+    throw err;
+  }
+  return data as ResOf<E>;
+}
+
 export interface UploadHandle {
   promise: Promise<MediaRow>;
   abort(): void;

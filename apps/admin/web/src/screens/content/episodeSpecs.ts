@@ -84,11 +84,12 @@ const MUSICA: Spec[] = [
     label: 'Letra',
     item: 'linha',
     inline: true,
-    hint: 'A lacuna é a palavra que o aluno completa no karaokê.',
+    hint: 'A lacuna é a palavra que o aluno completa no karaokê. Início: segundo da música em que a linha começa (vazio = estimado).',
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },
       { t: 'text', k: 'gap', label: 'Lacuna', opt: 'undef' },
+      { t: 'num', k: 't', label: 'Início (s)', opt: 'undef', min: 0, step: 0.1 },
     ],
   },
 ];

@@ -12,6 +12,7 @@ import { ebookApi } from '@tie/shared/contracts/ebook';
 import type { MicScoreSource } from '@tie/shared/contracts/progress';
 import { gate } from '@tie/shared/domain/gating';
 import { defaults } from '@tie/shared/domain/personalize';
+import { lyricLineAt } from '@tie/shared/domain/songSync';
 import { stepKey, type TieState } from '@tie/shared/state';
 import { confetti, Icon, Segs, toast, uiConfig } from '@tie/ui';
 import { Fragment } from 'preact';
@@ -393,9 +394,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         if (P.dead || P.audio !== a) return;
         P.aT = a.currentTime;
         P.aD = Number.isFinite(a.duration) ? a.duration : 0;
-        if (isSong(step) && len) {
-          P.line = Math.min(len - 1, Math.floor((P.aT / (P.aD || 1)) * len));
-        }
+        // PROD: lines with a start time follow the recording; otherwise the prototype's proportional rule.
+        if (isSong(step) && len) P.line = lyricLineAt(Ep.lyrics, P.aT, P.aD);
         re();
       });
       a.addEventListener('ended', () => {

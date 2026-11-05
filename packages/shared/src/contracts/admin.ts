@@ -46,6 +46,7 @@ import { adminFeedbackApi } from './feedback';
 import { BadgeRule } from './game';
 import { type EndpointDef, endpoint } from './http';
 import { adminSeasonTestApi } from './seasonTest';
+import { adminSongLyricsApi } from './songLyrics';
 import { adminStatsApi } from './stats';
 import { adminVoicesApi } from './voices';
 
@@ -1252,6 +1253,8 @@ export const adminApi = {
   backups: adminBackupsApi,
   // Configurações → Vozes (contracts/voices.ts).
   voices: adminVoicesApi,
+  // Episode editor → Música: lyrics and line times from the song (contracts/songLyrics.ts).
+  songLyrics: adminSongLyricsApi,
 } as const;
 
 /** Flattens a nested endpoint map (for route tables and tests). */

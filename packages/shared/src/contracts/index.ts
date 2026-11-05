@@ -33,6 +33,7 @@ export * from './mic';
 export * from './progress';
 export * from './reports';
 export * from './seasonTest';
+export * from './songLyrics';
 export * from './srs';
 export * from './stats';
 export * from './voices';

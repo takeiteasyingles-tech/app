@@ -15,6 +15,7 @@ import {
   MicPhraseEdit,
   type MicPhraseRow,
 } from '@tie/shared/contracts/admin';
+import { lyricTimesOutOfOrder } from '@tie/shared/domain/songSync';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { call, errorMessage, issuesOf } from '../../api';
 import { fmtAgo, fmtDateTime } from '../../format';
@@ -48,6 +49,7 @@ import {
 import { EpisodeMaterials } from './EpisodeMaterials';
 import { EpisodePreview } from './EpisodePreview';
 import { ALL_SPECS, TAB_SPECS, TABS, type TabId, tabOf } from './episodeSpecs';
+import { SongSync } from './SongSync';
 
 type Ex = ExerciseRow & { items: ExerciseItemRow[] };
 type Doc = Obj & { num: number; mic: MicPhraseRow[]; ex: Ex[] };
@@ -111,6 +113,8 @@ function normalize(d: Doc): Doc {
 function validate(d: Doc): Record<string, string> {
   const out: Record<string, string> = { ...zodErrors(EpisodeEditSchema.create, pick(d, EP_KEYS)) };
   if (d.status === 'published' && !d.done) out.done = 'Um episódio publicado precisa da tela de conclusão.';
+  const back = lyricTimesOutOfOrder((Array.isArray(d.lyrics) ? d.lyrics : []) as { t?: number }[]);
+  if (back >= 0) out[`lyrics.${back}.t`] = 'O início desta linha vem antes da linha anterior.';
   d.mic.forEach((m, i) => {
     Object.assign(out, prefixErrors(zodErrors(MicPhraseEdit.create, pick(m, MIC_KEYS)), `mic.${i}`));
   });
@@ -366,6 +370,9 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
           <div class="ad-split with-preview">
             {showEditor ? (
               <section class="card ad-card" aria-label={TABS.find(([t]) => t === tab)?.[1]}>
+                {tab === 'musica' ? (
+                  <SongSync doc={draft} set={(fn) => setDraft((p) => (p ? (fn(p) as Doc) : p))} />
+                ) : null}
                 <Form
                   specs={TAB_SPECS[tab]}
                   value={draft}

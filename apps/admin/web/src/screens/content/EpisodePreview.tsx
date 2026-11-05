@@ -1,7 +1,9 @@
 // Live preview of the episode being edited, drawn with the student app's own tie.css classes inside a
 // phone frame: the part shown follows the editor tab (lyrics, dialogue, lesson blocks, exercises…).
 import type { Block, BlockRow } from '@tie/shared/content/schema';
+import { lyricLineAt } from '@tie/shared/domain/songSync';
 import type { ComponentChildren } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../ui/icons';
 import { MediaPreview, useMedia } from '../../ui/media';
 import type { TabId } from './episodeSpecs';
@@ -33,7 +35,42 @@ function MediaById({ id, label }: { id: string | null; label: string }) {
   );
 }
 
-function Lyric({ en, pt, gap }: { en: string; pt: string; gap: string }) {
+/**
+ * The lyrics with the episode song: while it plays, the line being sung lights up as in the student
+ * player (domain/songSync.ts lyricLineAt), so staff can check the line times before publishing.
+ */
+function SongPreview({ lyrics, songId, title }: { lyrics: Any[]; songId: string | null; title: string }) {
+  const m = useMedia(songId);
+  const [at, setAt] = useState<{ t: number; d: number; on: boolean }>({ t: 0, d: 0, on: false });
+  const box = useRef<HTMLDivElement>(null);
+  const times = lyrics.map((l) => ({ t: typeof l.t === 'number' ? l.t : undefined }));
+  const cur = at.on ? lyricLineAt(times, at.t, at.d) : -1;
+  useEffect(() => {
+    if (cur < 0) return;
+    const el = box.current?.children[cur] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [cur]);
+  const tick = (e: Event) => {
+    const a = e.currentTarget as HTMLAudioElement;
+    setAt({ t: a.currentTime, d: Number.isFinite(a.duration) ? a.duration : 0, on: !a.paused || a.currentTime > 0 });
+  };
+  return (
+    <div class="on-navy stack" style={{ '--gap': '8px' }}>
+      <div class="lbl">{title}</div>
+      {m ? (
+        // biome-ignore lint/a11y/useMediaCaption: the lyrics below are the captions.
+        <audio class="ad-maudio" src={m.url} controls preload="none" onTimeUpdate={tick} onSeeked={tick} />
+      ) : null}
+      <div class="lyrics" ref={box}>
+        {lyrics.map((l, i) => (
+          <Lyric key={i} en={str(l.en)} pt={str(l.pt)} gap={str(l.gap)} on={i === cur} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Lyric({ en, pt, gap, on }: { en: string; pt: string; gap: string; on?: boolean }) {
   let enNode: ComponentChildren = en;
   if (gap) {
     const i = en.toLowerCase().indexOf(gap.toLowerCase());
@@ -48,7 +85,7 @@ function Lyric({ en, pt, gap }: { en: string; pt: string; gap: string }) {
     }
   }
   return (
-    <div class="lyric">
+    <div class="lyric" style={on ? { background: 'rgba(255,255,255,.12)' } : undefined}>
       <div class="en">{enNode}</div>
       {pt ? <div class="pt">{pt}</div> : null}
     </div>
@@ -172,14 +209,7 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
     case 'musica': {
       const ly = arr<Any>(d.lyrics);
       return ly.length ? (
-        <div class="on-navy stack" style={{ '--gap': '8px' }}>
-          <div class="lbl">{str(d.songTitle) || 'Música'}</div>
-          <div class="lyrics">
-            {ly.map((l, i) => (
-              <Lyric key={i} en={str(l.en)} pt={str(l.pt)} gap={str(l.gap)} />
-            ))}
-          </div>
-        </div>
+        <SongPreview lyrics={ly} songId={(d.songMedia as string) ?? null} title={str(d.songTitle) || 'Música'} />
       ) : (
         <Empty what="A letra aparece aqui." />
       );

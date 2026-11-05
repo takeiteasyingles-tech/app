@@ -7,4 +7,5 @@ export * from './guide';
 export * from './norm';
 export * from './personalize';
 export * from './season';
+export * from './songSync';
 export * from './srs';
