@@ -7,9 +7,14 @@ import { onSpeech } from '../../core/speech';
 import { type AvatarAssistant, AvatarVideo } from './Avatar';
 import type { AvatarEngine } from './avatar3d/engine';
 
-/** Assistant key → glTF model (web/public/avatars). */
+/**
+ * Assistant key → glTF model (web/public/avatars). The service worker serves /avatars/* cache-first, so a
+ * changed model goes in a new version folder (v2, v3…) instead of replacing files in place.
+ * v3 (2026-11-04): the mouth opens as an almond (jaw weights) with sealed corners, over an interior
+ * that stretches with the jaw so the lower teeth ride the lower lip; v1 opened in a V.
+ */
 const MODELS: Readonly<Record<string, string>> = {
-  margaret: '/avatars/margaret/margaret.gltf',
+  margaret: '/avatars/margaret/v3/margaret.gltf',
 };
 
 let webgl: boolean | null = null;

@@ -47,23 +47,31 @@ const VOWELS = new Set<Viseme>(['aa', 'E', 'I', 'O', 'U', 'RR']);
 const COST: Partial<Record<Viseme, number>> = { aa: 2, E: 2, I: 1.8, O: 2, U: 1.8, RR: 1.6, PP: 1.3, FF: 1.2, HH: 0.6 };
 const cost = (v: Viseme): number => COST[v] ?? 1;
 
-/** Viseme → jaw opening (0..1 of the avatar's max) and mouth morphs. Vowels open, consonants nearly close. */
+/**
+ * Viseme → jaw opening (0..1 of the avatar's max, before the audio-energy scaling) and mouth morphs.
+ * Calibrated on 2026-11-04 against an audio-driven reference video of Margaret (Kling AI Avatar 2.0 Pro,
+ * same photo, 8 s of speech): the mouth was read frame by frame (MediaPipe Face Landmarker) and fitted
+ * with the app's own viseme timing and, separately, with Whisper word times; only values both fits agree
+ * on were taken (the rest keep their earlier hand-tuned value; CH had no samples). Then: lip press only
+ * for M/B/P and lip-on-teeth only for F/V and M/B/P, no consonant opens wider than the open vowels, and
+ * the lip morphs ×1.3 to undo the blur of averaging short visemes. Tools: tools/avatar (git-ignored out/).
+ */
 export const SHAPES: Readonly<Record<Viseme, Shape>> = {
   sil: { jaw: 0 },
-  aa: { jaw: 0.9, mouthWide: 0.1, lowerLipDown: 0.45, upperLipUp: 0.25 },
-  E: { jaw: 0.6, mouthWide: 0.6, lowerLipDown: 0.2, upperLipUp: 0.15 },
-  I: { jaw: 0.35, mouthWide: 0.9, upperLipUp: 0.3 },
-  O: { jaw: 0.65, mouthRound: 0.8, lowerLipDown: 0.2 },
-  U: { jaw: 0.25, mouthRound: 1, mouthFunnel: 0.4 },
-  RR: { jaw: 0.3, mouthRound: 0.55, mouthFunnel: 0.25 },
-  PP: { jaw: 0, mouthPress: 1 },
-  FF: { jaw: 0.1, lowerLipF: 1, upperLipUp: 0.4 },
-  TH: { jaw: 0.15, mouthWide: 0.25, upperLipUp: 0.25 },
-  DD: { jaw: 0.15, mouthWide: 0.2, upperLipUp: 0.2 },
-  kk: { jaw: 0.2, mouthWide: 0.1 },
+  aa: { jaw: 0.7, mouthWide: 0.34, upperLipUp: 0.26, lowerLipDown: 0.26 },
+  E: { jaw: 0.53, mouthWide: 0.55, upperLipUp: 0.18, lowerLipDown: 0.17 },
+  I: { jaw: 0.35, mouthWide: 0.59, upperLipUp: 0.27, lowerLipDown: 0.23 },
+  O: { jaw: 0.65, mouthRound: 0.34, mouthWide: 0.39, upperLipUp: 0.22, lowerLipDown: 0.27 },
+  U: { jaw: 0.46, mouthRound: 0.69, mouthFunnel: 0.2, upperLipUp: 0.14, lowerLipDown: 0.23 },
+  RR: { jaw: 0.37, mouthRound: 0.3 },
+  PP: { jaw: 0, mouthPress: 0.73, lowerLipF: 0.3 },
+  FF: { jaw: 0.28, mouthWide: 0.2, lowerLipF: 0.64, upperLipUp: 0.38 },
+  TH: { jaw: 0.31, mouthWide: 0.39, upperLipUp: 0.29 },
+  DD: { jaw: 0.5, mouthWide: 0.49, upperLipUp: 0.42, lowerLipDown: 0.29 },
+  kk: { jaw: 0.41, mouthWide: 0.13, upperLipUp: 0.18 },
   CH: { jaw: 0.12, mouthFunnel: 1, upperLipUp: 0.3 },
-  SS: { jaw: 0.05, mouthWide: 0.45, upperLipUp: 0.4 },
-  HH: { jaw: 0.3 },
+  SS: { jaw: 0.21, mouthWide: 0.59, upperLipUp: 0.52 },
+  HH: { jaw: 0.6, mouthWide: 0.33, lowerLipDown: 0.13 },
 };
 
 const MULTI: readonly (readonly [string, readonly Viseme[]])[] = [

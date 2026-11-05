@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { envelope, MORPHS, sample, timeline, wordVisemes } from '../src/screens/maggie/avatar3d/lipsync';
+import { envelope, MORPHS, SHAPES, sample, timeline, wordVisemes } from '../src/screens/maggie/avatar3d/lipsync';
 
 /** A fake decoded buffer: 100 Hz frames of sound or silence, as `[seconds, loud]` segments. */
 function buffer(segments: [number, boolean][]) {
@@ -38,6 +38,25 @@ describe('lip sync', () => {
     expect(firstPhrase).toEqual([...wordVisemes('Good'), ...wordVisemes('morning!')]);
     expect(sample(keys, 1.25).jaw).toBe(0); // in the pause
     expect(sample(keys, 0.6).jaw).toBeGreaterThan(0);
+  });
+
+  it('keeps the calibrated mouth shapes physically sensible', () => {
+    for (const [v, s] of Object.entries(SHAPES)) {
+      for (const [k, x] of Object.entries(s)) expect(x, `${v}.${k}`).toBeGreaterThanOrEqual(0);
+      for (const [k, x] of Object.entries(s)) expect(x, `${v}.${k}`).toBeLessThanOrEqual(1);
+    }
+    expect(SHAPES.sil.jaw).toBe(0);
+    expect(SHAPES.PP.jaw).toBe(0); // M/B/P shut the mouth
+    expect(SHAPES.PP.mouthPress).toBeGreaterThan(0.5);
+    expect(SHAPES.FF.lowerLipF).toBeGreaterThan(0.5); // F/V: lower lip on the teeth
+    expect(SHAPES.U.mouthRound).toBeGreaterThan(SHAPES.E.mouthRound ?? 0);
+    expect(SHAPES.I.mouthWide).toBeGreaterThan(SHAPES.U.mouthWide ?? 0);
+    // the open vowel opens the jaw most; no consonant opens wider than it
+    for (const v of ['E', 'I', 'O', 'U', 'RR', 'FF', 'TH', 'DD', 'kk', 'CH', 'SS', 'HH'] as const) {
+      expect(SHAPES[v].jaw, v).toBeLessThan(SHAPES.aa.jaw);
+    }
+    // only M/B/P press the lips
+    for (const [v, s] of Object.entries(SHAPES)) if (v !== 'PP') expect(s.mouthPress ?? 0, v).toBe(0);
   });
 
   it('always returns every morph, also before and after the line', () => {
