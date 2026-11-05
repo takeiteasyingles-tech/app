@@ -5,7 +5,7 @@ import { createApp, type Env, fail } from '@tie/worker-core';
 import { runScheduledBackup } from './lib/backups';
 import routes from './routes/index';
 
-const MULTIPART = new Set([`POST ${adminApi.media.upload.path}`]);
+const MULTIPART = new Set([`POST ${adminApi.media.upload.path}`, `POST ${adminApi.voices.clone.path}`]);
 
 /** The admin app: shared middleware (headers, config guard, CSRF, JSON cap) + every admin route. */
 export function buildAdminApp() {

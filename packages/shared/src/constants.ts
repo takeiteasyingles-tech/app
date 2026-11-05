@@ -176,6 +176,12 @@ export const SETTINGS = {
   modelGuard: 'ai.model.guard',
   /** JSON BackupConfig (contracts/backups.ts): the automatic backup schedule of tie-admin. */
   backupConfig: 'backup.config',
+  /** ElevenLabs API key, sealed (worker-core secrets.ts): never returned by any API. */
+  elevenKey: 'voice.eleven.key',
+  /** JSON {assistantKey: voiceId} of the cloned voices. */
+  elevenVoices: 'voice.eleven.voices',
+  /** ElevenLabs model id (ELEVEN_MODELS). */
+  elevenModel: 'voice.eleven.model',
 } as const;
 
 export const DEFAULT_MODELS = {
@@ -261,3 +267,22 @@ export const BACKUP_EXCLUDED_TABLES: readonly string[] = [
   'd1_migrations',
   '_episode_books',
 ];
+
+// ---------- ElevenLabs voices (Configurações → Vozes) ----------
+
+/** ElevenLabs TTS models offered in the admin: Turbo/Flash v2.5 answer fastest, Multilingual v2 sounds richest. */
+export const ELEVEN_MODELS = ['eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_multilingual_v2'] as const;
+export type ElevenModel = (typeof ELEVEN_MODELS)[number];
+export const ELEVEN_DEFAULT_MODEL: ElevenModel = 'eleven_turbo_v2_5';
+/** Voice sample for Instant Voice Clone: an audio file up to this size. */
+export const ELEVEN_SAMPLE_MAX_BYTES = 10 * 1024 * 1024;
+export const ELEVEN_SAMPLE_MIME = [
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/ogg',
+  'audio/webm',
+] as const;

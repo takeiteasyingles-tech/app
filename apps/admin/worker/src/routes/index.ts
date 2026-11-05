@@ -16,6 +16,7 @@ import plans from './plans';
 import publish from './publish';
 import seasonTest from './seasonTest';
 import users from './users';
+import voices from './voices';
 
 const routes = new Hono<AppEnv>();
 
@@ -38,6 +39,7 @@ for (const r of [
   feedback,
   apiTokens,
   backups,
+  voices,
 ]) {
   routes.route('/', r);
 }

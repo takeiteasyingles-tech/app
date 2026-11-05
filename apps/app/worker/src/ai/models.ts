@@ -3,7 +3,7 @@
 // DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
 // them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
 import { DEFAULT_MODELS, FLAGS, SETTINGS } from '@tie/shared';
-import { all, type Env, type FlagSubject, isEnabled } from '@tie/worker-core';
+import { all, type Env, elevenSpeak, type FlagSubject, isEnabled, readElevenConfig } from '@tie/worker-core';
 
 export interface Models {
   tutor: string;
@@ -183,42 +183,28 @@ export async function synthesize(
   return bytes;
 }
 
-/** ElevenLabs voice of an assistant (env.ELEVENLABS_VOICES), or null to use the Workers AI voice. */
-export function elevenVoice(
-  env: Pick<Env, 'ELEVENLABS_API_KEY' | 'ELEVENLABS_VOICES'>,
-  assistantKey: string | null,
-): string | null {
-  if (!assistantKey || !env.ELEVENLABS_API_KEY || !env.ELEVENLABS_VOICES) return null;
-  try {
-    const id = (JSON.parse(env.ELEVENLABS_VOICES) as Record<string, unknown>)[assistantKey];
-    return typeof id === 'string' && /^[A-Za-z0-9]{8,40}$/.test(id) ? id : null;
-  } catch {
-    return null;
-  }
+/** The cloned ElevenLabs voice an assistant speaks with, or null to use the Workers AI voice. */
+export interface ElevenVoice {
+  apiKey: string;
+  model: string;
+  voiceId: string;
 }
 
-export const DEFAULT_ELEVEN_MODEL = 'eleven_turbo_v2_5';
+/** Configurações → Vozes (admin, app_settings) with the ELEVENLABS_* env vars as a fallback. */
+export async function elevenFor(env: Env, db: D1Database, assistantKey: string | null): Promise<ElevenVoice | null> {
+  if (!assistantKey) return null;
+  const cfg = await readElevenConfig(db, env);
+  const voiceId = cfg.voices[assistantKey];
+  return cfg.apiKey && voiceId ? { apiKey: cfg.apiKey, model: cfg.model, voiceId } : null;
+}
 
 /** Text → mp3 with an ElevenLabs (cloned) voice. */
-export async function synthesizeEleven(
-  env: Pick<Env, 'ELEVENLABS_API_KEY'>,
-  model: string,
-  voiceId: string,
-  text: string,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
-    method: 'POST',
-    headers: { 'xi-api-key': env.ELEVENLABS_API_KEY ?? '', 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-    body: JSON.stringify({
-      text,
-      model_id: model,
-      voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true },
-    }),
-  });
-  if (!r.ok) throw new AiCallError(`ElevenLabs TTS ${r.status}`, model);
-  const bytes = new Uint8Array(await r.arrayBuffer());
-  if (bytes.length === 0) throw new AiCallError('TTS returned no audio', model);
-  return bytes;
+export async function synthesizeEleven(v: ElevenVoice, text: string): Promise<Uint8Array<ArrayBuffer>> {
+  try {
+    return await elevenSpeak(v.apiKey, v.model, v.voiceId, text);
+  } catch (err) {
+    throw new AiCallError(err instanceof Error ? err.message : 'ElevenLabs TTS failed', v.model);
+  }
 }
 
 export interface GuardVerdict {

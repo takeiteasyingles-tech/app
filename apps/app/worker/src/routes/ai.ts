@@ -83,8 +83,7 @@ import {
 import { background, flagSubject } from '../ai/http';
 import {
   aiEnabled,
-  DEFAULT_ELEVEN_MODEL,
-  elevenVoice,
+  elevenFor,
   hasAiBinding,
   loadModels,
   runJson,
@@ -636,9 +635,10 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
   const { speaker, assistantKey } = await resolveSpeaker(db, body.voice, body.gender);
   const models = await loadModels(db);
   // An assistant with a cloned voice speaks through ElevenLabs; everyone else through Workers AI.
-  const eleven = elevenVoice(c.env, assistantKey);
-  const ttsModel = eleven ? (c.env.ELEVENLABS_MODEL ?? DEFAULT_ELEVEN_MODEL) : models.tts;
-  const voiceTag = eleven ? `eleven:${eleven}` : speaker;
+  // Key, model and voices come from Configurações → Vozes in the admin (env vars as a fallback).
+  const eleven = await elevenFor(c.env, db, assistantKey);
+  const ttsModel = eleven ? eleven.model : models.tts;
+  const voiceTag = eleven ? `eleven:${eleven.voiceId}` : speaker;
   const hash = await ttsKey(ttsModel, voiceTag, text);
   const quota = quotaOf(c.env, c.get('services'));
 
@@ -654,9 +654,7 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
     const r = await reserveOrThrow(quota, s.userId, ttsSeconds(text), { kind: 'tts', model: ttsModel });
     const started = Date.now();
     try {
-      audio = eleven
-        ? await synthesizeEleven(c.env, ttsModel, eleven, text)
-        : await synthesize(c.env, models.tts, text, speaker);
+      audio = eleven ? await synthesizeEleven(eleven, text) : await synthesize(c.env, models.tts, text, speaker);
     } catch (err) {
       logWarn('tts failed', err);
       // The client falls back to browser TTS: nothing delivered, nothing billed.

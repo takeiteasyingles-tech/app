@@ -46,6 +46,8 @@ const FIXED: Record<string, string> = {
   'backup.delete': 'Excluiu um backup',
   'backup.restore': 'Restaurou o conteúdo de um backup',
   'backup.config': 'Mudou o backup automático',
+  'voice.settings': 'Mudou a configuração de vozes',
+  'voice.clone': 'Clonou a voz de uma assistente',
 };
 
 const ENTITY: Record<string, string> = {
@@ -141,6 +143,7 @@ export function auditIcon(action: string): string {
   if (action.startsWith('game.') || action.startsWith('certificate.')) return 'trophy';
   if (action.startsWith('season_test.')) return 'pen';
   if (action.startsWith('backup.')) return 'database';
+  if (action.startsWith('voice.')) return 'mic';
   return 'history';
 }
 

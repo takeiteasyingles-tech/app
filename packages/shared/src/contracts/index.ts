@@ -35,6 +35,7 @@ export * from './reports';
 export * from './seasonTest';
 export * from './srs';
 export * from './stats';
+export * from './voices';
 
 /** Student API (tie-app): /api/* and /m/*. */
 export const appApi = {

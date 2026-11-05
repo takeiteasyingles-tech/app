@@ -47,6 +47,7 @@ import { BadgeRule } from './game';
 import { type EndpointDef, endpoint } from './http';
 import { adminSeasonTestApi } from './seasonTest';
 import { adminStatsApi } from './stats';
+import { adminVoicesApi } from './voices';
 
 // Admin API (/admin-api). Bodies are strict (unknown keys rejected). Every staff endpoint names the
 // permission it needs; every mutation is audited with a JSON diff. Media fields are media ids.
@@ -1249,6 +1250,8 @@ export const adminApi = {
   apiTokens: adminApiTokensApi,
   // Operação → Backup (contracts/backups.ts).
   backups: adminBackupsApi,
+  // Configurações → Vozes (contracts/voices.ts).
+  voices: adminVoicesApi,
 } as const;
 
 /** Flattens a nested endpoint map (for route tables and tests). */

@@ -145,13 +145,14 @@ Without `RESEND_API_KEY` the app still works: the request answers as usual, noth
 
 ## 5b. Cloned assistant voices (ElevenLabs)
 
-An assistant listed in `ELEVENLABS_VOICES` speaks the HD voice (`/api/tts`) with an ElevenLabs voice (a clone of the character); every other assistant keeps the Workers AI voice. The audio is cached in R2 like any TTS and billed against the same Mic quota.
+An assistant with a cloned voice speaks the HD voice (`/api/tts`) through ElevenLabs; every other assistant keeps the Workers AI voice. The audio is cached in R2 like any TTS and billed against the same Mic quota. Everything is set in the admin, no deploy needed:
 
-1. ElevenLabs account on a plan with Instant Voice Cloning (Starter or above). Profile → API Keys → create a key.
-2. Clone the voice from the character's sample (`prototipo/personagens/<Name>/voz.mp3`): ElevenLabs → Voices → Add a new voice → Instant Voice Clone, or `node tools/avatar/eleven.mjs clone <Name> <voz.mp3> <out.json>` with `ELEVENLABS_API_KEY` in the root `.env`. Note the voice id.
-3. Store the key as a secret of tie-app (paste when prompted): `cd apps/app; npx wrangler secret put ELEVENLABS_API_KEY`.
-4. Set `ELEVENLABS_VOICES` in `apps/app/wrangler.jsonc`, in **both** the top-level `vars` and `env.local.vars`, e.g. `"{\"margaret\":\"<voice id>\"}"`. `ELEVENLABS_MODEL` (optional) picks the model; the default is `eleven_turbo_v2_5` (low latency).
-5. Deploy tie-app. If ElevenLabs fails, `/api/tts` answers `ai_unavailable` and the app falls back to the browser voice, as for any TTS failure.
+1. ElevenLabs account on a plan with Instant Voice Clone (Starter or above). Developers → API Keys → create a key with access to Text to Speech and Voices.
+2. Admin → **Configurações → Vozes** (admins, `settings.manage`): paste the key and save. It is stored sealed in `app_settings['voice.eleven.key']` (AES-GCM under a key derived from `MEDIA_TOKEN_KEY`, which is why that secret must be the same on both Workers) and never shown again, only its last 4 characters.
+3. For each assistant, either paste the id of a voice that already exists in the ElevenLabs account, or click **Clonar voz…** and send a sample (1 to 3 minutes of clean speech, MP3 or WAV up to 10 MB; Margaret's is `prototipo/personagens/Margaret/voz.mp3`). **Testar** plays a short line with the stored key, model and voice.
+4. Pick the model on the same screen (default `eleven_turbo_v2_5`, low latency).
+
+If ElevenLabs fails, `/api/tts` answers `ai_unavailable` and the app falls back to the browser voice, as for any TTS failure. The old env route still works as a fallback when nothing is set in the admin: the `ELEVENLABS_API_KEY` secret and the `ELEVENLABS_VOICES` / `ELEVENLABS_MODEL` vars of tie-app.
 
 ## 6. Migrations (remote)
 

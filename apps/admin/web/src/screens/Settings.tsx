@@ -23,6 +23,7 @@ import { Modal } from '../ui/modal';
 import { toast } from '../ui/toast';
 import { ApiTokens } from './ApiTokens';
 import type { ScreenProps } from './registry';
+import { VoicesSettings } from './Voices';
 
 const FLAG_INFO: Record<string, string> = {
   [FLAGS.aiEnabled]: 'IA ligada: conversa, pronúncia e voz pelo Workers AI. Desligada, o app usa o modo demo.',
@@ -414,6 +415,7 @@ export function Settings({ q }: ScreenProps) {
   const tabs = [
     ...(can('flags.manage') ? ([['flags', 'Flags']] as const) : []),
     ...(can('settings.manage') ? ([['app', 'Valores do app']] as const) : []),
+    ...(can('settings.manage') ? ([['vozes', 'Vozes']] as const) : []),
     ...(can('ai.prompts') ? ([['prompts', 'Prompts da IA']] as const) : []),
     ...(can('api_tokens.manage') ? ([['integracoes', 'Integrações']] as const) : []),
   ];
@@ -447,6 +449,8 @@ export function Settings({ q }: ScreenProps) {
         <Flags />
       ) : tab === 'app' ? (
         <AppSettings />
+      ) : tab === 'vozes' ? (
+        <VoicesSettings />
       ) : tab === 'integracoes' ? (
         <ApiTokens />
       ) : (
