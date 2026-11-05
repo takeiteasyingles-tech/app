@@ -3,21 +3,10 @@
 import type { Spec } from '../../ui/form';
 import { EpisodeExtraPicker } from './EpisodeReferences';
 
-export type TabId =
-  | 'geral'
-  | 'midia'
-  | 'musica'
-  | 'olhar'
-  | 'dialogo'
-  | 'mic'
-  | 'licao'
-  | 'away'
-  | 'exercicios'
-  | 'fim';
+export type TabId = 'geral' | 'musica' | 'olhar' | 'dialogo' | 'mic' | 'licao' | 'away' | 'exercicios' | 'fim';
 
 export const TABS: readonly (readonly [TabId, string])[] = [
   ['geral', 'Geral'],
-  ['midia', 'Mídia'],
   ['musica', '1 · Música'],
   ['olhar', '4 · Take a Look'],
   ['dialogo', '5 · Take It In'],
@@ -59,6 +48,7 @@ const GERAL: Spec[] = [
     render: EpisodeExtraPicker,
   },
   { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3, hint: 'Mostrada na Intro (etapa 3).' },
+  { t: 'media', k: 'introMedia', label: 'Áudio da Intro (etapa 3)', kind: 'audio', opt: 'null' },
   {
     t: 'strings',
     k: 'castNames',
@@ -69,32 +59,28 @@ const GERAL: Spec[] = [
   },
 ];
 
-const MIDIA: Spec[] = [
-  { t: 'media', k: 'introMedia', label: 'Áudio da Intro (etapa 3)', kind: 'audio', opt: 'null' },
-  { t: 'text', k: 'songTitle', label: 'Título da música', opt: 'null' },
-  { t: 'media', k: 'songMedia', label: 'Música (etapas 1 e 10)', kind: 'audio', opt: 'null' },
-  { t: 'media', k: 'sceneMedia', label: 'Vídeo da cena (etapa 4)', kind: 'video', opt: 'null' },
-  { t: 'text', k: 'sceneNote', label: 'Nota da cena', opt: 'null', rows: 2 },
-];
-
+// The song file itself is sent from the "Música e sincronização" card (SongSync.tsx) above these fields.
 const MUSICA: Spec[] = [
+  { t: 'text', k: 'songTitle', label: 'Título da música', opt: 'null' },
   {
     t: 'list',
     k: 'lyrics',
     label: 'Letra',
     item: 'linha',
     inline: true,
-    hint: 'A lacuna é a palavra que o aluno completa no karaokê. Início: segundo da música em que a linha começa (vazio = estimado).',
+    // The karaoke gap is not edited here: the AI picks it (or the line's first word is used); rows keep theirs.
+    hint: 'Início: segundo da música em que a linha começa (vazio = estimado).',
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },
-      { t: 'text', k: 'gap', label: 'Lacuna', opt: 'undef' },
       { t: 'num', k: 't', label: 'Início (s)', opt: 'undef', min: 0, step: 0.1 },
     ],
   },
 ];
 
 const OLHAR: Spec[] = [
+  { t: 'media', k: 'sceneMedia', label: 'Vídeo da cena', kind: 'video', opt: 'null' },
+  { t: 'text', k: 'sceneNote', label: 'Nota da cena', opt: 'null', rows: 2 },
   {
     t: 'list',
     k: 'visual',
@@ -331,7 +317,6 @@ const FIM: Spec[] = [
 
 export const TAB_SPECS: Record<TabId, readonly Spec[]> = {
   geral: GERAL,
-  midia: MIDIA,
   musica: MUSICA,
   olhar: OLHAR,
   dialogo: DIALOGO,
@@ -347,6 +332,7 @@ export const ALL_SPECS: readonly Spec[] = Object.values(TAB_SPECS).flat();
 /** Tab of an error path ("dialog.3.en" → dialogo). */
 export function tabOf(path: string): TabId {
   const head = path.split('.')[0] ?? '';
+  if (head === 'songMedia') return 'musica';
   for (const [tab, specs] of Object.entries(TAB_SPECS) as [TabId, readonly Spec[]][]) {
     if (specs.some((s) => s.k === head)) return tab;
   }

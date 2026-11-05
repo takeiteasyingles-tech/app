@@ -209,6 +209,17 @@ export const Track = z.object({
 });
 export type Track = z.infer<typeof Track>;
 
+/**
+ * PROD: id of the album track compile adds for a published episode no album lists (`e3-song`). The
+ * worker's karaoke and song routes read it as "the episode's song".
+ */
+export const autoTrackId = (ep: number): string => `e${ep}-song`;
+/** Episode number of an autoTrackId, or null. */
+export function autoTrackEp(id: string): number | null {
+  const m = /^e([1-9]\d{0,3})-song$/.exec(id);
+  return m ? Number(m[1]) : null;
+}
+
 export const Album = z.object({
   id: z.string(),
   title: z.string(),

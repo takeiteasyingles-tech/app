@@ -11,6 +11,7 @@ import { mediaUrl } from '../contracts/content';
 import {
   type Album,
   type AssistantPublic,
+  autoTrackId,
   type Block,
   Catalog,
   CONTENT_FILES,
@@ -29,6 +30,7 @@ import {
   type PointKind,
   type TestPart,
   type TestQuestion,
+  type Track,
 } from './schema';
 
 // ---------- Row shapes (D1 columns as `SELECT *` returns them: JSON columns are text) ----------
@@ -595,35 +597,64 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       }),
     );
   const episodeByNum = new Map(episodesSorted.map((e) => [e.num, e]));
-  const albums: Album[] = [...rows.albums].sort(bySort).map((a) => ({
-    id: a.id,
-    title: a.title,
-    sub: str(a.sub),
-    level: str(a.level),
-    img: url(a.img_media, `albums.${a.id}.img`),
-    genres: J<string[]>(a.genres, [], `albums.${a.id}.genres`),
-    tracks: rows.album_tracks
-      .filter((t) => t.album_id === a.id)
-      .sort(bySort)
-      .map((t) => {
-        const ep = t.ep_num != null ? episodeByNum.get(t.ep_num) : undefined;
-        const own = J<{ en: string; pt: string; gap: string }[] | null>(t.lines, null, `album_tracks.${t.id}.lines`);
-        // Episode tracks sing the episode lyrics; a line without a gap blanks its first word (extra.js tracksOf).
-        const lines =
-          own ??
-          (ep ? lyricsOf(ep).map((l) => ({ en: l.en, pt: l.pt, gap: l.gap || (l.en.split(' ')[0] ?? '') })) : []);
-        return {
-          id: t.id,
-          title: t.title,
-          from: str(t.src_from),
-          audio: url(t.audio_media, `album_tracks.${t.id}.audio`),
-          ...(t.ep_num != null ? { ep: t.ep_num } : {}),
-          ...(t.bpm != null ? { bpm: t.bpm } : {}),
-          ...(t.music_key != null ? { key: t.music_key } : {}),
-          lines,
-        };
-      }),
-  }));
+  // PROD (spec 05 "Albums from the episodes"): the albums are the episodes' songs. A track that points at
+  // no episode is left out, and so is an album left without tracks (the prototype's Synth Nights and
+  // Garage Beacon). An episode track plays the episode's song and title (the track's own as a fallback),
+  // and every published episode with lyrics that no album lists yet joins the first episode album as
+  // `e{n}-song` (worker game/keys.ts and routes/extras.ts resolve that id to the episode).
+  const epLines = (ep: EpisodeRowDb) =>
+    lyricsOf(ep).map((l) => ({ en: l.en, pt: l.pt, gap: l.gap || (l.en.split(' ')[0] ?? '') }));
+  const listed = new Set(rows.album_tracks.flatMap((t) => (t.ep_num != null ? [t.ep_num] : [])));
+  const autoTracks: Track[] = episodesSorted
+    .filter((e) => e.status === 'published' && !listed.has(e.num) && lyricsOf(e).length > 0)
+    .map((e) => ({
+      id: autoTrackId(e.num),
+      title: str(e.song_title) || e.title,
+      from: `Episódio ${e.num}`,
+      audio: url(e.song_media, `episodes.${e.num}.song_media`),
+      ep: e.num,
+      lines: epLines(e),
+    }));
+  let autoPlaced = false;
+  const albums: Album[] = [...rows.albums]
+    .sort(bySort)
+    .map((a) => {
+      const tracks: Track[] = rows.album_tracks
+        .filter((t) => t.album_id === a.id && t.ep_num != null)
+        .sort(bySort)
+        .map((t) => {
+          const ep = episodeByNum.get(t.ep_num as number);
+          const own = J<{ en: string; pt: string; gap: string }[] | null>(t.lines, null, `album_tracks.${t.id}.lines`);
+          // Episode tracks sing the episode lyrics; a line without a gap blanks its first word (extra.js tracksOf).
+          const lines = own ?? (ep ? epLines(ep) : []);
+          return {
+            id: t.id,
+            title: str(ep?.song_title) || t.title,
+            from: str(t.src_from),
+            audio: ep?.song_media
+              ? url(ep.song_media, `episodes.${ep.num}.song_media`)
+              : url(t.audio_media, `album_tracks.${t.id}.audio`),
+            ep: t.ep_num as number,
+            ...(t.bpm != null ? { bpm: t.bpm } : {}),
+            ...(t.music_key != null ? { key: t.music_key } : {}),
+            lines,
+          };
+        });
+      if (tracks.length && !autoPlaced) {
+        autoPlaced = true;
+        tracks.push(...autoTracks);
+      }
+      return {
+        id: a.id,
+        title: a.title,
+        sub: str(a.sub),
+        level: str(a.level),
+        img: url(a.img_media, `albums.${a.id}.img`),
+        genres: J<string[]>(a.genres, [], `albums.${a.id}.genres`),
+        tracks,
+      };
+    })
+    .filter((a) => a.tracks.length > 0);
 
   // ----- Mic -----
   const mic: MicCatalog = {

@@ -211,6 +211,22 @@ describe('/api/karaoke/gap', () => {
     expect(r).toMatchObject({ correct: true, answer: 'there' });
   });
 
+  it('PROD: an e{n}-song track (added by compile for an unlisted episode) sings that episode, published only', async () => {
+    const h = await harness();
+    const r = await json<KaraokeGapRes>(
+      h.call('u1', 'POST', '/api/karaoke/gap', { trackId: 'e1-song', line: 0, choice: 'There' }),
+    );
+    expect(r).toMatchObject({ correct: true, answer: 'there', award: { awarded: true } });
+    expect(h.award.calls.map((c) => c.key)).toEqual(['kgap:e1-song:0']);
+    // Episode 2 is a draft and episode 9 does not exist.
+    expect(
+      (await h.call('u1', 'POST', '/api/karaoke/gap', { trackId: 'e2-song', line: 0, choice: 'draft' })).status,
+    ).toBe(404);
+    expect((await h.call('u1', 'POST', '/api/karaoke/gap', { trackId: 'e9-song', line: 0, choice: 'x' })).status).toBe(
+      404,
+    );
+  });
+
   it('an episode lyric line without a gap blanks its first word (compile.ts / tracksOf)', async () => {
     const h = await harness();
     const r = await json<KaraokeGapRes>(

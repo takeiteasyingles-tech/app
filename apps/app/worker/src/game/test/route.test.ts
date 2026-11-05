@@ -72,7 +72,10 @@ describe('POST /api/game/event', () => {
     await exec("INSERT INTO albums(id, title, genres, sort) VALUES('season-one', 'Season One', '[]', 1)");
     await exec("INSERT INTO album_tracks(id, album_id, sort, title) VALUES('so-1', 'season-one', 1, 'Hello')");
     expect(await ok({ kind: 'song', key: 'so-1' })).toMatchObject({ awarded: true });
-    expect(await keys()).toEqual(['song:1', 'song:so-1']);
+    // PROD: e{n}-song, the album track compile adds for an unlisted published episode.
+    expect(await ok({ kind: 'song', key: 'e1-song' })).toMatchObject({ awarded: true });
+    expect((await post({ kind: 'song', key: 'e7-song' })).status).toBe(404);
+    expect(await keys()).toEqual(['song:1', 'song:so-1', 'song:e1-song']);
   });
 
   it('rejects verifiable kinds and malformed keys', async () => {

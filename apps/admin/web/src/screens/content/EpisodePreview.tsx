@@ -176,7 +176,6 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
   const num = Number(d.num) || 0;
   switch (tab) {
     case 'geral':
-    case 'midia':
       return (
         <>
           <div class="now-card stack" style={{ '--gap': '10px' }}>
@@ -196,14 +195,9 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
               </div>
             ) : null}
           </div>
-          {tab === 'midia' ? (
-            <div class="card stack">
-              <MediaById id={(d.introMedia as string) ?? null} label="Intro" />
-              <MediaById id={(d.songMedia as string) ?? null} label={str(d.songTitle) || 'Música'} />
-              <MediaById id={(d.sceneMedia as string) ?? null} label="Cena" />
-              {str(d.sceneNote) ? <p class="sm">{str(d.sceneNote)}</p> : null}
-            </div>
-          ) : null}
+          <div class="card stack">
+            <MediaById id={(d.introMedia as string) ?? null} label="Intro (etapa 3)" />
+          </div>
         </>
       );
     case 'musica': {
@@ -216,17 +210,29 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
     }
     case 'olhar': {
       const v = arr<Any>(d.visual);
-      return v.length ? (
-        <div class="grid2">
-          {v.map((w, i) => (
-            <div key={i} class="card stack" style={{ '--gap': '4px', padding: '14px' }}>
-              <span class="en">{str(w.en)}</span>
-              <span class="pt sm">{str(w.pt)}</span>
-            </div>
-          ))}
+      const scene = (
+        <div class="card stack">
+          <MediaById id={(d.sceneMedia as string) ?? null} label="Cena" />
+          {str(d.sceneNote) ? <p class="sm">{str(d.sceneNote)}</p> : null}
         </div>
+      );
+      return v.length ? (
+        <>
+          {scene}
+          <div class="grid2">
+            {v.map((w, i) => (
+              <div key={i} class="card stack" style={{ '--gap': '4px', padding: '14px' }}>
+                <span class="en">{str(w.en)}</span>
+                <span class="pt sm">{str(w.pt)}</span>
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
-        <Empty what="As palavras da cena aparecem aqui." />
+        <>
+          {scene}
+          <Empty what="As palavras da cena aparecem aqui." />
+        </>
       );
     }
     case 'dialogo': {

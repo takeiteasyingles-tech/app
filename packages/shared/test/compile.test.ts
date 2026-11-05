@@ -2,7 +2,7 @@
 // published-only files, deterministic versions and failure on broken references.
 import { describe, expect, it } from 'vitest';
 import { ContentCompileError, type ContentRows, compileContent, contentKey } from '../src/content/compile';
-import { Catalog, Ebook, Episode, Extra } from '../src/content/schema';
+import { autoTrackEp, Catalog, Ebook, Episode, Extra } from '../src/content/schema';
 
 const NOW = 1_760_000_000_000;
 const j = JSON.stringify;
@@ -498,14 +498,39 @@ describe('compileContent', () => {
 
   it('album tracks inline episode lyrics with gaps (first word when none)', async () => {
     const c = await compileContent(rows(), { publishedAt: NOW });
-    const [t0, t1] = c.catalog.albums[0]?.tracks ?? [];
-    expect(t0?.audio).toBe('/m/media/abcd1234/audio/intro.mp3');
+    const [t0] = c.catalog.albums[0]?.tracks ?? [];
+    // No episode song: the track's own audio is the fallback; the title is the episode's song title.
+    expect(t0).toMatchObject({ id: 'season-one-t0', ep: 1, title: 'Song', audio: '/m/media/abcd1234/audio/intro.mp3' });
     expect(t0?.lines).toEqual([
       { en: 'Hi! Hi! Good morning!', pt: 'Oi!', gap: 'morning' },
       { en: 'Bye bye', pt: 'Tchau', gap: 'Bye' },
     ]);
-    expect(t1).toMatchObject({ bpm: 100, key: 2, lines: [{ en: 'a b', pt: 'c', gap: 'b' }] });
-    expect(t1).not.toHaveProperty('ep');
+  });
+
+  it('PROD: albums are the episode songs (own tracks out, unlisted published episodes in)', async () => {
+    const c = await compileContent(rows(), { publishedAt: NOW });
+    const ids = c.catalog.albums.map((a) => a.id);
+    expect(ids).toEqual(['season-one']);
+    const tracks = c.catalog.albums[0]?.tracks ?? [];
+    // The own-lines track (no episode) is gone; episode 2 (published, lyrics, in no album) joins.
+    expect(tracks.map((t) => t.id)).toEqual(['season-one-t0', 'e2-song']);
+    expect(tracks[1]).toMatchObject({ ep: 2, title: 'Song', from: 'Episódio 2', audio: null });
+    expect(autoTrackEp('e2-song')).toBe(2);
+    expect(autoTrackEp('season-one-t0')).toBeNull();
+
+    // The episode's song wins over the track's file; an album with only own tracks disappears.
+    const r = rows();
+    r.media.push(media('m-song', 'audio/song.mp3', 'audio', 'audio/mpeg'));
+    r.episodes = r.episodes.map((e) => (e.num === 1 ? { ...e, song_media: 'm-song' } : e));
+    r.albums.push({ id: 'synth', title: 'Synth', sub: null, level: null, img_media: null, genres: '[]', sort: 1 });
+    r.album_tracks.push({
+      ...(r.album_tracks[1] as (typeof r.album_tracks)[number]),
+      id: 'synth-t0',
+      album_id: 'synth',
+    });
+    const c2 = await compileContent(r, { publishedAt: NOW });
+    expect(c2.catalog.albums.map((a) => a.id)).toEqual(['season-one']);
+    expect(c2.catalog.albums[0]?.tracks[0]?.audio).toBe('/m/media/abcd1234/audio/song.mp3');
   });
 
   it('extra files keep lines and vocab; premium is flagged', async () => {
