@@ -3,6 +3,7 @@
 // speakers; anything else is rejected, so clients cannot drive arbitrary model parameters.
 // Cache: R2 tts/{sha256}.mp3 (durable, shared) and the Cache API (per colo, fast). Billing happens
 // only on a miss in both.
+import { TTS_WORDS_HEADER } from '@tie/shared';
 import { fail, sha256Hex } from '@tie/worker-core';
 import { activeAssistants } from './context';
 
@@ -45,45 +46,45 @@ function defaultCache(): Cache | null {
   }
 }
 
-export async function cacheGet(hash: string): Promise<Uint8Array<ArrayBuffer> | null> {
+/** Audio plus, for voices that report timing, the encoded word spans (TTS_WORDS_HEADER format). */
+export interface TtsAudio {
+  bytes: Uint8Array<ArrayBuffer>;
+  words: string | null;
+}
+
+export async function cacheGet(hash: string): Promise<TtsAudio | null> {
   const cache = defaultCache();
   if (!cache) return null;
   try {
     const hit = await cache.match(cacheUrl(hash));
-    return hit ? new Uint8Array(await hit.arrayBuffer()) : null;
+    return hit ? { bytes: new Uint8Array(await hit.arrayBuffer()), words: hit.headers.get(TTS_WORDS_HEADER) } : null;
   } catch {
     return null;
   }
 }
 
-export async function cachePut(hash: string, bytes: Uint8Array<ArrayBuffer>): Promise<void> {
+export async function cachePut(hash: string, audio: TtsAudio): Promise<void> {
   const cache = defaultCache();
   if (!cache) return;
+  const headers: Record<string, string> = { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=2592000' };
+  if (audio.words) headers[TTS_WORDS_HEADER] = audio.words;
   try {
-    await cache.put(
-      cacheUrl(hash),
-      new Response(bytes, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=2592000' } }),
-    );
+    await cache.put(cacheUrl(hash), new Response(audio.bytes, { headers }));
   } catch {
     // Cache API is best effort (unavailable on some hosts).
   }
 }
 
-export async function r2Get(bucket: R2Bucket, hash: string): Promise<Uint8Array<ArrayBuffer> | null> {
+export async function r2Get(bucket: R2Bucket, hash: string): Promise<TtsAudio | null> {
   const obj = await bucket.get(ttsR2Key(hash));
-  return obj ? new Uint8Array(await obj.arrayBuffer()) : null;
+  return obj ? { bytes: new Uint8Array(await obj.arrayBuffer()), words: obj.customMetadata?.words ?? null } : null;
 }
 
-export async function r2Put(
-  bucket: R2Bucket,
-  hash: string,
-  bytes: Uint8Array<ArrayBuffer>,
-  speaker: string,
-): Promise<void> {
-  await bucket.put(ttsR2Key(hash), bytes, {
-    httpMetadata: { contentType: 'audio/mpeg' },
-    customMetadata: { speaker },
-  });
+export async function r2Put(bucket: R2Bucket, hash: string, audio: TtsAudio, speaker: string): Promise<void> {
+  // R2 custom metadata is capped at 2 KB; a 400-character line needs well under 1 KB of spans.
+  const customMetadata: Record<string, string> = { speaker };
+  if (audio.words && audio.words.length <= 1600) customMetadata.words = audio.words;
+  await bucket.put(ttsR2Key(hash), audio.bytes, { httpMetadata: { contentType: 'audio/mpeg' }, customMetadata });
 }
 
 /** TTS bill on a miss: ceil(chars / 15) seconds (spec 04 §3.1 "Quota"). */

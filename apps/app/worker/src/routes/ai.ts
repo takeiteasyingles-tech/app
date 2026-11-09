@@ -26,6 +26,7 @@ import {
   aiApi,
   demoReply,
   demoReport,
+  encodeWordSpans,
   FLAGS,
   type Health,
   LIMITS,
@@ -35,6 +36,7 @@ import {
   type ReportResult,
   scorePronunciation,
   script,
+  TTS_WORDS_HEADER,
   type TutorReply,
   type TutorTurnRes,
 } from '@tie/shared';
@@ -654,7 +656,10 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
     const r = await reserveOrThrow(quota, s.userId, ttsSeconds(text), { kind: 'tts', model: ttsModel });
     const started = Date.now();
     try {
-      audio = eleven ? await synthesizeEleven(eleven, text) : await synthesize(c.env, models.tts, text, speaker);
+      if (eleven) {
+        const timed = await synthesizeEleven(eleven, text);
+        audio = { bytes: timed.audio, words: timed.words ? encodeWordSpans(timed.words) : null };
+      } else audio = { bytes: await synthesize(c.env, models.tts, text, speaker), words: null };
     } catch (err) {
       logWarn('tts failed', err);
       // The client falls back to browser TTS: nothing delivered, nothing billed.
@@ -664,22 +669,24 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
     source = 'ai';
     background(c, quota.finish(r.eventId, { ok: true, latencyMs: Date.now() - started, model: ttsModel }));
     // The audio is delivered (and billed) whether or not the caches can be written.
-    const bytes = audio;
-    background(c, r2Put(c.env.MEDIA, hash, bytes, voiceTag));
-    background(c, cachePut(hash, bytes));
+    const fresh = audio;
+    background(c, r2Put(c.env.MEDIA, hash, fresh, voiceTag));
+    background(c, cachePut(hash, fresh));
   } else {
     background(c, quota.log(s.userId, 'tts', { ok: true, model: ttsModel }));
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'audio/mpeg',
-    'Content-Length': String(audio.byteLength),
+    'Content-Length': String(audio.bytes.byteLength),
     'Cache-Control': 'private, max-age=86400',
   };
+  // Word timing for the 3D avatar's mouth (voices that report it: the ElevenLabs ones).
+  if (audio.words) headers[TTS_WORDS_HEADER] = audio.words;
   // The cache is shared across users, so where the bytes came from would tell a user whether
   // someone else already synthesized a text. Local development only.
   if (isLocalOrigin(c.env.APP_ORIGIN)) headers['X-TTS-Source'] = source;
-  return new Response(audio, { headers });
+  return new Response(audio.bytes, { headers });
 });
 
 export default routes;

@@ -266,6 +266,41 @@ async function typeLine(page: Page, text: string) {
 }
 
 // =====================================================================================
+test('Mic uses the configured assistant voice with profile HD switched off', async ({ context, page }) => {
+  await context.route('**/api/health', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ai: true }) }),
+  );
+  // A valid short PCM WAV exercises real Web Audio playback without calling a paid TTS service.
+  const audio = Buffer.alloc(44 + 3200);
+  audio.write('RIFF', 0);
+  audio.writeUInt32LE(audio.length - 8, 4);
+  audio.write('WAVEfmt ', 8);
+  audio.writeUInt32LE(16, 16);
+  audio.writeUInt16LE(1, 20);
+  audio.writeUInt16LE(1, 22);
+  audio.writeUInt32LE(16000, 24);
+  audio.writeUInt32LE(32000, 28);
+  audio.writeUInt16LE(2, 32);
+  audio.writeUInt16LE(16, 34);
+  audio.write('data', 36);
+  audio.writeUInt32LE(3200, 40);
+  const voices: string[] = [];
+  await context.route('**/api/tts', async (route) => {
+    voices.push(route.request().postDataJSON().voice);
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: audio });
+  });
+  await signup(page);
+  const current = await page.request.get('/api/me/state');
+  expect((await current.json()).settings.hd).toBe(false);
+  await openLobby(page);
+  await startCall(page);
+  await expect.poll(() => voices.length).toBe(1);
+  await btn(page, /Again, please/).click();
+  await expect.poll(() => voices.length).toBe(2);
+  expect(voices).toEqual(['margaret', 'margaret']);
+  expect(await said(page)).toEqual([]);
+});
+
 test.describe('mobile', () => {
   test('lobby: assistant picker, modes, per-mode pickers, minutes, persistence', async ({ page }) => {
     await signup(page);

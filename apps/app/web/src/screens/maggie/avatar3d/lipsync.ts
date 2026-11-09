@@ -218,9 +218,51 @@ interface Word {
   time?: WordTime;
 }
 
-/** Viseme keys [{t, v}] (seconds), with 'sil' around every phrase. */
+/**
+ * Viseme keys timed on the voice's own word timing (the TTS reports when each word is heard): each
+ * word's visemes fill its span by cost, and the mouth rests in every pause longer than a breath.
+ */
+export function timelineTimed(all: readonly string[], spans: readonly WordTime[]): Key[] {
+  const keys: Key[] = [];
+  let prevEnd = -1;
+  all.forEach((raw, i) => {
+    const vis = wordVisemes(raw);
+    const sp = spans[i];
+    if (!vis.length || !sp) return;
+    if (prevEnd < 0 || sp.s - prevEnd > 0.14) {
+      if (prevEnd >= 0) keys.push({ t: prevEnd + 0.07, v: 'sil' });
+      keys.push({ t: Math.max(0, sp.s - 0.06, prevEnd + 0.08), v: 'sil' });
+    }
+    const dur = Math.max(0.06, sp.e - sp.s);
+    const c = vis.reduce((n, v) => n + cost(v), 0);
+    let t = sp.s;
+    for (const v of vis) {
+      const d = (cost(v) / c) * dur;
+      keys.push({ t: t + d * (VOWELS.has(v) ? 0.5 : 0.4), v });
+      t += d;
+    }
+    prevEnd = Math.max(prevEnd, sp.e);
+  });
+  if (prevEnd >= 0) keys.push({ t: prevEnd + 0.07, v: 'sil' });
+  // Keep the keys strictly increasing (word spans from a TTS may touch or overlap by a few ms).
+  const out: Key[] = [];
+  for (const k of keys) {
+    const last = out[out.length - 1];
+    if (!last || k.t > last.t + 1e-3) out.push(k);
+  }
+  return out;
+}
+
+/**
+ * Viseme keys [{t, v}] (seconds), with 'sil' around every phrase. With a time for every word (from the
+ * TTS) the keys follow them exactly; otherwise the words are spread over the voiced parts of the audio.
+ */
 export function timeline(text: string, env: Float32Array, times: readonly WordTime[] | null = null): Key[] {
   const all = text.split(/\s+/).filter(Boolean);
+  if (times && times.length === all.length && all.length) {
+    const exact = timelineTimed(all, times);
+    if (exact.length) return exact;
+  }
   const hints = times && times.length === all.length ? times : null;
   const words: Word[] = all
     .map((raw, i) => {
@@ -334,8 +376,7 @@ const REST: Sample = {
 };
 const ease = (x: number) => x * x * (3 - 2 * x);
 
-/** Mouth at time t: a smooth blend of the two surrounding keys. Always returns every morph. */
-export function sample(keys: readonly Key[], t: number): Sample {
+function sampleAt(keys: readonly Key[], t: number): Sample {
   const first = keys[0];
   if (!first || t <= first.t) return REST;
   const i = keys.findIndex((k) => k.t > t);
@@ -347,5 +388,21 @@ export function sample(keys: readonly Key[], t: number): Sample {
   const B = SHAPES[b.v];
   const out = { jaw: A.jaw + (B.jaw - A.jaw) * f, v: f < 0.5 ? a.v : b.v } as Sample;
   for (const m of MORPHS) out[m] = (A[m] ?? 0) + ((B[m] ?? 0) - (A[m] ?? 0)) * f;
+  return out;
+}
+
+/** How far ahead the lips start rounding for a coming O/U/W/R (anticipatory coarticulation), s. */
+export const ROUND_LEAD = 0.09;
+
+/**
+ * Mouth at time t: a smooth blend of the two surrounding keys, with the lips already rounding toward a
+ * rounded sound up to ROUND_LEAD ahead (people round before the vowel, not on it). Always returns every
+ * morph, in a new object.
+ */
+export function sample(keys: readonly Key[], t: number): Sample {
+  const out = { ...sampleAt(keys, t) };
+  const ahead = sampleAt(keys, t + ROUND_LEAD);
+  out.mouthRound = Math.max(out.mouthRound, 0.6 * ahead.mouthRound);
+  out.mouthFunnel = Math.max(out.mouthFunnel, 0.6 * ahead.mouthFunnel);
   return out;
 }

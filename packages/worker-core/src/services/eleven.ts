@@ -104,6 +104,77 @@ export async function elevenSpeak(
   return bytes;
 }
 
+export interface TimedSpeech {
+  audio: Uint8Array<ArrayBuffer>;
+  /** One span per whitespace-separated word of the text, or null when the alignment does not match it. */
+  words: { s: number; e: number }[] | null;
+}
+
+/**
+ * Character alignment → one span per whitespace-separated word of `text` (the same split the avatar's
+ * lip sync uses). null when the alignment is not the text's characters one to one.
+ */
+export function wordSpans(
+  text: string,
+  chars: readonly string[],
+  starts: readonly number[],
+  ends: readonly number[],
+): { s: number; e: number }[] | null {
+  if (chars.length !== text.length || starts.length !== chars.length || ends.length !== chars.length) return null;
+  const out: { s: number; e: number }[] = [];
+  const re = /\S+/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const s = starts[m.index] as number;
+    const e = ends[m.index + m[0].length - 1] as number;
+    if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+    out.push({ s, e: Math.max(s, e) });
+  }
+  return out;
+}
+
+/** Text → mp3 plus when each word is heard (ElevenLabs /with-timestamps; same voice and settings). */
+export async function elevenSpeakTimed(
+  apiKey: string,
+  model: string,
+  voiceId: string,
+  text: string,
+): Promise<TimedSpeech> {
+  const r = await fetch(`${API}/text-to-speech/${voiceId}/with-timestamps?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      text,
+      model_id: model,
+      voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true },
+    }),
+  });
+  if (!r.ok) throw new ElevenError(`ElevenLabs TTS ${r.status}`, r.status, await detailOf(r));
+  const j = (await r.json()) as {
+    audio_base64?: unknown;
+    alignment?: {
+      characters?: unknown;
+      character_start_times_seconds?: unknown;
+      character_end_times_seconds?: unknown;
+    };
+  };
+  if (typeof j.audio_base64 !== 'string' || !j.audio_base64)
+    throw new ElevenError('ElevenLabs TTS returned no audio', 502);
+  const bin = atob(j.audio_base64);
+  const audio = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) audio[i] = bin.charCodeAt(i);
+  const a = j.alignment;
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+  const words = a
+    ? wordSpans(
+        text,
+        arr(a.characters).map(String),
+        arr(a.character_start_times_seconds).map(Number),
+        arr(a.character_end_times_seconds).map(Number),
+      )
+    : null;
+  return { audio, words };
+}
+
 /** Instant Voice Clone from one sample: the new voice id (it lives in that ElevenLabs account). */
 export async function elevenClone(apiKey: string, name: string, sample: File, description: string): Promise<string> {
   const fd = new FormData();

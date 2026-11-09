@@ -1515,6 +1515,46 @@ describe('POST /api/tts', () => {
     expect(res.headers.get('X-TTS-Source')).toBeNull();
   });
 
+  it('speaks a cloned voice through ElevenLabs and returns (and caches) its word timing', async () => {
+    const text = 'Hi, I am Maggie.';
+    const chars = [...text];
+    const real = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      calls.push(url);
+      return Response.json({
+        audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)),
+        alignment: {
+          characters: chars,
+          character_start_times_seconds: chars.map((_, i) => i * 0.05),
+          character_end_times_seconds: chars.map((_, i) => (i + 1) * 0.05),
+        },
+      });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'HyqisByK1ozCXL4PglY3' }),
+      });
+      const res = await tts(env, u1, { text, voice: 'margaret' });
+      expect(res.status).toBe(200);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain('/text-to-speech/HyqisByK1ozCXL4PglY3/with-timestamps');
+      expect(new Uint8Array(await res.arrayBuffer()).slice(0, 3)).toEqual(new Uint8Array([0x49, 0x44, 0x33]));
+      // "Hi," 0–0.15 s, "I" 0.20–0.25, "am" 0.30–0.40, "Maggie." 0.45–0.80
+      expect(res.headers.get('X-TTS-Words')).toBe('0,15;20,25;30,40;45,80');
+      // A cache or R2 hit keeps the timing and calls ElevenLabs no more.
+      const again = await tts(env, u1, { text, voice: 'margaret' });
+      expect(['cache', 'r2']).toContain(again.headers.get('X-TTS-Source'));
+      expect(again.headers.get('X-TTS-Words')).toBe('0,15;20,25;30,40;45,80');
+      expect(calls).toHaveLength(1);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('enforces the 400-char limit and the quota', async () => {
     const long = await tts(testEnv(), u1, { text: 'a'.repeat(401), voice: 'margaret' });
     expect(long.status).toBe(400);

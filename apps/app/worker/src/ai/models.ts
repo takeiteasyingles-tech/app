@@ -3,7 +3,15 @@
 // DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
 // them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
 import { DEFAULT_MODELS, FLAGS, SETTINGS } from '@tie/shared';
-import { all, type Env, elevenSpeak, type FlagSubject, isEnabled, readElevenConfig } from '@tie/worker-core';
+import {
+  all,
+  type Env,
+  elevenSpeakTimed,
+  type FlagSubject,
+  isEnabled,
+  readElevenConfig,
+  type TimedSpeech,
+} from '@tie/worker-core';
 
 export interface Models {
   tutor: string;
@@ -198,10 +206,10 @@ export async function elevenFor(env: Env, db: D1Database, assistantKey: string |
   return cfg.apiKey && voiceId ? { apiKey: cfg.apiKey, model: cfg.model, voiceId } : null;
 }
 
-/** Text → mp3 with an ElevenLabs (cloned) voice. */
-export async function synthesizeEleven(v: ElevenVoice, text: string): Promise<Uint8Array<ArrayBuffer>> {
+/** Text → mp3 with an ElevenLabs (cloned) voice, plus when each word is heard (for the avatar's mouth). */
+export async function synthesizeEleven(v: ElevenVoice, text: string): Promise<TimedSpeech> {
   try {
-    return await elevenSpeak(v.apiKey, v.model, v.voiceId, text);
+    return await elevenSpeakTimed(v.apiKey, v.model, v.voiceId, text);
   } catch (err) {
     throw new AiCallError(err instanceof Error ? err.message : 'ElevenLabs TTS failed', v.model);
   }

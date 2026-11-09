@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { envelope, MORPHS, SHAPES, sample, timeline, wordVisemes } from '../src/screens/maggie/avatar3d/lipsync';
+import { spring } from '../src/screens/maggie/avatar3d/engine';
+import {
+  envelope,
+  MORPHS,
+  ROUND_LEAD,
+  SHAPES,
+  sample,
+  timeline,
+  wordVisemes,
+} from '../src/screens/maggie/avatar3d/lipsync';
 
 /** A fake decoded buffer: 100 Hz frames of sound or silence, as `[seconds, loud]` segments. */
 function buffer(segments: [number, boolean][]) {
@@ -64,6 +73,60 @@ describe('lip sync', () => {
     for (const t of [-1, 0.2, 99]) {
       const s = sample(keys, t);
       for (const m of MORPHS) expect(Number.isFinite(s[m])).toBe(true);
+    }
+  });
+
+  it('follows the voice’s own word timing exactly when the TTS reports it', () => {
+    const env = envelope(buffer([[3, true]])); // one long voiced stretch: no pause to go by
+    const text = 'Good morning, Maria.';
+    const spans = [
+      { s: 0.2, e: 0.45 },
+      { s: 0.5, e: 1.0 },
+      { s: 1.6, e: 2.2 }, // a real pause before "Maria"
+    ];
+    const keys = timeline(text, env, spans);
+    for (let i = 1; i < keys.length; i++)
+      expect((keys[i] as { t: number }).t).toBeGreaterThan((keys[i - 1] as { t: number }).t);
+    const inWord = (k: { t: number }, w: { s: number; e: number }) => k.t >= w.s && k.t <= w.e;
+    const voiced = keys.filter((k) => k.v !== 'sil');
+    expect(voiced.map((k) => k.v)).toEqual([
+      ...wordVisemes('Good'),
+      ...wordVisemes('morning,'),
+      ...wordVisemes('Maria.'),
+    ]);
+    expect(voiced.every((k) => spans.some((w) => inWord(k, w)))).toBe(true);
+    // the mouth rests in the pause, though the audio never goes quiet
+    expect(sample(keys, 1.3).jaw).toBe(0);
+    // a mismatched word count falls back to the audio-only timing
+    expect(timeline(text, env, spans.slice(1)).length).toBeGreaterThan(0);
+  });
+
+  it('rounds the lips ahead of a rounded vowel and never mutates the rest pose', () => {
+    const keys = [
+      { t: 0, v: 'sil' as const },
+      { t: 0.3, v: 'DD' as const },
+      { t: 0.5, v: 'U' as const },
+      { t: 0.8, v: 'sil' as const },
+    ];
+    // just before the U is due, the lips are already partly rounded
+    const early = sample(keys, 0.5 - ROUND_LEAD * 0.5);
+    expect(early.mouthRound).toBeGreaterThan(0.3);
+    const before = sample(keys, -1);
+    before.mouthRound = 1;
+    expect(sample(keys, -1).mouthRound).toBe(0);
+  });
+
+  it('moves the mouth on a critically damped spring: no overshoot, stable at any frame time', () => {
+    for (const dt of [1 / 120, 1 / 30, 0.1]) {
+      let x = 0;
+      let v = 0;
+      let max = 0;
+      for (let i = 0; i < Math.ceil(1 / dt); i++) {
+        [x, v] = spring(x, v, 1, 55, dt);
+        max = Math.max(max, x);
+      }
+      expect(max).toBeLessThanOrEqual(1 + 1e-9);
+      expect(x).toBeCloseTo(1, 3);
     }
   });
 });

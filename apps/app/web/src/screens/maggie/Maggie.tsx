@@ -182,7 +182,7 @@ function maggieSays(en: string, opt: { rate?: number } = {}): Promise<void> {
   const mine = ++sayTurn;
   M.speaking = true;
   re();
-  return speech.say(en, { who: assistant(c).name, ...opt }).then(() => {
+  return speech.say(en, { who: assistant(c).name, hd: true, ...opt }).then(() => {
     // Uma fala anterior cortada por esta termina depois que esta começou: não desliga o avatar.
     if (!M || mine !== sayTurn) return;
     M.speaking = false;

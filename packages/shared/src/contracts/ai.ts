@@ -26,9 +26,38 @@ export type Feedback = z.infer<typeof Feedback>;
 export const PronTip = z.object({ word: z.string(), tip_pt: z.string() });
 export type PronTip = z.infer<typeof PronTip>;
 
-/** encouraging → talk-happy, thinking/correcting → talk-soft, anything else → talk. */
-export const Mood = z.enum(['happy', 'curious', 'encouraging', 'thinking', 'correcting']);
+/**
+ * encouraging → talk-happy, thinking/correcting → talk-soft, sad → talk-sad, anything else → talk.
+ * `sad` (added 2026-11) is for empathy: the learner shared something sad or disappointing.
+ */
+export const Mood = z.enum(['happy', 'curious', 'encouraging', 'thinking', 'correcting', 'sad']);
 export type Mood = z.infer<typeof Mood>;
+
+/**
+ * POST /api/tts response header (only for voices that report timing, today the ElevenLabs ones): when
+ * each word of the request text is heard, as "start,end" pairs in centiseconds joined by ";", one pair
+ * per whitespace-separated word of the text. The 3D avatar times its mouth shapes on it.
+ */
+export const TTS_WORDS_HEADER = 'X-TTS-Words';
+
+export interface WordSpan {
+  /** Seconds from the start of the audio. */
+  s: number;
+  e: number;
+}
+
+export function encodeWordSpans(spans: readonly WordSpan[]): string {
+  return spans.map((w) => `${Math.round(w.s * 100)},${Math.round(w.e * 100)}`).join(';');
+}
+
+/** null when the header is missing or malformed. */
+export function decodeWordSpans(raw: string | null | undefined): WordSpan[] | null {
+  if (!raw || !/^\d+,\d+(;\d+,\d+)*$/.test(raw)) return null;
+  return raw.split(';').map((p) => {
+    const [s, e] = p.split(',').map(Number) as [number, number];
+    return { s: s / 100, e: Math.max(s, e) / 100 };
+  });
+}
 
 /** The server clamps model output to these lengths before validating it. */
 export const AI_LIMITS = {

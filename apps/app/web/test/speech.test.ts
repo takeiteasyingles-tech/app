@@ -1,0 +1,118 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const f = vi.hoisted(() => ({
+  state: { value: { settings: { hd: false }, profile: { assistant: 'margaret' } } },
+  online: { value: true },
+  tts: vi.fn(),
+  ac: vi.fn(),
+}));
+vi.mock('../src/store/state', () => ({ state: f.state }));
+vi.mock('../src/store/content', () => ({
+  catalog: {
+    value: {
+      assistants: [
+        {
+          k: 'margaret',
+          name: 'Maggie',
+          aka: ['Maggie', 'Margaret'],
+          art: 'a',
+          voice: { gender: 'female', pitch: 1, rate: 1, tts: 'asteria' },
+        },
+      ],
+    },
+  },
+}));
+vi.mock('../src/core/aiClient', () => ({ aiOnline: f.online, tts: f.tts }));
+vi.mock('../src/core/sound', () => ({ ac: f.ac }));
+
+describe('assistant speech', () => {
+  let speak: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    f.state.value.settings.hd = false;
+    f.online.value = true;
+    f.tts.mockReset().mockResolvedValue({
+      audio: new ArrayBuffer(8),
+      words: [
+        { s: 0.1, e: 0.4 },
+        { s: 0.45, e: 0.9 },
+      ],
+    });
+    speak = vi.fn((u: SpeechSynthesisUtterance) => u.onend?.(new Event('end') as SpeechSynthesisEvent));
+    vi.stubGlobal('window', { speechSynthesis: { getVoices: () => [], cancel: vi.fn(), speak } });
+    vi.stubGlobal(
+      'SpeechSynthesisUtterance',
+      class {
+        constructor(public text: string) {}
+      },
+    );
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const source = {
+      buffer: null,
+      playbackRate: { value: 1 },
+      connect: vi.fn(),
+      onended: null as (() => void) | null,
+      start: () => queueMicrotask(() => source.onended?.()),
+      stop: vi.fn(),
+    };
+    f.ac.mockReturnValue({
+      currentTime: 1,
+      destination: {},
+      decodeAudioData: async () => ({ duration: 1 }),
+      createBufferSource: () => source,
+      createAnalyser: () => ({ fftSize: 512, connect: vi.fn(), getByteTimeDomainData: (b: Uint8Array) => b.fill(128) }),
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('uses Maggie’s server voice and sends audio to lip sync with profile HD off', async () => {
+    const speech = await import('../src/core/speech');
+    const events: import('../src/core/speech').SpeechEvent[] = [];
+    const off = speech.onSpeech((e) => events.push(e));
+    const saying = speech.say('Good morning.', { who: 'Maggie', hd: true, rate: 0.7 });
+    await vi.runAllTimersAsync();
+    await saying;
+    off();
+    expect(f.tts).toHaveBeenCalledWith('Good morning.', 'female', 'margaret');
+    expect(speak).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'audio',
+        text: 'Good morning.',
+        rate: 0.7,
+        words: [
+          { s: 0.1, e: 0.4 },
+          { s: 0.45, e: 0.9 },
+        ],
+      }),
+      { type: 'end' },
+    ]);
+    expect(f.state.value.settings.hd).toBe(false);
+  });
+
+  it('keeps the profile preference for speech outside the Mic', async () => {
+    const speech = await import('../src/core/speech');
+    await speech.say('Hello.');
+    expect(f.tts).not.toHaveBeenCalled();
+    expect(speak).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to the browser when the server voice is unavailable', async () => {
+    f.tts.mockResolvedValue(null);
+    const speech = await import('../src/core/speech');
+    await speech.say('Hello.', { who: 'Margaret', hd: true });
+    expect(f.tts).toHaveBeenCalledWith('Hello.', 'female', 'margaret');
+    expect(speak).toHaveBeenCalledOnce();
+  });
+});

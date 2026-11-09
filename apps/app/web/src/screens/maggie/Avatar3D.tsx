@@ -14,7 +14,7 @@ import type { AvatarEngine } from './avatar3d/engine';
  * that stretches with the jaw so the lower teeth ride the lower lip; v1 opened in a V.
  */
 const MODELS: Readonly<Record<string, string>> = {
-  margaret: '/avatars/margaret/v3/margaret.gltf',
+  margaret: '/avatars/margaret/v4/margaret.gltf',
 };
 
 let webgl: boolean | null = null;

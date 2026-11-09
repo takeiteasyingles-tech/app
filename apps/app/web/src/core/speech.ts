@@ -1,9 +1,10 @@
 // Voice (port of prototipo/js/core/speech.js): speak (free browser voice with a synced mouth, or the
-// HD voice from /api/tts when settings.hd is on and the AI is online), listen (Web Speech API, en-US
+// HD voice from /api/tts when requested by the Mic or settings.hd and the AI is online), listen (Web Speech API, en-US
 // with interim results) and record a 16 kHz mono PCM16 WAV for /api/pronounce.
 
 import { DEFAULT_ASSISTANT } from '@tie/shared/constants';
 import type { AssistantPublic } from '@tie/shared/content/schema';
+import type { WordSpan } from '@tie/shared/contracts/ai';
 import { assistantByName, getAssistant } from '@tie/shared/domain/assist';
 import { catalog } from '../store/content';
 import { state } from '../store/state';
@@ -110,7 +111,16 @@ let current: Job | null = null;
  * audio lip sync), the browser voice's flap visemes (no audio to analyse), and the end of the line.
  */
 export type SpeechEvent =
-  | { type: 'audio'; text: string; buffer: AudioBuffer; ctx: AudioContext; startAt: number; rate: number }
+  | {
+      type: 'audio';
+      text: string;
+      buffer: AudioBuffer;
+      ctx: AudioContext;
+      startAt: number;
+      rate: number;
+      /** When each word of the text is heard (voices that report timing), else null. */
+      words: WordSpan[] | null;
+    }
   | { type: 'mouth'; v: Viseme }
   | { type: 'end' };
 const taps = new Set<(e: SpeechEvent) => void>();
@@ -145,6 +155,8 @@ export function stop(): void {
 }
 
 export interface SayOptions {
+  /** Override the profile's HD preference; Mic lines always request the configured assistant voice. */
+  hd?: boolean;
   /** 1 = normal; "Slowly, please." is .7, "Sorry?" .85. */
   rate?: number;
   /** Speaker name: a Mic assistant (its voice profile) or a series character. Default: the chosen assistant. */
@@ -170,12 +182,12 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   const gender: 'male' | 'female' = vo ? vo.gender : MALE.test(o.who) ? 'male' : 'female';
   const job: Job = { mouth: o.mouth, cancelled: false };
   current = job;
-  if (state.value.settings.hd && aiOnline.value) {
+  if ((o.hd ?? state.value.settings.hd) && aiOnline.value) {
     try {
       // An assistant is sent by key, so the server can pick its own voice (a cloned one, see /api/tts).
-      const buf = await tts(text, gender, prof?.k || vo?.tts || (gender === 'male' ? 'orion' : 'asteria'));
+      const got = await tts(text, gender, prof?.k || vo?.tts || (gender === 'male' ? 'orion' : 'asteria'));
       if (job.cancelled) return;
-      if (buf) return await playBuffer(buf, job, o, text);
+      if (got) return await playBuffer(got.audio, job, o, text, got.words);
     } catch {
       // Falls back to the browser voice.
     }
@@ -242,7 +254,13 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
 }
 
 /** HD voice through the shared AudioContext; the mouth follows the RMS level. */
-function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: number }, text: string): Promise<void> {
+function playBuffer(
+  arrayBuf: ArrayBuffer,
+  job: Job,
+  o: SayOptions & { rate: number },
+  text: string,
+  words: WordSpan[] | null = null,
+): Promise<void> {
   return new Promise<void>((resolve) => {
     const c = ac();
     if (!c) return resolve();
@@ -281,7 +299,7 @@ function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: num
         };
         o.onStart?.();
         const startAt = c.currentTime;
-        emit({ type: 'audio', text, buffer: audio, ctx: c, startAt, rate: o.rate });
+        emit({ type: 'audio', text, buffer: audio, ctx: c, startAt, rate: o.rate, words });
         src.start(startAt);
         loop();
       },
