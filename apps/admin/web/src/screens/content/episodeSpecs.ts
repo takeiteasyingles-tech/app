@@ -3,11 +3,22 @@
 import type { Spec } from '../../ui/form';
 import { EpisodeExtraPicker } from './EpisodeReferences';
 
-export type TabId = 'geral' | 'musica' | 'olhar' | 'dialogo' | 'mic' | 'licao' | 'away' | 'exercicios' | 'fim';
+export type TabId =
+  | 'geral'
+  | 'apresentacao'
+  | 'musica'
+  | 'olhar'
+  | 'dialogo'
+  | 'mic'
+  | 'licao'
+  | 'away'
+  | 'exercicios'
+  | 'fim';
 
 export const TABS: readonly (readonly [TabId, string])[] = [
   ['geral', 'Geral'],
-  ['musica', '1 · Música'],
+  ['apresentacao', '1 · Apresentação'],
+  ['musica', '2 · Música'],
   ['olhar', '4 · Take a Look'],
   ['dialogo', '5 · Take It In'],
   ['mic', '6 · Take the Mic'],
@@ -38,7 +49,7 @@ const GERAL: Spec[] = [
     ro: true,
     opt: 'null',
     min: 1,
-    hint: 'O e-book que cobre este episódio (etapa 2).',
+    hint: 'O e-book que cobre este episódio (etapa 3).',
   },
   {
     t: 'custom',
@@ -47,15 +58,34 @@ const GERAL: Spec[] = [
     hint: 'Escolha um extra exclusivo. Os materiais já vinculados a outro episódio não aparecem.',
     render: EpisodeExtraPicker,
   },
-  { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3, hint: 'Mostrada na Intro (etapa 3).' },
-  { t: 'media', k: 'introMedia', label: 'Áudio da Intro (etapa 3)', kind: 'audio', opt: 'null' },
   {
     t: 'strings',
     k: 'castNames',
     label: 'Personagens',
     wide: true,
     ph: 'Nome e Enter',
-    hint: 'Quem aparece no episódio (Intro e Take It In). Cada personagem ganha uma cor própria, na ordem desta lista.',
+    hint: 'Quem aparece no episódio (Take a Look e Take It In). Cada personagem ganha uma cor própria, na ordem desta lista.',
+  },
+];
+
+// 1 · Apresentação do Episódio: the audio of the opening (the orb plays with it) and the episode text.
+const APRESENTACAO: Spec[] = [
+  {
+    t: 'media',
+    k: 'introMedia',
+    label: 'Áudio da apresentação',
+    kind: 'audio',
+    opt: 'null',
+    hint: 'Sem áudio, o aluno ouve uma vinheta de 15 s.',
+  },
+  {
+    t: 'text',
+    k: 'synopsis',
+    label: 'Texto da apresentação',
+    opt: 'null',
+    rows: 6,
+    wide: true,
+    hint: 'Aparece abaixo do orb. Se passar do espaço da tela, o aluno rola com a setinha.',
   },
 ];
 
@@ -317,6 +347,7 @@ const FIM: Spec[] = [
 
 export const TAB_SPECS: Record<TabId, readonly Spec[]> = {
   geral: GERAL,
+  apresentacao: APRESENTACAO,
   musica: MUSICA,
   olhar: OLHAR,
   dialogo: DIALOGO,

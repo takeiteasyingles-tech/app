@@ -2161,6 +2161,32 @@ img.ad-mprev {
 .ad-psong-line.on {
   background: #fff;
 }
+/* Apresentação preview: a still version of the student's orb (the app animates it) and the text. */
+.ad-porb {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}
+.ad-porb > span {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.95) 0, rgba(255, 255, 255, 0) 22%),
+    radial-gradient(circle at 50% 108%, #ffb36b 0, rgba(255, 179, 107, 0) 46%),
+    radial-gradient(circle at 70% 70%, #8b6cff 0, rgba(139, 108, 255, 0) 52%),
+    radial-gradient(circle at 40% 45%, #6ea4ff 0, #3a63e0 58%, #2a3fb0 100%);
+  box-shadow:
+    0 0 0 14px rgba(90, 130, 255, 0.1),
+    0 0 0 28px rgba(90, 130, 255, 0.06),
+    0 0 70px rgba(110, 164, 255, 0.45);
+}
+.ad-ptext {
+  text-align: center;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  color: var(--navy);
+}
 .ad-psong-rep {
   margin-left: 10px;
   vertical-align: 2px;

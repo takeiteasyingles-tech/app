@@ -14,8 +14,13 @@ const protoNeed = core.run(declSource('js/screens/player.js', 'need'));
 const protoGate = core.run(`(${declSource('js/screens/player.js', 'gate')})`.replace('need(', 'globalThis.__need('));
 core.ctx.__need = protoNeed;
 
-/** The prototype's step at production positions 1-3 (spec 05 "Step order"); 4-10 are the same. */
-const PROTO_STEP = [2, 3, 1] as const;
+/**
+ * The prototype's step at production positions 1-3 (spec 05 "Step order"): since migration 0012 the
+ * prototype's own order (Apresentação = its intro, song, e-book); 4-10 are the same.
+ */
+const PROTO_STEP = [1, 2, 3] as const;
+/** Production copy of the intro's gate: the step is the Apresentação now. */
+const prodMsg = (m: string): string => (m === 'Ouça a abertura até o fim' ? 'Ouça a apresentação até o fim' : m);
 
 /** A v6 state (index keys) and the same state in v7 (stable ids). */
 function pair(rng: () => number, E: Any) {
@@ -75,7 +80,7 @@ describe('need() parity with player.js (index keys → stable ids)', () => {
             expected = protoNeed(E, v6, step);
             expectedGate = protoGate(E, v6, step);
           } else {
-            // Steps 1-3 are the prototype's 2, 3, 1 (production order). The prototype step sees the
+            // Steps 1-3 map through PROTO_STEP. The prototype step sees the
             // same completions under its own number; "prog past this step" is production's position,
             // so the prototype runs without prog and the shortcut is applied here.
             const old = PROTO_STEP[step - 1] as number;
@@ -85,7 +90,7 @@ describe('need() parity with player.js (index keys → stable ids)', () => {
             });
             const v6r = { ...v6, prog: {}, stepOk };
             const past = step !== STEP.EBOOK && (v7.prog[n] || 1) > step;
-            expected = past ? '' : protoNeed(E, v6r, old);
+            expected = past ? '' : prodMsg(protoNeed(E, v6r, old));
             expectedGate = v7.settings.free ? '' : expected;
           }
           expect(need(ep, v7, step), `step ${step} ${JSON.stringify(v6)}`).toBe(expected);

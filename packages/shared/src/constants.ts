@@ -64,13 +64,14 @@ export const DURATIONS = {
 } as const;
 
 /**
- * Episode step numbers. Production order (spec 05 "Step order"): the song's first pass, the e-book,
- * then the intro opens "O episódio". The prototype had intro → song → e-book.
+ * Episode step numbers (spec 05 "Step order"). Since migration 0012 the episode opens with the
+ * Apresentação (the intro step: audio, animated orb and the episode text), then the song's first pass
+ * and the e-book, as in the prototype's intro → song → e-book. INTRO keeps its name in code.
  */
 export const STEP = {
-  SONG: 1,
-  EBOOK: 2,
-  INTRO: 3,
+  INTRO: 1,
+  SONG: 2,
+  EBOOK: 3,
   LOOK: 4,
   DIALOG: 5,
   MIC: 6,
@@ -80,7 +81,7 @@ export const STEP = {
   LAST: 10,
 } as const;
 /** First step of each group after the first ("O episódio", "Fechamento"): the 10-step bar's gaps. */
-export const STEP_GROUP_STARTS: readonly number[] = [STEP.INTRO, STEP.LAST];
+export const STEP_GROUP_STARTS: readonly number[] = [STEP.LOOK, STEP.LAST];
 
 export const LOCKOUT_FAILED_LOGINS = 10;
 export const PBKDF2_ITERATIONS = 100_000;

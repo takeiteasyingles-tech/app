@@ -7,6 +7,7 @@ import { Btn, Icon } from '@tie/ui';
 import { type ComponentChildren, Fragment } from 'preact';
 import { Blocks } from '../../ui-blocks/Blocks';
 import { fmt, heard, lyricRows, type MicFeedback, pad2, type StepCtx, type StepOut } from './model';
+import { Presentation } from './Presentation';
 
 const playIco = (playing: boolean) => <Icon name={playing ? 'pause' : 'play'} size={20} />;
 
@@ -62,8 +63,6 @@ function CastStrip({ Ep, cat, desk, bare = false }: Pick<StepCtx, 'Ep' | 'cat' |
   );
 }
 
-// ---------- 3 · Intro (abre "O episódio") ----------
-
 /**
  * A lesson block's all-caps label in sentence case, for a light read: "O VERBO TO BE NA 1ª E 2ª
  * PESSOA" → "O verbo to be na 1ª e 2ª pessoa", "MR. · MRS. · MS. · MISS" → "Mr. · Mrs. · Ms. · Miss".
@@ -79,89 +78,24 @@ function sentenceCase(t: string): string {
     .join(' · ');
 }
 
-function Intro({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx): StepOut {
-  const has = !!Ep.introAudio;
-  // "1 · O VERBO TO BE NA 1ª E 2ª PESSOA" → "O verbo to be na 1ª e 2ª pessoa" (numbered by the list).
-  const topics = Ep.lesson.map((b) => sentenceCase(b.k.replace(/^\s*\d+\s*·\s*/, '').trim())).filter(Boolean);
+// ---------- 1 · Apresentação do Episódio (abre o episódio; Presentation.tsx) ----------
+
+function Intro({ Ep, P, a, tap }: StepCtx): StepOut {
   return {
     body: (
-      <>
-        <div class="now-card stack" style={{ '--gap': '16px', minHeight: '340px', justifyContent: 'space-between' }}>
-          <div class="bgimg" style={{ backgroundImage: homeBg ? `url(${homeBg})` : undefined, opacity: '.3' }} />
-          <div class="row between">
-            <span class="kick">Abertura</span>
-            <span class="pill pl-eppill">Ep. {pad2(Ep.num)}</span>
-          </div>
-          <div>
-            <div class="h1" style={{ color: '#fff' }}>
-              {Ep.title}
-            </div>
-            <p class="p mt8" style={{ color: 'var(--onNavy)' }}>
-              {Ep.synopsis}
-            </p>
-          </div>
-          <div class="stack" style={{ '--gap': '10px' }}>
-            <button type="button" class="btn light" onClick={tap(a.play)} style={{ alignSelf: 'flex-start' }}>
-              {playIco(P.playing)}
-              <span>{has ? (P.playing ? 'Pausar a abertura' : 'Ouvir a abertura') : 'Ouvir a vinheta'}</span>
-            </button>
-            {has ? (
-              <div class="row" style={{ '--gap': '10px' }}>
-                <div class="bar grow">
-                  <i id="pl-bar" style={{ width: `${P.aD ? Math.round((P.aT / P.aD) * 100) : 0}%` }} />
-                </div>
-                {/* The opening is a short sting: before it plays, "vinheta · 3 s" says so (a bare
-                    "0:00 / 0:03" read like placeholder audio); while it plays, the clock. */}
-                <span class="xs" id="pl-time" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
-                  {P.playing || P.aT > 0
-                    ? clock(P.aT, P.aD)
-                    : P.aD
-                      ? `vinheta · ${Math.max(1, Math.round(P.aD))} s`
-                      : 'vinheta'}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        </div>
-        <p class="p-read">
-          {has
-            ? 'A mesma música volta no fim do episódio para você cantar junto.'
-            : 'A música do episódio abre, marca e fecha a aula. Você ouve a abertura agora e canta junto no fim.'}
-        </p>
-        {topics.length || Ep.cast.length ? (
-          <div class="card stack" style={{ '--gap': '14px' }}>
-            {topics.length ? (
-              <>
-                <div class="lbl or">Neste episódio você aprende</div>
-                <ol class="pl-topics">
-                  {topics.map((t, i) => (
-                    <li key={i}>
-                      <span class="num">{i + 1}</span>
-                      <span>{t}</span>
-                    </li>
-                  ))}
-                </ol>
-              </>
-            ) : null}
-            {Ep.cast.length ? (
-              <>
-                <div
-                  class="lbl"
-                  style={topics.length ? { borderTop: '1.5px solid var(--line2)', paddingTop: '14px' } : undefined}
-                >
-                  Quem aparece
-                </div>
-                <CastStrip Ep={Ep} cat={cat} desk={desk} />
-              </>
-            ) : null}
-          </div>
-        ) : null}
-      </>
+      <Presentation
+        text={Ep.synopsis}
+        playing={P.playing}
+        aT={P.aT}
+        aD={P.aD}
+        hasAudio={!!Ep.introAudio}
+        onPlay={tap(a.play)}
+      />
     ),
   };
 }
 
-// ---------- 1 e 10 · Música (título, tradução, player e instrução fixos; só a letra rola) ----------
+// ---------- 2 e 10 · Música (título, tradução, player e instrução fixos; só a letra rola) ----------
 
 function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
   const len = Ep.lyrics.length || 1;

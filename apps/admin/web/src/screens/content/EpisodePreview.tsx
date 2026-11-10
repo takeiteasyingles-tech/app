@@ -301,10 +301,24 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
               </div>
             ) : null}
           </div>
-          <div class="card stack">
-            <MediaById id={(d.introMedia as string) ?? null} label="Intro (etapa 3)" />
-          </div>
         </>
+      );
+    case 'apresentacao':
+      return (
+        <div class="stack ad-pres" style={{ '--gap': '14px' }}>
+          <div class="h2" style={{ textAlign: 'center' }}>
+            Apresentação do Episódio
+          </div>
+          <MediaById id={(d.introMedia as string) ?? null} label="Áudio da apresentação" />
+          <div class="ad-porb" aria-hidden="true">
+            <span />
+          </div>
+          {str(d.synopsis) ? (
+            <p class="ad-ptext">{str(d.synopsis)}</p>
+          ) : (
+            <Empty what="O texto da apresentação aparece aqui." />
+          )}
+        </div>
       );
     case 'musica': {
       const ly = arr<Any>(d.lyrics);

@@ -43,10 +43,14 @@ const DONE_GO: Record<string, string> = { ep2: 'episodio/2/1', ebook1: 'ebook/1'
 export const ebookOfEpisode = (num: number): number => Math.ceil(num / EPISODES_PER_EBOOK);
 
 /**
- * Production step order (spec 05 "Step order"): the prototype's step at each position. The song's
- * first pass and the e-book open the episode; the intro moves to 3 and starts "O episódio".
+ * Production step order (spec 05 "Step order"): the prototype's step at each position. Since migration
+ * 0012 it is the prototype's own order again (intro → song → e-book), the intro renamed Apresentação.
  */
-export const STEP_ORDER = [2, 3, 1, 4, 5, 6, 7, 8, 9, 10] as const;
+export const STEP_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+/** Production name and subtitle of a step that differ from the prototype's STEPS. */
+const STEP_RENAME: Readonly<Record<number, { name: string; pt: string }>> = {
+  1: { name: 'Apresentação', pt: 'conheça o episódio' },
+};
 
 /** The prototype's STEPS in production order; each group label goes on its group's new first step. */
 export function orderSteps(P: Any[]): { n: number; name: string; pt: string; group_label: string | null }[] {
@@ -57,7 +61,8 @@ export function orderSteps(P: Any[]): { n: number; name: string; pt: string; gro
     if (!s) throw new Error(`STEPS has no step ${old}`);
     const n = i + 1;
     const g = starts.indexOf(n);
-    return { n, name: s.name, pt: s.pt, group_label: g >= 0 ? (groups[g] ?? null) : null };
+    const r = STEP_RENAME[n];
+    return { n, name: r?.name ?? s.name, pt: r?.pt ?? s.pt, group_label: g >= 0 ? (groups[g] ?? null) : null };
   });
 }
 
