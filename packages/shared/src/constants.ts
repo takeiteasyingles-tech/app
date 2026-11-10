@@ -64,23 +64,25 @@ export const DURATIONS = {
 } as const;
 
 /**
- * Episode step numbers (spec 05 "Step order"). Since migration 0012 the episode opens with the
- * Apresentação (the intro step: audio, animated orb and the episode text), then the song's first pass
- * and the e-book, as in the prototype's intro → song → e-book. INTRO keeps its name in code.
+ * Episode step numbers (spec 05 "Step order"). Nine steps since migration 0013: the Apresentação (the
+ * intro step: audio, animated orb and the episode text; 0012), the song's first pass, then Take a Look
+ * … Take Action and the sing-along. The e-book step is gone (the prototype's 3); the prototype's steps
+ * 4-10 are 3-9 here. INTRO keeps its name in code. Always use these names, never the numbers.
  */
 export const STEP = {
   INTRO: 1,
   SONG: 2,
-  EBOOK: 3,
-  LOOK: 4,
-  DIALOG: 5,
-  MIC: 6,
-  LESSON: 7,
-  AWAY: 8,
-  ACTION: 9,
-  LAST: 10,
+  LOOK: 3,
+  DIALOG: 4,
+  MIC: 5,
+  LESSON: 6,
+  AWAY: 7,
+  ACTION: 8,
+  LAST: 9,
 } as const;
-/** First step of each group after the first ("O episódio", "Fechamento"): the 10-step bar's gaps. */
+/** Number of steps in an episode (the bars, "etapa N de 9", the map). */
+export const STEP_COUNT = STEP.LAST;
+/** First step of each group after the first ("O episódio", "Fechamento"): the step bar's gaps. */
 export const STEP_GROUP_STARTS: readonly number[] = [STEP.LOOK, STEP.LAST];
 
 export const LOCKOUT_FAILED_LOGINS = 10;

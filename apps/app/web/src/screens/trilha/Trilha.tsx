@@ -1,7 +1,8 @@
-// Seasons contain episodes; each episode owns its ten steps, book, extra and assessment.
+// Seasons contain episodes; each episode owns its nine steps and its extra.
+
+import { STEP_COUNT } from '@tie/shared/constants';
 import type { Catalog, EpisodeIndexEntry } from '@tie/shared/content/schema';
 import { type CurrentEpisode, current } from '@tie/shared/domain/guide';
-import { testGate } from '@tie/shared/domain/testGate';
 import type { TieState } from '@tie/shared/state';
 import { Icon, Topbar } from '@tie/ui';
 import { useState } from 'preact/hooks';
@@ -121,58 +122,25 @@ function EpisodeNode({
   );
 }
 
-function Materials({ ep, c, s, open }: { ep: EpisodeIndexEntry; c: Catalog; s: TieState; open: boolean }) {
-  const book = c.ebooks.find((b) => b.num === ep.ebook);
+function Materials({ ep, c, open }: { ep: EpisodeIndexEntry; c: Catalog; open: boolean }) {
   const extra = c.extras.find((x) => x.id === ep.extra);
-  const gate = book
-    ? testGate(
-        book.episodes,
-        s.epsDone,
-        book.testRequiredEpisodes,
-        book.testMinCompleted,
-        book.testEnabled,
-        c.episodes.filter((e) => e.status === 'published').map((e) => e.num),
-      )
-    : null;
-  const testReady = !!book?.available && (book.testQuestionCount ?? 0) > 0 && !!gate?.unlocked;
-  const action = (label: string, href: string | null, icon: string) =>
-    href ? (
-      <a class="pill bl" href={`#/${href}`}>
-        <Icon name={icon} size={15} />
-        {label}
-        <Icon name="next" size={13} />
-      </a>
-    ) : (
-      <span class="pill">
-        <Icon name="lock" size={14} />
-        {label}
-      </span>
-    );
   return (
     <div class="stack" style={{ '--gap': '8px', padding: '0 12px 16px 44px' }}>
-      <span class="xs">Jornada de {c.steps.length || 10} etapas · materiais do episódio</span>
+      <span class="xs">Jornada de {c.steps.length || STEP_COUNT} etapas · materiais do episódio</span>
       <div class="row wrapx" style={{ '--gap': '8px' }}>
-        {action('E-book', open && book?.available ? `ebook/${book.num}` : null, 'book')}
-        {action(
-          extra ? `Extra · ${extra.title}` : 'Extra em preparação',
-          open && extra ? `extra/${extra.id}` : null,
-          'tv',
-        )}
-        {action(
-          s.testDone[String(ep.ebook)] ? 'Teste concluído' : 'Teste',
-          testReady ? `ebook/${book?.num}/teste` : null,
-          'pen',
+        {extra && open ? (
+          <a class="pill bl" href={`#/extra/${extra.id}`}>
+            <Icon name="tv" size={15} />
+            {`Extra · ${extra.title}`}
+            <Icon name="next" size={13} />
+          </a>
+        ) : (
+          <span class="pill">
+            <Icon name="lock" size={14} />
+            {extra ? `Extra · ${extra.title}` : 'Extra em preparação'}
+          </span>
         )}
       </div>
-      {book?.testEnabled === false ? (
-        <span class="xs">Teste ainda não liberado pela equipe.</span>
-      ) : !book?.testQuestionCount ? (
-        <span class="xs">Teste em preparação.</span>
-      ) : gate && !gate.unlocked ? (
-        <span class="xs">
-          Teste: {gate.completed} de {gate.minimum} episódios completos. Conclua mais {gate.remaining} para liberar.
-        </span>
-      ) : null}
     </div>
   );
 }
@@ -255,7 +223,6 @@ export default function Trilha(_props: ScreenProps) {
                 <Materials
                   ep={ep}
                   c={c}
-                  s={s}
                   open={ep.status === 'published' && (!!s.epsDone[String(ep.num)] || ep.num === cur.num)}
                 />
                 {i === episodes.length - 1 ? (

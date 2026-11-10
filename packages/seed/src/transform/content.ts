@@ -43,10 +43,10 @@ const DONE_GO: Record<string, string> = { ep2: 'episodio/2/1', ebook1: 'ebook/1'
 export const ebookOfEpisode = (num: number): number => Math.ceil(num / EPISODES_PER_EBOOK);
 
 /**
- * Production step order (spec 05 "Step order"): the prototype's step at each position. Since migration
- * 0012 it is the prototype's own order again (intro → song → e-book), the intro renamed Apresentação.
+ * Production step order (spec 05 "Step order"): the prototype's step at each position. Since migrations
+ * 0012-0013: the prototype's own order without its e-book step (3), the intro renamed Apresentação.
  */
-export const STEP_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+export const STEP_ORDER = [1, 2, 4, 5, 6, 7, 8, 9, 10] as const;
 /** Production name and subtitle of a step that differ from the prototype's STEPS. */
 const STEP_RENAME: Readonly<Record<number, { name: string; pt: string }>> = {
   1: { name: 'Apresentação', pt: 'conheça o episódio' },

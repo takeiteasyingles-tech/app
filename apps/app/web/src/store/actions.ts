@@ -8,8 +8,7 @@
 // Every helper resolves to the server response, or null when the write failed (already toasted)
 // or was queued offline (no award to play yet).
 import { batch } from '@preact/signals';
-import { LIMITS } from '@tie/shared/constants';
-import { ebookApi } from '@tie/shared/contracts/ebook';
+import { LIMITS, STEP } from '@tie/shared/constants';
 import { extrasApi } from '@tie/shared/contracts/extras';
 import { type AwardResult, type GameEventBody, gameApi } from '@tie/shared/contracts/game';
 import type { EndpointDef, ResOf } from '@tie/shared/contracts/http';
@@ -17,7 +16,7 @@ import { type ClientTurn, micApi, type StartSessionBody } from '@tie/shared/cont
 import { type MicScoreSource, progressApi } from '@tie/shared/contracts/progress';
 import { type CardSource, type NewCard, srsApi } from '@tie/shared/contracts/srs';
 import { gradeCard } from '@tie/shared/domain/srs';
-import { stepKey, type TestAnswer, type TieState } from '@tie/shared/state';
+import { stepKey, type TieState } from '@tie/shared/state';
 import { uiConfig } from '@tie/ui';
 import { type CallOptions, call, errorMessage, isOutboxPath, newIdempotencyKey, QueuedError, urlFor } from '../api';
 import { type AwardMeta, cardsFx, playAward, runFx, showToast } from './award';
@@ -134,7 +133,7 @@ export const finishEpisode = (ep: number) =>
   send(
     progressApi.episodeDone,
     { body: { ep } },
-    { optimistic: (s) => ({ prog: rec(s.prog, ep, 10), epsDone: rec(s.epsDone, ep, true) }) },
+    { optimistic: (s) => ({ prog: rec<number>(s.prog, ep, STEP.LAST), epsDone: rec(s.epsDone, ep, true) }) },
   );
 
 /**
@@ -162,42 +161,6 @@ export const saveMicScore = (phraseId: string, score: number, source: MicScoreSo
     {
       optimistic: (s) => ({ scores: rec(s.scores, phraseId, score) }),
       apply: (r, s) => ({ scores: rec(s.scores, r.phraseId, r.last) }),
-    },
-  );
-
-// ---------- E-book ----------
-
-/** ebDownload: unlocks step 3; resolves with the real PDF URL when the e-book has one. */
-export const downloadEbook = (n: number) =>
-  send(ebookApi.download, { params: { n } }, { optimistic: (s) => ({ ebooks: rec(s.ebooks, n, true) }) });
-
-/** Saves test answers (null clears one); `reset` is testRedo (answers and the done flag cleared). */
-export const saveTestAnswers = (n: number, answers: Readonly<Record<string, TestAnswer | null>>, reset = false) =>
-  send(
-    ebookApi.testAnswers,
-    { body: { answers: { ...answers }, ...(reset ? { reset } : {}) }, params: { n } },
-    {
-      optimistic: (s) => {
-        const cur: Record<string, TestAnswer> = reset ? {} : { ...(s.testAns[n] ?? {}) };
-        for (const [k, v] of Object.entries(answers)) {
-          if (v === null) delete cur[k];
-          else cur[k] = v;
-        }
-        return { testAns: rec(s.testAns, n, cur), ...(reset ? { testDone: rec(s.testDone, n, false) } : {}) };
-      },
-    },
-  );
-
-/** testSubmit: done + score; passing awards test_pass, failing plays the soft sfx. */
-export const submitTest = (n: number, answers?: Readonly<Record<string, TestAnswer | null>>) =>
-  send(
-    ebookApi.testSubmit,
-    { params: { n }, body: answers ? { answers: { ...answers } } : {} },
-    {
-      apply: (r, s) => {
-        if (!r.passed) uiConfig.sfx('soft');
-        return { testDone: rec(s.testDone, n, true), testScore: rec(s.testScore, n, r.score) };
-      },
     },
   );
 

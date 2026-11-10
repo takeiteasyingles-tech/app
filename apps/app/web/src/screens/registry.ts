@@ -16,8 +16,6 @@ export const SCREENS: Readonly<Record<ScreenName, ScreenDef>> = {
   cadastro: { component: lazy(() => import('./cadastro/Cadastro')), chrome: {} },
   inicio: { component: lazy(() => import('./inicio/Inicio')), chrome: { tabs: true } },
   trilha: { component: lazy(() => import('./trilha/Trilha')), chrome: { tabs: true } },
-  ebook: { component: lazy(() => import('./ebook/Ebook')), chrome: { tabs: true, nav: 'trilha' } },
-  ebookx: { component: lazy(() => import('./ebook/EbookPart')), chrome: { tabs: false } },
   player: { component: lazy(() => import('./player/Player')), chrome: {} },
   concluido: { component: lazy(() => import('./concluido/Concluido')), chrome: {} },
   extra: { component: lazy(() => import('./extra/Extra')), chrome: { tabs: true, theme: 'navy' } },
@@ -49,8 +47,6 @@ export function screenFor(name: RouteName): ScreenDef | undefined {
 export const SECTION: Readonly<Partial<Record<RouteName, string>>> = {
   inicio: 'inicio',
   trilha: 'trilha',
-  ebook: 'trilha',
-  ebookx: 'trilha',
   player: 'trilha',
   concluido: 'trilha',
   extra: 'extra',

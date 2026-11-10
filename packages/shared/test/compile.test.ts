@@ -1,6 +1,7 @@
 // compileContent on a small hand-built set of D1 rows: shapes, ids, media URLs, persona exclusion,
 // published-only files, deterministic versions and failure on broken references.
 import { describe, expect, it } from 'vitest';
+import { STEP_COUNT } from '../src/constants';
 import { ContentCompileError, type ContentRows, compileContent, contentKey } from '../src/content/compile';
 import { autoTrackEp, Catalog, Ebook, Episode, Extra } from '../src/content/schema';
 
@@ -12,7 +13,7 @@ function media(id: string, rel: string, kind = 'image', mime = 'image/webp') {
 }
 
 function rows(): ContentRows {
-  const steps = Array.from({ length: 10 }, (_, i) => ({
+  const steps = Array.from({ length: STEP_COUNT }, (_, i) => ({
     n: i + 1,
     name: `Step ${i + 1}`,
     pt: `etapa ${i + 1}`,

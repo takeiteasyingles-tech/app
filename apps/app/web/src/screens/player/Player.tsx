@@ -8,7 +8,6 @@
 import { signal } from '@preact/signals';
 import { STEP } from '@tie/shared/constants';
 import type { Catalog, Episode } from '@tie/shared/content/schema';
-import { ebookApi } from '@tie/shared/contracts/ebook';
 import type { MicScoreSource } from '@tie/shared/contracts/progress';
 import { gate } from '@tie/shared/domain/gating';
 import { defaults } from '@tie/shared/domain/personalize';
@@ -33,7 +32,6 @@ import {
   loadEpisode,
   markStep,
   saveMicScore,
-  send,
   state,
   useContent,
 } from '../../store';
@@ -129,17 +127,6 @@ function stopAll(P: PState): void {
   P.playing = false;
   clearInterval(P.timer);
   P.tk++;
-}
-
-/** Saves the e-book PDF the server returned (production has the real file; the prototype faked it). */
-function savePdf(url: string, n: number): void {
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `take-it-easy-ebook-${pad2(n)}.pdf`;
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
 }
 
 export default function Player({ params }: ScreenProps) {
@@ -339,7 +326,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
 
   const next = () => {
     if (gate(Ep, view(state.value), step) || P.finishing) return;
-    if (step === 10) {
+    if (step === STEP.LAST) {
       // The done screen opens only once the server has recorded the episode (or queued it offline):
       // a refusal keeps the student here, with the server's message toasted by send().
       stopAll(P);
@@ -453,7 +440,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       re();
       return;
     }
-    if (step === 5) {
+    if (step === STEP.DIALOG) {
       P.playing = true;
       re();
       speakFrom(P.line, P.tk);
@@ -613,27 +600,6 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     re();
   };
 
-  const download = async () => {
-    if (P.dl !== 'idle') return;
-    P.dl = 'busy';
-    re();
-    const n = Ep.ebook;
-    const again = !!state.value.ebooks[String(n)];
-    const r = await send(
-      ebookApi.download,
-      { params: { n } },
-      { apply: (_res, st) => ({ ebooks: { ...st.ebooks, [String(n)]: true } }) },
-    );
-    if (P.dead) return;
-    P.dl = 'idle';
-    if (r) {
-      if (r.pdf) savePdf(r.pdf, n);
-      else if (again) toast('O PDF deste e-book ainda não está disponível. O conteúdo está no app.');
-      if (!again) sfx.ok();
-    }
-    re();
-  };
-
   const exGo = (d: number) => {
     const ex = Ep.ex;
     const itIdx = P.itIdx ?? 0;
@@ -696,11 +662,6 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     showScore: () => {
       P.showScore = true;
       re();
-    },
-    download: () => void download(),
-    ebookOpen: () => {
-      stopAll(P);
-      go(`ebook/${Ep.ebook}`);
     },
     vidStart: (v) => {
       P.vid = true;
@@ -815,7 +776,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         </button>
         <div class="grow tc">
           <div class="lbl" style={{ fontSize: '.72rem' }}>
-            {`Episódio ${Ep.num} · etapa ${step} de 10`}
+            {`Episódio ${Ep.num} · etapa ${step} de ${STEP.LAST}`}
           </div>
           <div class="h3">{Ep.title}</div>
         </div>
@@ -866,14 +827,14 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         <span style={{ minWidth: '0' }}>
           <span class="kicker">
             {lock ||
-              (step === 10
+              (step === STEP.LAST
                 ? P.finishing
                   ? 'Concluindo…'
                   : 'Última etapa · +40 pontos'
                 : `Próxima · ${pad2(step + 1)} · +10`)}
           </span>
           <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {step === 10 ? 'Concluir episódio' : nx?.name}
+            {step === STEP.LAST ? 'Concluir episódio' : nx?.name}
           </span>
         </span>
         <Icon name={lock ? 'lock' : 'next'} size={22} />
@@ -920,7 +881,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
               <span>Voltar para Hoje</span>
             </button>
             <div class="h2 mt8">Episódio {pad2(Ep.num)}</div>
-            <p class="sm mt8">{Ep.scope}</p>
+            <p class="sm mt8">{Ep.title}</p>
             <div class="mt12">{stepList()}</div>
           </aside>
           <div class="view">{main}</div>

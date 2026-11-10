@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { STEP_COUNT } from '../constants';
 
 // Published content snapshots (R2 content/{ver}/*). Field names follow the prototype's js/data/* so the
 // screen port stays mechanical; tuples ([en, pt], [name, ini, color]) became objects.
@@ -313,7 +314,7 @@ export type SrsGrade = z.infer<typeof SrsGrade>;
 
 export const Catalog = z.object({
   version: z.string(),
-  steps: z.array(Step).length(10),
+  steps: z.array(Step).length(STEP_COUNT),
   seasons: z.array(Season),
   /** Episode titles by position (index = num - 1), as TIE.data.TITLES. */
   titles: z.array(z.string()),

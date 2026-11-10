@@ -1,4 +1,4 @@
-// The 10 step bodies of the episode player (STEP[1..10] in prototipo/js/screens/player.js), with the
+// The 9 step bodies of the episode player (prototipo/js/screens/player.js STEP, without its e-book), with the
 // prototype's exact markup, classes, inline styles and pt-BR copy so tie.css renders them the same.
 // Steps 1-3 follow the production order (STEP: song, e-book, intro), not the prototype's.
 import { STEP } from '@tie/shared/constants';
@@ -95,9 +95,9 @@ function Intro({ Ep, P, a, tap }: StepCtx): StepOut {
   };
 }
 
-// ---------- 2 e 10 · Música (título, tradução, player e instrução fixos; só a letra rola) ----------
+// ---------- 2 e 9 · Música (título, tradução, player e instrução fixos; só a letra rola) ----------
 
-function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
+function Song({ Ep, cat, s, P, step, a, tap }: StepCtx): StepOut {
   const len = Ep.lyrics.length || 1;
   const pct =
     Ep.songAudio && P.aD ? Math.round((P.aT / P.aD) * 100) : Math.round(((P.line + (P.playing ? 1 : 0)) / len) * 100);
@@ -151,7 +151,7 @@ function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
     body: (
       <>
         {/* Step 10's instruction scrolls away with the lyrics instead of making the fixed dock taller. */}
-        {step === 10 ? (
+        {step === STEP.LAST ? (
           <div class="pl-sing">
             <span class="pl-singi" aria-hidden="true">
               <Icon name="mic" size={18} />
@@ -187,12 +187,10 @@ function Song({ Ep, s, P, step, a, tap }: StepCtx): StepOut {
             </div>
           ))}
         </div>
-        {step === STEP.SONG && !need(Ep, s, STEP.SONG) ? (
-          <NextCard icon="download" onClick={tap(a.next)}>
-            <b class="pl-nextt">
-              Próximo: baixar o <span class="nw">e-book {Ep.ebook}.</span>
-            </b>
-            <span class="sm pl-nexts">O download libera o episódio.</span>
+        {step === STEP.SONG && !need(Ep, s, STEP.SONG) && cat.steps[STEP.SONG] ? (
+          <NextCard icon="play" onClick={tap(a.next)}>
+            <b class="pl-nextt">Próximo: {cat.steps[STEP.SONG]?.name}</b>
+            <span class="sm pl-nexts">{cat.steps[STEP.SONG]?.pt}</span>
           </NextCard>
         ) : null}
       </>
@@ -221,82 +219,7 @@ function NextCard({
   );
 }
 
-// ---------- 2 · E-book ----------
-
-function Ebook({ Ep, cat, s, P, a, tap }: StepCtx): StepOut {
-  const busy = P.dl === 'busy';
-  // The step after the e-book (cat.steps is 0-based).
-  const nx = cat.steps[STEP.EBOOK];
-  return {
-    body: (
-      <>
-        <div class="card stack" style={{ '--gap': '12px' }}>
-          <div class="row between">
-            <span class="lbl">
-              {Ep.season ? `Temporada ${pad2(Ep.season)} · ` : ''}Episódio {pad2(Ep.num)}
-            </span>
-            <span class="pill navy pl-pdf">
-              <Icon name="book" size={14} />
-              PDF
-            </span>
-          </div>
-          <div class="h1">{Ep.ebookTitle}</div>
-          <p class="p-read">{Ep.scope}</p>
-          <div class="chips pl-inside">
-            {['Diálogo bilíngue', 'Take Away', 'Exercícios', 'Gabarito'].map((t) => (
-              <span key={t} class="pill">
-                <Icon name="check" size={12} />
-                {t}
-              </span>
-            ))}
-          </div>
-        </div>
-        {s.ebooks[Ep.ebook] ? (
-          <>
-            <div class="card gr stack pl-ebdone" style={{ '--gap': '16px' }}>
-              {/* The prototype's single success line, plus the actions it lacked (open / download again). */}
-              <div class="row" style={{ '--gap': '12px' }}>
-                <span class="iconbtn" style={{ background: 'var(--green)', color: '#fff', border: '0', flex: 'none' }}>
-                  <Icon name="check" size={20} />
-                </span>
-                <span class="grow pl-ebok">
-                  <b>E-book baixado.</b>
-                  <span>O episódio está liberado.</span>
-                </span>
-              </div>
-              <div class="pl-ebtns">
-                <Btn label="Abrir no app" kind="green compact" icon="book" onClick={a.ebookOpen} />
-                <Btn
-                  label={busy ? 'Baixando…' : 'Baixar de novo'}
-                  kind="light compact"
-                  cls="pl-again"
-                  icon="download"
-                  onClick={a.download}
-                />
-              </div>
-            </div>
-            {nx ? (
-              <NextCard icon="play" onClick={tap(a.next)}>
-                <b class="pl-nextt">Próximo: {nx.name}</b>
-                <span class="sm pl-nexts">{nx.pt}</span>
-              </NextCard>
-            ) : null}
-          </>
-        ) : (
-          <Btn
-            label={busy ? 'Baixando…' : `Baixar e-book ${Ep.ebook}`}
-            onClick={a.download}
-            icon="download"
-            cls="block"
-            kind={busy ? 'navy' : ''}
-          />
-        )}
-      </>
-    ),
-  };
-}
-
-// ---------- 4 · Take a Look ----------
+// ---------- 3 · Take a Look ----------
 
 function Look({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx, onVideoEnd: () => void): StepOut {
   const still = Ep.sceneImage || homeBg;
@@ -388,7 +311,7 @@ function Look({ Ep, cat, P, desk, a, tap, homeBg }: StepCtx, onVideoEnd: () => v
   };
 }
 
-// ---------- 5 · Take It In (dock fixo; só as falas rolam) ----------
+// ---------- 4 · Take It In (dock fixo; só as falas rolam) ----------
 
 const SPEEDS = [0.75, 1, 1.25] as const;
 
@@ -485,7 +408,7 @@ function Dialog({ Ep, cat, P, desk, a, tap }: StepCtx): StepOut {
   };
 }
 
-// ---------- 6 · Take the Mic (gravar) ----------
+// ---------- 5 · Take the Mic (gravar) ----------
 
 function Mic({ Ep, s, P, training, a, tap }: StepCtx): StepOut {
   const m = Ep.mic[P.micIdx];
@@ -704,7 +627,7 @@ function Mic({ Ep, s, P, training, a, tap }: StepCtx): StepOut {
   };
 }
 
-// ---------- 7 · Take a Lesson ----------
+// ---------- 6 · Take a Lesson ----------
 
 /** Scrolls Take a Lesson to its i-th block (the cards Blocks renders, then the pronunciation card). */
 function toBlock(i: number): void {
@@ -836,7 +759,7 @@ function Lesson({ Ep, desk, a, tap }: StepCtx): StepOut {
   };
 }
 
-// ---------- 8 · Take Away ----------
+// ---------- 7 · Take Away ----------
 
 const heardCls = (t: string) => (heard.has(t) ? ' heard' : '');
 
@@ -912,7 +835,7 @@ function Away({ Ep, desk, a, tap }: StepCtx): StepOut {
   };
 }
 
-// ---------- 9 · Take Action: uma pergunta por vez ----------
+// ---------- 8 · Take Action: uma pergunta por vez ----------
 
 function Dots({ n, cur, w }: { n: number; cur: number; w: number }) {
   return (
@@ -1102,19 +1025,17 @@ export function renderStep(c: StepCtx, onVideoEnd: () => void): StepOut {
     case STEP.SONG:
     case STEP.LAST:
       return Song(c);
-    case STEP.EBOOK:
-      return Ebook(c);
     case STEP.INTRO:
       return Intro(c);
-    case 4:
+    case STEP.LOOK:
       return Look(c, onVideoEnd);
-    case 5:
+    case STEP.DIALOG:
       return Dialog(c);
-    case 6:
+    case STEP.MIC:
       return Mic(c);
-    case 7:
+    case STEP.LESSON:
       return Lesson(c);
-    case 8:
+    case STEP.AWAY:
       return Away(c);
     default:
       return Action(c);

@@ -1,3 +1,4 @@
+import { STEP } from '../constants';
 import type { AwayExp, Bilingual } from '../content/schema';
 import type { TieState } from '../state';
 
@@ -31,22 +32,22 @@ export interface UnlockedCard {
 
 /** Step whose completion unlocks cards → the cards it unlocks. */
 export const SRS_UNLOCKS: readonly (readonly [number, (e: SrsEpisode) => UnlockedCard[]])[] = [
-  [4, (e) => (e.visual || []).map((x) => ({ en: x.en, pt: x.pt, scene: `Ep. ${e.num} · Take a Look` }))],
+  [STEP.LOOK, (e) => (e.visual || []).map((x) => ({ en: x.en, pt: x.pt, scene: `Ep. ${e.num} · Take a Look` }))],
   [
-    8,
+    STEP.AWAY,
     (e) =>
       (e.awayExp || []).map((x) => ({ en: x.en, pt: x.pt, note: x.note || '', scene: `Ep. ${e.num} · Take Away` })),
   ],
 ];
 
-/** Steps already completed count as "reached": prog holds the furthest step, a done episode is 11. */
+/** Steps already completed count as "reached": prog holds the furthest step, a done episode is past the last. */
 export function reached(s: Pick<TieState, 'epsDone' | 'prog'>, num: number): number {
-  return s.epsDone[num] ? 11 : s.prog[num] || 1;
+  return s.epsDone[num] ? STEP.LAST + 1 : s.prog[num] || 1;
 }
 
 /** Cards unlocked by steps before `upTo` (default: all). */
 export function cardsOf(e: SrsEpisode, upTo?: number): UnlockedCard[] {
-  return SRS_UNLOCKS.filter(([n]) => n < (upTo || 11)).flatMap(([, f]) => f(e));
+  return SRS_UNLOCKS.filter(([n]) => n < (upTo || STEP.LAST + 1)).flatMap(([, f]) => f(e));
 }
 
 type Due = { at?: number | null };

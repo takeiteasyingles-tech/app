@@ -11,8 +11,6 @@ export type RouteName =
   | 'trilha'
   | 'player'
   | 'concluido'
-  | 'ebook'
-  | 'ebookx'
   | 'extra'
   | 'musica'
   | 'desafio'
@@ -35,8 +33,6 @@ export const ROUTES: readonly (readonly [RegExp, RouteName, (readonly string[])?
   [/^trilha$/, 'trilha'],
   [/^episodio\/(\d+)(?:\/(\d+))?$/, 'player', ['ep', 'step']],
   [/^concluido\/(\d+)$/, 'concluido', ['ep']],
-  [/^ebook\/(\d{1,9})$/, 'ebook', ['num']],
-  [/^ebook\/(\d{1,9})\/(five|real|lead|teste)$/, 'ebookx', ['num', 'part']],
   [/^extra$/, 'extra'],
   [/^extra\/musica\/([\w-]+)$/, 'musica', ['id']],
   [/^extra\/desafio$/, 'desafio'],

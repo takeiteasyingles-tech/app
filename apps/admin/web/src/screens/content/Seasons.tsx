@@ -92,7 +92,6 @@ function EpisodesCard({ n }: { n: number }) {
           <span class="ad-epnum">{String(e.num).padStart(2, '0')}</span>
           <span class="ad-cell2">
             {e.title.trim() ? <span>{e.title}</span> : <i class="ad-untitled">Sem título</i>}
-            <span class="xs">{e.ebookNum ? `E-book ${e.ebookNum}` : 'Sem e-book'}</span>
           </span>
         </span>
       ),

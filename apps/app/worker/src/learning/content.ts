@@ -183,48 +183,47 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
   const { db, userId } = d;
   const src = await contentSource(d);
   const snapshot = src.kind === 'snapshot' ? snapshotFile(() => src.content.episode(ep)) : null;
-  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, earlierD1, doneRows] =
-    await batch(db, [
-      q<EpisodeRow>(db, 'SELECT num, status, ebook_num, scene_media FROM episodes WHERE num = ?', ep),
-      q<PhraseRow>(db, 'SELECT id, demo_result FROM mic_phrases WHERE episode_num = ? ORDER BY sort, id', ep),
-      q<ItemRow>(
-        db,
-        `SELECT i.id, i.exercise_id, i.opts, i.answer_idx, i.fix FROM exercise_items i
+  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, earlierD1, doneRows] = await batch(db, [
+    q<EpisodeRow>(db, 'SELECT num, status, ebook_num, scene_media FROM episodes WHERE num = ?', ep),
+    q<PhraseRow>(db, 'SELECT id, demo_result FROM mic_phrases WHERE episode_num = ? ORDER BY sort, id', ep),
+    q<ItemRow>(
+      db,
+      `SELECT i.id, i.exercise_id, i.opts, i.answer_idx, i.fix FROM exercise_items i
          JOIN exercises x ON x.id = i.exercise_id
          WHERE x.episode_num = ? ORDER BY x.sort, x.id, i.sort, i.id`,
-        ep,
-      ),
-      q<ProgressRow>(
-        db,
-        'SELECT furthest_step, done_at FROM episode_progress WHERE user_id = ? AND episode_num = ?',
-        userId,
-        ep,
-      ),
-      q<{ step: number }>(db, 'SELECT step FROM step_completions WHERE user_id = ? AND episode_num = ?', userId, ep),
-      q<{ ebook_num: number }>(db, 'SELECT ebook_num FROM user_ebooks WHERE user_id = ?', userId),
-      q<{ phrase_id: string; last_score: number }>(
-        db,
-        `SELECT s.phrase_id, s.last_score FROM mic_scores s JOIN mic_phrases p ON p.id = s.phrase_id
+      ep,
+    ),
+    q<ProgressRow>(
+      db,
+      'SELECT furthest_step, done_at FROM episode_progress WHERE user_id = ? AND episode_num = ?',
+      userId,
+      ep,
+    ),
+    q<{ step: number }>(db, 'SELECT step FROM step_completions WHERE user_id = ? AND episode_num = ?', userId, ep),
+    q<{ ebook_num: number }>(db, 'SELECT ebook_num FROM user_ebooks WHERE user_id = ?', userId),
+    q<{ phrase_id: string; last_score: number }>(
+      db,
+      `SELECT s.phrase_id, s.last_score FROM mic_scores s JOIN mic_phrases p ON p.id = s.phrase_id
          WHERE s.user_id = ? AND p.episode_num = ?`,
-        userId,
-        ep,
-      ),
-      q<{ item_id: string; choice_idx: number }>(
-        db,
-        `SELECT a.item_id, a.choice_idx FROM exercise_answers a
+      userId,
+      ep,
+    ),
+    q<{ item_id: string; choice_idx: number }>(
+      db,
+      `SELECT a.item_id, a.choice_idx FROM exercise_answers a
          JOIN exercise_items i ON i.id = a.item_id JOIN exercises x ON x.id = i.exercise_id
          WHERE a.user_id = ? AND x.episode_num = ?`,
-        userId,
-        ep,
-      ),
-      q<{ num: number }>(db, "SELECT num FROM episodes WHERE status = 'published' AND num < ? ORDER BY num", ep),
-      q<{ episode_num: number }>(
-        db,
-        'SELECT episode_num FROM episode_progress WHERE user_id = ? AND done_at IS NOT NULL AND episode_num <= ?',
-        userId,
-        ep,
-      ),
-    ] as const);
+      userId,
+      ep,
+    ),
+    q<{ num: number }>(db, "SELECT num FROM episodes WHERE status = 'published' AND num < ? ORDER BY num", ep),
+    q<{ episode_num: number }>(
+      db,
+      'SELECT episode_num FROM episode_progress WHERE user_id = ? AND done_at IS NOT NULL AND episode_num <= ?',
+      userId,
+      ep,
+    ),
+  ] as const);
 
   let content: Pick<EpisodeContext, 'episode' | 'items' | 'phrases'>;
   let earlier: number[];

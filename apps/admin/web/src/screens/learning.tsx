@@ -179,15 +179,6 @@ function Funnel({ eps }: { eps: LearningStats['episodes'] }) {
 
 function TestRates({ s }: { s: LearningStats }) {
   const rows = [
-    ...s.ebookTests.map((t) => ({
-      key: `e${t.ebookNum}`,
-      name: `Teste do e-book ${pad2(t.ebookNum)}`,
-      takers: t.takers,
-      passed: t.passed,
-      pct: t.passPct,
-      extra: null as string | null,
-      off: false,
-    })),
     // A season test nobody can take yet (unpublished, no results) would only add noise.
     ...s.seasonTests
       .filter((t) => t.published || t.takers > 0)
@@ -384,21 +375,8 @@ export function UserLearning({ userId }: { userId: string }) {
                 </div>
                 <div class="stack" style={{ '--gap': '10px' }}>
                   <h3 class="lbl">Testes e certificados</h3>
-                  {s.ebookTests.length || s.seasonTests.length || s.certificates.length ? (
+                  {s.seasonTests.length || s.certificates.length ? (
                     <ul class="ad-utests">
-                      {s.ebookTests.map((t) => (
-                        <li key={`e${t.ebookNum}`}>
-                          <span class="grow">{`Teste do e-book ${pad2(t.ebookNum)}`}</span>
-                          {t.submittedAt === 0 ? (
-                            <Pill label="Refazendo" tone="bl" />
-                          ) : (
-                            <Pill
-                              label={`${t.score}${t.passScore != null ? `/${t.passScore}` : ''} · ${t.passed ? 'aprovado' : 'não passou'}`}
-                              tone={t.passed ? 'gr' : 'or'}
-                            />
-                          )}
-                        </li>
-                      ))}
                       {s.seasonTests.map((t) => (
                         <li key={`s${t.seasonN}`}>
                           <span class="grow">

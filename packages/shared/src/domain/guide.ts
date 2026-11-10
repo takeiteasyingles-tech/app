@@ -1,3 +1,4 @@
+import { STEP } from '../constants';
 import type { Step } from '../content/schema';
 import type { TieState } from '../state';
 import { getAssistant } from './assist';
@@ -80,7 +81,7 @@ export function plan<X extends GuideExtra, A extends RankableAlbum>(i: DayPlanIn
   tasks.push({
     k: 'ep',
     t: `Episódio ${cur.num} · ${step.name}`,
-    sub: `Etapa ${cur.step} de 10 · ${step.pt}`,
+    sub: `Etapa ${cur.step} de ${STEP.LAST} · ${step.pt}`,
     min: 8,
     go: `episodio/${cur.num}`,
     icon: 'play',

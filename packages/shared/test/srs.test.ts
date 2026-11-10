@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { STEP } from '../src/constants';
 import { cardsOf, GRADES, gradeCard, nextIn, queue, reached } from '../src/domain/srs';
 import { tsEpisode } from './helpers/catalog';
 import { declSource, loadPrototypeCore, plain } from './helpers/core';
@@ -20,8 +21,10 @@ describe('srs parity with review.js', () => {
     for (const n of [1, 2, 5]) {
       const E = T.data.EPS[n];
       const ep = tsEpisode(T.data, n);
-      for (const upTo of [undefined, 0, 1, 4, 5, 8, 9, 10, 11]) {
-        expect(cardsOf(ep, upTo), `${n}/${upTo}`).toEqual(plain(T.review.cardsOf(E, upTo)));
+      // Production steps 1-2 are the prototype's 1-2 and 3-9 its 4-10 (no e-book step); past the last is 10 vs 11.
+      const proto = (p: number | undefined) => (p === undefined || p <= 2 ? p : p + 1);
+      for (const upTo of [undefined, 0, 1, 3, 4, 7, 8, 9, 10]) {
+        expect(cardsOf(ep, upTo), `${n}/${upTo}`).toEqual(plain(T.review.cardsOf(E, proto(upTo))));
       }
     }
   });
@@ -36,7 +39,11 @@ describe('srs parity with review.js', () => {
       { epsDone: { 2: true }, prog: { 1: 10 } },
     ];
     for (const s of states) {
-      for (const n of [1, 2, 5]) expect(reached(s, n)).toBe(protoReached(() => s)(n));
+      // A done episode reads one past the last step: 10 here (9 steps), 11 in the prototype (10 steps).
+      for (const n of [1, 2, 5]) {
+        const p = protoReached(() => s)(n);
+        expect(reached(s, n)).toBe(p === 11 ? STEP.LAST + 1 : p);
+      }
     }
   });
 

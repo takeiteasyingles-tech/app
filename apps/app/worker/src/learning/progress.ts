@@ -35,11 +35,11 @@ import type { LearningDeps } from './deps';
 /** Steps whose completion the client attests when the media ends (mark(n) in player.js). */
 export const MEDIA_STEPS: ReadonlySet<number> = new Set([STEP.SONG, STEP.INTRO, STEP.LOOK, STEP.DIALOG, STEP.LAST]);
 /** Leaving these steps moves the episode's cards into Revisão (SrsService.unlock). */
-export const CARD_STEPS: ReadonlySet<number> = new Set([4, 8]);
+export const CARD_STEPS: ReadonlySet<number> = new Set([STEP.LOOK, STEP.AWAY]);
 /** Steps that hold the scored activities: Take the Mic (record) and Take Action. */
-export const MIC_STEP = 6;
-export const EXERCISE_STEP = 9;
-export const LAST_STEP = 10;
+export const MIC_STEP = STEP.MIC;
+export const EXERCISE_STEP = STEP.ACTION;
+export const LAST_STEP = STEP.LAST;
 
 const reached = (r: { prog: number; done: boolean }, step: number) => r.done || r.prog >= step;
 

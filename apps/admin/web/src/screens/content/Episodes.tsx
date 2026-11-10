@@ -75,7 +75,7 @@ export function Episodes({ q }: ScreenProps) {
           <span class="ad-cell2">
             {e.title.trim() ? <span>{e.title}</span> : <i class="ad-untitled">Sem título</i>}
             <span class="xs">
-              {e.ebookNum ? `E-book ${e.ebookNum}` : 'Sem e-book'}
+              {`Temporada ${e.seasonN ?? '—'}`}
               {e.seasonN ? ` · Temporada ${e.seasonN}` : ''}
             </span>
           </span>

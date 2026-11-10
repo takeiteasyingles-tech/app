@@ -1,4 +1,5 @@
 import type { AddCardsRes, GradeRes, SrsQueueRes } from '@tie/shared';
+import { STEP } from '@tie/shared';
 import { localDate } from '@tie/worker-core';
 import { describe, expect, it } from 'vitest';
 import { SRS_DECK_MAX, SRS_MANUAL_ADDS_PER_DAY } from '../../src/services/srs.impl';
@@ -8,13 +9,13 @@ const MIN = 60_000;
 const DAY = 86_400_000;
 
 describe('SrsService.unlock', () => {
-  it('step 4 adds the visual words once, deduped by norm (INSERT OR IGNORE)', async () => {
+  it('Take a Look adds the visual words once, deduped by norm (INSERT OR IGNORE)', async () => {
     const h = await harness();
-    const added = await h.srs.unlock('u1', 1, 4);
+    const added = await h.srs.unlock('u1', 1, STEP.LOOK);
     // "The kitchen." folds into "the kitchen"; the malformed item is dropped.
     expect(added.map((c) => c.en)).toEqual(['the kitchen', 'I am home!']);
     expect(added[0]).toMatchObject({ pt: 'a cozinha', scene: 'Ep. 1 · Take a Look', note: '', at: h.clock.t, reps: 0 });
-    expect(await h.srs.unlock('u1', 1, 4)).toEqual([]);
+    expect(await h.srs.unlock('u1', 1, STEP.LOOK)).toEqual([]);
     const rows = h.db.sql<{ norm_key: string; source: string }>(
       'SELECT norm_key, source FROM srs_cards WHERE user_id = ? ORDER BY rowid',
       'u1',
@@ -25,23 +26,23 @@ describe('SrsService.unlock', () => {
     ]);
   });
 
-  it('step 8 adds the awayExp expressions with notes; other steps and unknown episodes add nothing', async () => {
+  it('Take Away adds the awayExp expressions with notes; other steps and unknown episodes add nothing', async () => {
     const h = await harness();
-    const added = await h.srs.unlock('u1', 1, 8);
+    const added = await h.srs.unlock('u1', 1, STEP.AWAY);
     expect(added.map((c) => [c.en, c.note, c.scene])).toEqual([
       ['Take it easy', 'informal', 'Ep. 1 · Take Away'],
       ['See you', '', 'Ep. 1 · Take Away'],
     ]);
     expect(h.db.sql('SELECT DISTINCT source FROM srs_cards')).toEqual([{ source: 'ep_away' }]);
     expect(await h.srs.unlock('u1', 1, 5)).toEqual([]);
-    expect(await h.srs.unlock('u1', 99, 4)).toEqual([]);
+    expect(await h.srs.unlock('u1', 99, STEP.LOOK)).toEqual([]);
   });
 
   it('decks are per user, and a manual card blocks the same unlocked card', async () => {
     const h = await harness();
     await h.srs.add('u1', [{ en: "I'm home", pt: 'manual', scene: 'Mic · Maggie', source: 'mic' }]);
-    expect((await h.srs.unlock('u1', 1, 4)).map((c) => c.en)).toEqual(['the kitchen']);
-    expect(await h.srs.unlock('u2', 1, 4)).toHaveLength(2);
+    expect((await h.srs.unlock('u1', 1, STEP.LOOK)).map((c) => c.en)).toEqual(['the kitchen']);
+    expect(await h.srs.unlock('u2', 1, STEP.LOOK)).toHaveLength(2);
   });
 });
 
@@ -67,7 +68,7 @@ describe('SrsService.add', () => {
     for (let i = 0; i < SRS_MANUAL_ADDS_PER_DAY; i += 50) added += (await h.srs.add('u1', batchOf(i, 50))).added.length;
     expect(added).toBe(SRS_MANUAL_ADDS_PER_DAY);
     await expect(h.srs.add('u1', batchOf(10_000, 1))).rejects.toMatchObject({ code: 'quota_exceeded' });
-    expect(await h.srs.unlock('u1', 1, 4)).toHaveLength(2);
+    expect(await h.srs.unlock('u1', 1, STEP.LOOK)).toHaveLength(2);
     expect(await h.srs.add('u2', batchOf(0, 1))).toMatchObject({ skipped: 0 }); // per user
     h.clock.t += DAY + 1;
     expect((await h.srs.add('u1', batchOf(20_000, 3))).added).toHaveLength(3);
@@ -105,7 +106,7 @@ describe('SrsService.add', () => {
 describe('SrsService.grade', () => {
   it('follows GRADES: De novo now (back of queue), Difícil 10 min, Bom 2 d, Fácil 5 d; reps++', async () => {
     const h = await harness();
-    const cards = await h.srs.unlock('u1', 1, 8);
+    const cards = await h.srs.unlock('u1', 1, STEP.AWAY);
     const [a, b] = cards as [(typeof cards)[0], (typeof cards)[0]];
     const t0 = h.clock.t;
     h.clock.t = t0 + 1000;
@@ -125,7 +126,7 @@ describe('SrsService.grade', () => {
 
   it('awards card:{id}:{date} once per card per local day, only for due cards', async () => {
     const h = await harness();
-    const [c] = await h.srs.unlock('u1', 1, 4);
+    const [c] = await h.srs.unlock('u1', 1, STEP.LOOK);
     const id = c?.id as string;
     // De novo keeps it due: the regrade is a replay of the same day's key.
     expect((await h.srs.grade('u1', id, 0)).award?.awarded).toBe(true);
@@ -145,7 +146,7 @@ describe('SrsService.grade', () => {
 
   it('concurrent grades never lose a reps increment (reps = reps + 1 in one transaction)', async () => {
     const h = await harness();
-    const [c] = await h.srs.unlock('u1', 1, 4);
+    const [c] = await h.srs.unlock('u1', 1, STEP.LOOK);
     const id = c?.id as string;
     const results = await Promise.all([0, 1, 2, 3, 0].map((g) => h.srs.grade('u1', id, g)));
     expect(results.map((r) => r.card.reps).sort()).toEqual([1, 2, 3, 4, 5]);
@@ -154,7 +155,7 @@ describe('SrsService.grade', () => {
 
   it("rejects another user's card as not found and leaves it untouched (IDOR)", async () => {
     const h = await harness();
-    const [c] = await h.srs.unlock('u1', 1, 4);
+    const [c] = await h.srs.unlock('u1', 1, STEP.LOOK);
     await expect(h.srs.grade('u2', c?.id as string, 3)).rejects.toMatchObject({ code: 'not_found' });
     expect(h.db.sql('SELECT reps, due_at FROM srs_cards WHERE id = ?', c?.id)).toEqual([{ reps: 0, due_at: c?.at }]);
     expect(h.award.calls).toEqual([]);
@@ -170,7 +171,7 @@ describe('/api/srs routes', () => {
 
   it('GET /api/srs/queue lists due cards oldest first with counts and nextAt', async () => {
     const h = await harness();
-    const cards = await h.srs.unlock('u1', 1, 4);
+    const cards = await h.srs.unlock('u1', 1, STEP.LOOK);
     await h.srs.grade('u1', cards[0]?.id as string, 3);
     const res = await h.call('u1', 'GET', '/api/srs/queue');
     expect(res.status).toBe(200);
@@ -202,7 +203,7 @@ describe('/api/srs routes', () => {
 
   it("POST /api/srs/cards/:id/grade grades the owner's card and 404s for anyone else", async () => {
     const h = await harness();
-    const [c] = await h.srs.unlock('u1', 1, 4);
+    const [c] = await h.srs.unlock('u1', 1, STEP.LOOK);
     const id = c?.id as string;
     const denied = await h.call('u2', 'POST', `/api/srs/cards/${id}/grade`, { grade: 3 });
     expect(denied.status).toBe(404);

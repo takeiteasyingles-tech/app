@@ -38,18 +38,8 @@ export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
     perm: 'content.edit',
     nav: 'conteudo/temporadas',
   },
-  episodeBook: {
-    load: m(() => import('./content/EpisodeMaterials'), 'EpisodeBook'),
-    perm: 'content.edit',
-    nav: 'conteudo/temporadas',
-  },
   episodeExtra: {
     load: m(() => import('./content/EpisodeMaterials'), 'EpisodeExtra'),
-    perm: 'content.edit',
-    nav: 'conteudo/temporadas',
-  },
-  episodeTest: {
-    load: m(() => import('./content/EpisodeMaterials'), 'EpisodeTest'),
     perm: 'content.edit',
     nav: 'conteudo/temporadas',
   },
@@ -58,8 +48,6 @@ export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
     perm: 'content.edit',
     nav: 'conteudo/temporadas',
   },
-  ebooks: { load: m(() => import('./content/Ebooks'), 'Ebooks'), perm: 'content.edit', nav: 'conteudo/temporadas' },
-  ebook: { load: m(() => import('./content/Ebooks'), 'EbookEdit'), perm: 'content.edit', nav: 'conteudo/temporadas' },
   extras: { load: m(() => import('./content/Extras'), 'Extras'), perm: 'content.edit', nav: 'conteudo/extras' },
   extra: { load: m(() => import('./content/Extras'), 'ExtraEdit'), perm: 'content.edit', nav: 'conteudo/extras' },
   albums: { load: m(() => import('./content/Albums'), 'Albums'), perm: 'content.edit', nav: 'conteudo/albuns' },
