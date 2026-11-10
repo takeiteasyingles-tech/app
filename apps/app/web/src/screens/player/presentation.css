@@ -249,6 +249,10 @@
   width: 84%;
   height: 40%;
   overflow: hidden;
+  /* The wave fades out at both ends, so its box never shows as a cut edge inside the sphere. */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 78%, transparent 100%);
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.85));
 }
 .pr-wave path {
   fill: none;
@@ -256,7 +260,6 @@
   stroke-width: 3.2;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9));
 }
 .pr-wave-b path {
   stroke: rgba(210, 225, 255, 0.75);
