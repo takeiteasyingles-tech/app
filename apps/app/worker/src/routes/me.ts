@@ -21,7 +21,6 @@ import {
   auditFor,
   batch,
   batchRun,
-  bool,
   checkRateLimit,
   clearMediaCookie,
   clearSessionCookie,
@@ -68,7 +67,7 @@ const api = appApi.me;
 /** Re-issue tie_m when it is missing, foreign or has less than this left (it lives 12h). */
 const MEDIA_REFRESH_MS = 6 * HOUR;
 
-/** The settings PATCH also takes `free`, applied only while dev.free_steps is on for the user. */
+/** Accept the legacy `free` field for compatibility; the admin flag controls the effective value. */
 const SettingsPatchIn = SettingsPatch.extend({ free: z.boolean().optional() });
 
 async function freeStepsOn(c: Context<AppEnv>): Promise<boolean> {
@@ -220,7 +219,7 @@ routes.post(api.profileComplete.path, requireUser(), rateLimit('RL_API'), async 
   const free = evaluateRows(flagRows, flagSubject(s), [FLAGS.freeSteps])[FLAGS.freeSteps] === true;
   return c.json({
     profile,
-    settings: settingsFromRow(settingsRows[0], free && bool(settingsRows[0]?.free)),
+    settings: settingsFromRow(settingsRows[0], free),
   } satisfies ProfileCompleteRes);
 });
 
@@ -229,8 +228,8 @@ routes.patch(api.settings.path, requireUser(), rateLimit('RL_API'), vJson(Settin
   const body = c.req.valid('json');
   const db = c.env.DB;
   const free = await freeStepsOn(c);
-  // "Etapas livres" is a dev bypass: without the flag the field is ignored, like any unknown key.
-  const patch = free ? body : { ...body, free: undefined };
+  // A student's preferences cannot enable or disable the admin's Dev mode.
+  const patch = { ...body, free: undefined };
   const { sets, binds } = settingsSet(patch);
   const stmts: Query<unknown>[] = [q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', s.userId)];
   if (sets.length)
@@ -238,7 +237,7 @@ routes.patch(api.settings.path, requireUser(), rateLimit('RL_API'), vJson(Settin
   stmts.push(settingsQuery(db, s.userId));
   const results = await batch(db, stmts);
   const row = results[results.length - 1]?.[0] as SettingsRow | undefined;
-  return c.json({ settings: settingsFromRow(row, free && bool(row?.free)) } satisfies SettingsRes);
+  return c.json({ settings: settingsFromRow(row, free) } satisfies SettingsRes);
 });
 
 /** RL_AUTH (5/60s) keyed by the session user and the action: heavy or destructive account routes. */

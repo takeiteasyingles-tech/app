@@ -153,6 +153,17 @@ describe('advance gating (server-side need())', () => {
     }
   });
 
+  it('"Etapas livres" follows the flag alone: no student opt-in needed (user_settings.free = 0)', async () => {
+    w.db.exec("INSERT INTO feature_flags(key, enabled, rollout_pct, updated_at) VALUES('dev.free_steps', 1, 100, 1)");
+    invalidateFlags();
+    try {
+      expect((await advance(w.deps(), { ep: 1, step: 2 })).prog).toBe(2);
+    } finally {
+      w.db.exec("DELETE FROM feature_flags WHERE key = 'dev.free_steps'");
+      invalidateFlags();
+    }
+  });
+
   it('other users progress independently', async () => {
     await walkTo(w, 3);
     expect(await code(advance(w.deps('u_bob'), { ep: 1, step: 2 }))).toBe('gated');

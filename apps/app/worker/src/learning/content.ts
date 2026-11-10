@@ -176,14 +176,14 @@ function fromD1(
 /**
  * Everything the player use cases look at for one episode: its published content, the user's
  * reach and state, and the episode lock. null when the episode is missing or not published.
- * `settings.free` ("Etapas livres") is on only when the user turned it on AND the dev.free_steps
- * flag is enabled for them; it skips need() but never the episode lock.
+ * `settings.free` ("Etapas livres") follows the dev.free_steps flag evaluated for this user;
+ * it skips need() but never the episode lock.
  */
 export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<EpisodeContext | null> {
   const { db, userId } = d;
   const src = await contentSource(d);
   const snapshot = src.kind === 'snapshot' ? snapshotFile(() => src.content.episode(ep)) : null;
-  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, settings, earlierD1, doneRows] =
+  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, earlierD1, doneRows] =
     await batch(db, [
       q<EpisodeRow>(db, 'SELECT num, status, ebook_num, scene_media FROM episodes WHERE num = ?', ep),
       q<PhraseRow>(db, 'SELECT id, demo_result FROM mic_phrases WHERE episode_num = ? ORDER BY sort, id', ep),
@@ -217,7 +217,6 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
         userId,
         ep,
       ),
-      q<{ free: number }>(db, 'SELECT free FROM user_settings WHERE user_id = ?', userId),
       q<{ num: number }>(db, "SELECT num FROM episodes WHERE status = 'published' AND num < ? ORDER BY num", ep),
       q<{ episode_num: number }>(
         db,
@@ -247,7 +246,7 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
   const lockedBy = reach.done ? null : (earlier.sort((a, b) => a - b).find((n) => !doneSet.has(n)) ?? null);
 
   const key = String(ep);
-  const free = settings[0]?.free === 1 && (await isEnabled(db, FLAGS.freeSteps, d.subject));
+  const free = await isEnabled(db, FLAGS.freeSteps, d.subject);
   return {
     ...reach,
     ...content,

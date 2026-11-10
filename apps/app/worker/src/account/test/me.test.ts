@@ -150,7 +150,8 @@ describe('settings', () => {
     expect(bad.status).toBe(400);
 
     await exec("INSERT INTO feature_flags(key, enabled, rollout_pct, updated_at) VALUES('dev.free_steps', 1, 100, 0)");
-    r = await client.json<SettingsRes>(M.settings.path, { method: 'PATCH', json: { free: true } });
+    // The admin flag alone turns it on; the student's own `free: false` cannot switch it off.
+    r = await client.json<SettingsRes>(M.settings.path, { method: 'PATCH', json: { free: false } });
     expect(r.body.settings.free).toBe(true);
     const st = TieState.parse((await client.json(M.state.path)).body);
     expect(st.flags['dev.free_steps']).toBe(true);
