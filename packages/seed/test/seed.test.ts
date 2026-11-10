@@ -35,7 +35,7 @@ describe('extraction and transform', () => {
     expect(c.assistant_clips).toHaveLength(20);
     expect(c.media.length).toBeGreaterThanOrEqual(60);
     expect(c.ebooks).toHaveLength(10);
-    expect(c.steps).toHaveLength(9);
+    expect(c.steps).toHaveLength(10);
     expect(c.seasons).toHaveLength(8);
     expect(c.mic_missions).toHaveLength(8);
     expect(c.albums).toHaveLength(3);

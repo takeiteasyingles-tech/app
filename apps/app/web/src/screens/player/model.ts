@@ -137,11 +137,11 @@ export function lyricRows<L extends { en: string; pt: string }>(
 }
 
 /** Song steps (first pass and sing-along): they share the Song renderer and the lyric sync. */
-export const isSong = (step: number): boolean => step === STEP.SONG || step === STEP.LAST;
+export const isSong = (step: number): boolean => step === STEP.SONG || step === STEP.SING;
 
-/** Media of the steps that play a recording: the Apresentação (1) and the song (2, 9). */
+/** Media of the steps that play a recording: In this episode (1), the song (2, 9) and Take a Look's context audio. */
 export function stepAudio(Ep: Episode, step: number): string {
-  return (step === STEP.INTRO ? Ep.introAudio : isSong(step) ? Ep.songAudio : '') || '';
+  return (step === STEP.INTRO ? Ep.introAudio : isSong(step) ? Ep.songAudio : step === STEP.LOOK ? Ep.lookAudio : '') || '';
 }
 
 /** Click handler: preventDefault + tick sfx + action (the prototype's delegated data-act click). */

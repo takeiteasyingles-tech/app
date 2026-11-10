@@ -43,6 +43,11 @@ export const SCREENS: Partial<Record<RouteName, ScreenDef>> = {
     perm: 'content.edit',
     nav: 'conteudo/temporadas',
   },
+  episodeTest: {
+    load: m(() => import('./content/EpisodeMaterials'), 'EpisodeTest'),
+    perm: 'content.edit',
+    nav: 'conteudo/temporadas',
+  },
   episodeSeasonTest: {
     load: m(() => import('./content/EpisodeMaterials'), 'EpisodeSeasonTest'),
     perm: 'content.edit',

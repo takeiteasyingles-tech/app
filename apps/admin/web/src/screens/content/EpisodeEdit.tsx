@@ -362,6 +362,7 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
           <DraftNote />
           <EpisodeMaterials
             num={num}
+            ebookNum={draft.ebookNum as number | null}
             extraId={draft.extraId as string | null}
             seasonN={draft.seasonN as number | null}
           />

@@ -101,32 +101,33 @@ function ScrollText({ text }: { text: string }) {
   );
 }
 
-export function Presentation({
-  text,
+/** The pill player (play/pause, a waveform that fills as it plays, headphones) and its clock. */
+export function AudioPill({
   playing,
   aT,
   aD,
   hasAudio,
   onPlay,
+  what,
 }: {
-  text: string;
   playing: boolean;
   aT: number;
   aD: number;
   hasAudio: boolean;
   onPlay: (ev: Event) => void;
+  /** Accessible name's object: "a apresentação", "o contexto". */
+  what: string;
 }) {
   const filled = aD ? Math.round((aT / aD) * WAVE.length) : 0;
   const started = playing || aT > 0;
   return (
-    <div class="pr">
-      <h2 class="pr-title">Apresentação do Episódio</h2>
+    <>
       <div class="pr-pill">
         <button
           type="button"
           class="pr-play"
           onClick={onPlay}
-          aria-label={playing ? 'Pausar a apresentação' : 'Ouvir a apresentação'}
+          aria-label={playing ? `Pausar ${what}` : `Ouvir ${what}`}
         >
           <Icon name={playing ? 'pause' : 'play'} size={22} />
         </button>
@@ -142,6 +143,29 @@ export function Presentation({
       <div class="pr-clock xs" aria-live="off">
         {hasAudio && started ? `${fmt(aT)} / ${fmt(Math.round(aD))}` : hasAudio ? '' : started ? 'vinheta' : ''}
       </div>
+    </>
+  );
+}
+
+export function Presentation({
+  text,
+  playing,
+  aT,
+  aD,
+  hasAudio,
+  onPlay,
+}: {
+  text: string;
+  playing: boolean;
+  aT: number;
+  aD: number;
+  hasAudio: boolean;
+  onPlay: (ev: Event) => void;
+}) {
+  return (
+    <div class="pr">
+      <h2 class="pr-title">Apresentação do Episódio</h2>
+      <AudioPill playing={playing} aT={aT} aD={aD} hasAudio={hasAudio} onPlay={onPlay} what="a apresentação" />
       <Orb on={playing} />
       {text ? <ScrollText text={text} /> : null}
     </div>

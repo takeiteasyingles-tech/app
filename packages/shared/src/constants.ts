@@ -64,10 +64,10 @@ export const DURATIONS = {
 } as const;
 
 /**
- * Episode step numbers (spec 05 "Step order"). Nine steps since migration 0013: the Apresentação (the
- * intro step: audio, animated orb and the episode text; 0012), the song's first pass, then Take a Look
- * … Take Action and the sing-along. The e-book step is gone (the prototype's 3); the prototype's steps
- * 4-10 are 3-9 here. INTRO keeps its name in code. Always use these names, never the numbers.
+ * Episode step numbers (spec 05 "Step order"). Since migration 0014: "In this episode" (the intro step:
+ * audio, animated orb and the episode text; 0012), the song's first pass, Take a Look … Take Action, the
+ * sing-along (SING) and Take the Test (TEST, the last step). The e-book step is gone (0013: the
+ * prototype's 4-10 are 3-9 here). INTRO keeps its name in code. Always use these names, never numbers.
  */
 export const STEP = {
   INTRO: 1,
@@ -78,12 +78,14 @@ export const STEP = {
   LESSON: 6,
   AWAY: 7,
   ACTION: 8,
-  LAST: 9,
+  SING: 9,
+  TEST: 10,
+  LAST: 10,
 } as const;
-/** Number of steps in an episode (the bars, "etapa N de 9", the map). */
+/** Number of steps in an episode (the bars, "etapa N de 10", the map). */
 export const STEP_COUNT = STEP.LAST;
 /** First step of each group after the first ("O episódio", "Fechamento"): the step bar's gaps. */
-export const STEP_GROUP_STARTS: readonly number[] = [STEP.LOOK, STEP.LAST];
+export const STEP_GROUP_STARTS: readonly number[] = [STEP.LOOK, STEP.SING];
 
 export const LOCKOUT_FAILED_LOGINS = 10;
 export const PBKDF2_ITERATIONS = 100_000;

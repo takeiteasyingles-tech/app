@@ -17,7 +17,7 @@ export type TabId =
 
 export const TABS: readonly (readonly [TabId, string])[] = [
   ['geral', 'Geral'],
-  ['apresentacao', '1 · Apresentação'],
+  ['apresentacao', '1 · In this episode'],
   ['musica', '2 · Música'],
   ['olhar', '3 · Take a Look'],
   ['dialogo', '4 · Take It In'],
@@ -100,6 +100,14 @@ const MUSICA: Spec[] = [
 ];
 
 const OLHAR: Spec[] = [
+  {
+    t: 'media',
+    k: 'lookMedia',
+    label: 'Áudio de contexto',
+    kind: 'audio',
+    opt: 'null',
+    hint: '"1º Ouça o contexto e prepare a mente": toca antes do vídeo. Opcional.',
+  },
   { t: 'media', k: 'sceneMedia', label: 'Vídeo da cena', kind: 'video', opt: 'null' },
   { t: 'text', k: 'sceneNote', label: 'Nota da cena', opt: 'null', rows: 2 },
   {

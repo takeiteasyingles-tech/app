@@ -389,7 +389,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         if (P.dead || P.audio !== a) return;
         P.playing = false;
         P.audio = null;
-        mark(step);
+        // Take a Look's context audio is optional: the scene video is what completes that step.
+        if (step !== STEP.LOOK) mark(step);
         re();
       });
       // Resume where the pause left it; from the start once it played to the end.
@@ -664,6 +665,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       re();
     },
     vidStart: (v) => {
+      // The scene and the context audio never play together.
+      if (P.playing) stopAll(P);
       P.vid = true;
       re();
       v?.play().catch(() => {

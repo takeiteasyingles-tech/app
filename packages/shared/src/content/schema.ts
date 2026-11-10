@@ -469,6 +469,10 @@ export const Episode = z.object({
   songAudio: OptMedia,
   songTitle: z.string(),
   sceneVideo: OptMedia,
+  /** PROD (0014): Take a Look's context audio, "1º Ouça o contexto e prepare a mente". */
+  lookAudio: OptMedia.optional(),
+  /** PROD (0014): questions of the episode test (Take the Test, the last step); 0 = no test. */
+  testCount: z.int().min(0).optional(),
   /** Still shown in Take a Look when there is no video. */
   sceneImage: OptMedia,
   sceneNote: z.string(),

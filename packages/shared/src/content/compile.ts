@@ -79,6 +79,8 @@ export interface EpisodeRowDb {
   song_media: Text;
   song_title: Text;
   scene_media: Text;
+  /** 0014: Take a Look's context audio. */
+  look_media?: Text;
   scene_note: Text;
   dialog_title: Text;
   dialog_sub: Text;
@@ -741,6 +743,8 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       songAudio: url(e.song_media, w('song_media')),
       songTitle: str(e.song_title),
       sceneVideo: url(e.scene_media, w('scene_media')),
+      lookAudio: url(e.look_media, w('look_media')),
+      testCount: eb && eb.test_enabled !== 0 ? (questionsByEbook.get(eb.num)?.length ?? 0) : 0,
       sceneImage: url(scenes.episodes[String(e.num)] ?? scenes.default, 'content_blobs.scene_images'),
       sceneNote: str(e.scene_note),
       lyrics: lyricsOf(e),

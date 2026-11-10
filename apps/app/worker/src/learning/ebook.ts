@@ -2,6 +2,7 @@ import {
   type DownloadRes,
   mediaUrl,
   type Ok,
+  STEP,
   type TestAnswer,
   type TestAnswersBody,
   type TestQuestion,
@@ -108,10 +109,13 @@ async function loadTest(d: LearningDeps, n: number) {
         d.userId,
         n,
       ),
+      // PROD (0014): the test is the episode's last step, Take the Test, so reaching it counts as done
+      // for the test's rule (otherwise the test would wait for an episode that waits for the test).
       q<{ episode_num: number }>(
         d.db,
-        'SELECT episode_num FROM episode_progress WHERE user_id = ? AND done_at IS NOT NULL',
+        'SELECT episode_num FROM episode_progress WHERE user_id = ? AND (done_at IS NOT NULL OR furthest_step >= ?)',
         d.userId,
+        STEP.TEST,
       ),
       q<{ submitted: number }>(
         d.db,

@@ -3,24 +3,31 @@ import { call } from '../../api';
 import { useLoad } from '../../ui/async';
 import { Async, Card, LinkButton } from '../../ui/kit';
 import type { ScreenProps } from '../registry';
+import { EbookEdit } from './Ebooks';
 import { ExtraEdit } from './Extras';
 import { SeasonTestEditor } from './SeasonTest';
 
 export function EpisodeMaterials({
   num,
+  ebookNum,
   extraId,
   seasonN,
 }: {
   num: number;
+  /** The episode test lives on its (hidden) e-book row: Take the Test edits its questions. */
+  ebookNum: number | null;
   extraId: string | null;
   seasonN: number | null;
 }) {
   return (
     <Card
       title="Materiais e avaliação do episódio"
-      sub="Jornada de 9 etapas, extra e avaliação da temporada ficam juntos neste episódio."
+      sub="Jornada de 10 etapas, teste do episódio (Take the Test), extra e avaliação da temporada ficam juntos neste episódio."
     >
       <div class="row wrapx" style={{ '--gap': '10px' }}>
+        {ebookNum ? (
+          <LinkButton href={`conteudo/episodios/${num}/teste`} label="Take the Test" icon="list" kind="light" />
+        ) : null}
         {extraId ? (
           <LinkButton href={`conteudo/episodios/${num}/extra`} label="Extra" icon="tv" kind="light" />
         ) : (
@@ -39,7 +46,7 @@ export function EpisodeMaterials({
   );
 }
 
-function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'seasonTest' }) {
+function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'test' | 'seasonTest' }) {
   const ep = Number(params.ep);
   const load = useLoad((signal) => call(adminContentApi.episodes.get, { params: { id: String(ep) }, signal }), [ep]);
   return (
@@ -47,6 +54,8 @@ function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'se
       {({ item }) =>
         kind === 'extra' && item.extraId ? (
           <ExtraEdit params={{ id: item.extraId, ep: String(ep) }} q={q} />
+        ) : kind === 'test' && item.ebookNum ? (
+          <EbookEdit params={{ num: String(item.ebookNum), ep: String(ep) }} q={q} testOnly />
         ) : kind === 'seasonTest' && item.seasonN ? (
           <SeasonTestEditor params={{ n: String(item.seasonN), ep: String(ep) }} q={q} />
         ) : (
@@ -60,4 +69,5 @@ function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'se
 }
 
 export const EpisodeExtra = (props: ScreenProps) => <MaterialEditor {...props} kind="extra" />;
+export const EpisodeTest = (props: ScreenProps) => <MaterialEditor {...props} kind="test" />;
 export const EpisodeSeasonTest = (props: ScreenProps) => <MaterialEditor {...props} kind="seasonTest" />;

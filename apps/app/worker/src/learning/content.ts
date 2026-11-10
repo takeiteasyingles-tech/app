@@ -95,6 +95,8 @@ interface EpisodeRow {
   status: string;
   ebook_num: number | null;
   scene_media: string | null;
+  /** Questions of the episode test when its e-book row has the test on (Take the Test). */
+  test_count: number;
 }
 interface PhraseRow {
   id: string;
@@ -135,6 +137,7 @@ function fromSnapshot(
       num: e.num,
       ebook: e.ebook,
       sceneVideo: e.sceneVideo,
+      testCount: e.testCount ?? 0,
       mic: mic.map((m) => ({ id: m.id })),
       ex: ex.map((x) => ({ items: x.items.map((it) => ({ id: it.id })) })),
     },
@@ -162,9 +165,10 @@ function fromD1(
   return {
     episode: {
       num: row.num,
-      // need() reads ebooks[ep.ebook]; an episode without an e-book can never pass step 3.
+      // need() reads testDone[ep.ebook] for Take the Test (the episode test lives on its e-book row).
       ebook: row.ebook_num ?? 0,
       sceneVideo: row.scene_media,
+      testCount: row.test_count,
       mic: phrases.map((m) => ({ id: m.id })),
       ex,
     },
@@ -183,8 +187,15 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
   const { db, userId } = d;
   const src = await contentSource(d);
   const snapshot = src.kind === 'snapshot' ? snapshotFile(() => src.content.episode(ep)) : null;
-  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, earlierD1, doneRows] = await batch(db, [
-    q<EpisodeRow>(db, 'SELECT num, status, ebook_num, scene_media FROM episodes WHERE num = ?', ep),
+  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, earlierD1, doneRows, tests] = await batch(db, [
+    q<EpisodeRow>(
+      db,
+      `SELECT e.num, e.status, e.ebook_num, e.scene_media,
+         (SELECT COUNT(*) FROM ebook_test_questions t JOIN ebooks b ON b.num = t.ebook_num
+           WHERE t.ebook_num = e.ebook_num AND b.test_enabled != 0) AS test_count
+       FROM episodes e WHERE e.num = ?`,
+      ep,
+    ),
     q<PhraseRow>(db, 'SELECT id, demo_result FROM mic_phrases WHERE episode_num = ? ORDER BY sort, id', ep),
     q<ItemRow>(
       db,
@@ -223,6 +234,13 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
       userId,
       ep,
     ),
+    // Take the Test: a submitted result of the episode's test (redo in progress = submitted_at 0).
+    q<{ ebook_num: number }>(
+      db,
+      'SELECT r.ebook_num FROM ebook_test_results r JOIN episodes e ON e.ebook_num = r.ebook_num WHERE r.user_id = ? AND e.num = ? AND r.submitted_at > 0',
+      userId,
+      ep,
+    ),
   ] as const);
 
   let content: Pick<EpisodeContext, 'episode' | 'items' | 'phrases'>;
@@ -257,6 +275,7 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
       stepOk: Object.fromEntries(oks.map((o) => [stepKey(ep, o.step), true])),
       scores: Object.fromEntries(scores.map((s) => [s.phrase_id, s.last_score])),
       exAns: Object.fromEntries(answers.map((a) => [a.item_id, a.choice_idx])),
+      testDone: Object.fromEntries(tests.map((t) => [String(t.ebook_num), true])),
       settings: { free },
     },
   };

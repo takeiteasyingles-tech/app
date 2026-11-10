@@ -391,3 +391,23 @@
     transform: translateY(4px);
   }
 }
+
+/* ---------- Take a Look: "Episódio de hoje" (context audio, then the scene) ---------- */
+.lk-h {
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.12rem;
+  color: var(--blue);
+}
+.lk-step {
+  text-align: center;
+  font-weight: 800;
+  color: var(--navy);
+  margin-top: 2px;
+}
+.lk-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}

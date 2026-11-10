@@ -159,6 +159,7 @@ const episodes: Entity = {
     f('songMedia', 'song_media', 'media', ['audio']),
     f('songTitle', 'song_title'),
     f('sceneMedia', 'scene_media', 'media', ['video']),
+    f('lookMedia', 'look_media', 'media', ['audio']),
     f('sceneNote', 'scene_note'),
     f('dialogTitle', 'dialog_title'),
     f('dialogSub', 'dialog_sub'),

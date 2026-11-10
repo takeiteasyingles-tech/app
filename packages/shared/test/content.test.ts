@@ -148,8 +148,11 @@ describe('prototype content fits the schemas', () => {
 
     const catalog = {
       version: 'test',
-      // PROD: the prototype's STEPS without its e-book step (3), renumbered 1-9.
-      steps: (D.STEPS as Any[]).filter((x) => x.n !== 3).map((x, i) => ({ ...x, n: i + 1 })),
+      // PROD: the prototype's STEPS without its e-book step (3), renumbered 1-9, then Take the Test (10).
+      steps: [
+        ...(D.STEPS as Any[]).filter((x) => x.n !== 3).map((x, i) => ({ ...x, n: i + 1 })),
+        { n: 10, name: 'Take the Test', pt: 'teste do episódio' },
+      ],
       seasons: SEASONS.map((title, i) => ({ n: i + 1, title, synopsis: null })),
       titles: D.TITLES,
       episodes: D.TITLES.map((title: string, i: number) => ({

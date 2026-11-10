@@ -127,6 +127,7 @@ export const EPISODE_SECTIONS = [
   'songMedia',
   'songTitle',
   'sceneMedia',
+  'lookMedia',
   'sceneNote',
   'dialogTitle',
   'dialogSub',

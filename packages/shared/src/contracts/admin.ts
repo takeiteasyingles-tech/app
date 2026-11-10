@@ -269,6 +269,8 @@ export const EpisodeRow = z.object({
   songMedia: MediaId,
   songTitle: z.string().nullable(),
   sceneMedia: MediaId,
+  /** PROD (0014): Take a Look's context audio. */
+  lookMedia: MediaId.default(null),
   sceneNote: z.string().nullable(),
   dialogTitle: z.string().nullable(),
   dialogSub: z.string().nullable(),

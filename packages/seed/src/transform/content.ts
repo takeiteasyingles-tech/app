@@ -44,19 +44,22 @@ export const ebookOfEpisode = (num: number): number => Math.ceil(num / EPISODES_
 
 /**
  * Production step order (spec 05 "Step order"): the prototype's step at each position. Since migrations
- * 0012-0013: the prototype's own order without its e-book step (3), the intro renamed Apresentação.
+ * 0012-0014: the prototype's own order without its e-book step (3), the intro renamed "In this
+ * episode", and PROD_STEPS appended (Take the Test, the last step).
  */
 export const STEP_ORDER = [1, 2, 4, 5, 6, 7, 8, 9, 10] as const;
 /** Production name and subtitle of a step that differ from the prototype's STEPS. */
 const STEP_RENAME: Readonly<Record<number, { name: string; pt: string }>> = {
-  1: { name: 'Apresentação', pt: 'conheça o episódio' },
+  1: { name: 'In this episode', pt: 'conheça o episódio' },
 };
+/** Steps the prototype does not have, after its own (0014). */
+const PROD_STEPS: readonly { name: string; pt: string }[] = [{ name: 'Take the Test', pt: 'teste do episódio' }];
 
 /** The prototype's STEPS in production order; each group label goes on its group's new first step. */
 export function orderSteps(P: Any[]): { n: number; name: string; pt: string; group_label: string | null }[] {
   const groups = P.map((s) => s.group as string | undefined).filter((g): g is string => !!g);
   const starts = [1, ...STEP_GROUP_STARTS];
-  return STEP_ORDER.map((old, i) => {
+  const own = STEP_ORDER.map((old, i) => {
     const s = P.find((x) => x.n === old);
     if (!s) throw new Error(`STEPS has no step ${old}`);
     const n = i + 1;
@@ -64,6 +67,7 @@ export function orderSteps(P: Any[]): { n: number; name: string; pt: string; gro
     const r = STEP_RENAME[n];
     return { n, name: r?.name ?? s.name, pt: r?.pt ?? s.pt, group_label: g >= 0 ? (groups[g] ?? null) : null };
   });
+  return [...own, ...PROD_STEPS.map((x, i) => ({ n: own.length + i + 1, ...x, group_label: null }))];
 }
 
 export interface SeedContent extends ContentRows {}

@@ -332,7 +332,8 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
       const v = arr<Any>(d.visual);
       const scene = (
         <div class="card stack">
-          <MediaById id={(d.sceneMedia as string) ?? null} label="Cena" />
+          {d.lookMedia ? <MediaById id={d.lookMedia as string} label="1º Áudio de contexto" /> : null}
+          <MediaById id={(d.sceneMedia as string) ?? null} label={d.lookMedia ? '2º Cena' : 'Cena'} />
           {str(d.sceneNote) ? <p class="sm">{str(d.sceneNote)}</p> : null}
         </div>
       );

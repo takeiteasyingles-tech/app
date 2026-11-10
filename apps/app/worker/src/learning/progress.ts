@@ -33,7 +33,7 @@ import type { LearningDeps } from './deps';
 // need() only, never this lock (as in the prototype, where settings.free only feeds gate()).
 
 /** Steps whose completion the client attests when the media ends (mark(n) in player.js). */
-export const MEDIA_STEPS: ReadonlySet<number> = new Set([STEP.SONG, STEP.INTRO, STEP.LOOK, STEP.DIALOG, STEP.LAST]);
+export const MEDIA_STEPS: ReadonlySet<number> = new Set([STEP.SONG, STEP.INTRO, STEP.LOOK, STEP.DIALOG, STEP.SING]);
 /** Leaving these steps moves the episode's cards into Revisão (SrsService.unlock). */
 export const CARD_STEPS: ReadonlySet<number> = new Set([STEP.LOOK, STEP.AWAY]);
 /** Steps that hold the scored activities: Take the Mic (record) and Take Action. */
@@ -90,7 +90,7 @@ export async function stepOk(d: LearningDeps, body: StepOkBody): Promise<StepOkR
     step,
     d.now,
   );
-  const award = step === LAST_STEP ? await d.award.award(d.userId, 'song', `song:${ep}`, { now: d.now }) : null;
+  const award = step === STEP.SING ? await d.award.award(d.userId, 'song', `song:${ep}`, { now: d.now }) : null;
   return { stepOk: stepKey(ep, step), award };
 }
 
@@ -117,7 +117,7 @@ export async function advance(d: LearningDeps, body: AdvanceBody): Promise<Advan
   return { prog: step, cardsAdded, award };
 }
 
-/** POST /api/progress/episode-done (plNext on step 10). Replays are harmless: the award is keyed. */
+/** POST /api/progress/episode-done (plNext on the last step, Take the Test). Replays are harmless: the award is keyed. */
 export async function episodeDone(d: LearningDeps, body: EpisodeDoneBody): Promise<EpisodeDoneRes> {
   const { ep } = body;
   const ctx = await contextOrFail(d, ep);
