@@ -9,6 +9,7 @@
 // It never shows points, cards or a "concluído" the learner did not get.
 //
 // PROD (spec 07): the celebration carries the episode rating card (Rating.tsx) under the stats.
+import { STEP_COUNT } from '@tie/shared/constants';
 import type { Episode } from '@tie/shared/content/schema';
 import { cardsOf } from '@tie/shared/domain/srs';
 import { Btn, Icon, Segs } from '@tie/ui';
@@ -129,7 +130,7 @@ function Todo({ E, avg }: { E: Episode; avg: string }) {
   const s = state.value;
   const cat = catalog.value;
   const steps = cat?.steps ?? [];
-  const total = steps.length || 10;
+  const total = steps.length || STEP_COUNT;
   const at = Math.min(Math.max(s.prog[E.num] || 1, 1), total);
   const doneN = at - 1;
   const left = total - doneN;

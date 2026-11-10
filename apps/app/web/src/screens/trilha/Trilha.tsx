@@ -60,7 +60,7 @@ function EpisodeNode({
           </span>,
           ' ',
           <span key="e" style={{ whiteSpace: 'nowrap' }}>
-            {`· etapa ${cur.step} de ${c.steps.length || 10}`}
+            {`· etapa ${cur.step} de ${c.steps.length || STEP_COUNT}`}
           </span>,
         ]
       : 'Comece por aqui'
@@ -98,7 +98,7 @@ function EpisodeNode({
           </span>
           {now ? (
             <span class="mt8" style={{ display: 'block' }}>
-              <EvenSegs cur={cur.step} total={c.steps.length || 10} />
+              <EvenSegs cur={cur.step} total={c.steps.length || STEP_COUNT} />
             </span>
           ) : null}
         </span>

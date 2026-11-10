@@ -886,7 +886,7 @@ function Action({ Ep, cat, s, P, desk, a, tap }: StepCtx): StepOut {
   const lastIt = itIdx === ex.items.length - 1;
   const end = lastIt && P.exIdx === Ep.ex.length - 1;
   const hasAudio = ex.audio === 'tts' || ex.audio === 'song';
-  const nextName = cat.steps[9]?.name ?? '';
+  const nextName = cat.steps[STEP.LAST - 1]?.name ?? '';
   const all = Ep.ex.flatMap((x) => x.items);
   const totalAll = all.length;
   const answeredAll = all.filter((x) => s.exAns[x.id] != null).length;
