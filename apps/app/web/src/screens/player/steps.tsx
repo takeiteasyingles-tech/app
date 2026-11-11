@@ -2,9 +2,8 @@
 // prototype's exact markup, classes, inline styles and pt-BR copy so tie.css renders them the same.
 // Steps 1-3 follow the production order (STEP: song, e-book, intro), not the prototype's.
 import { STEP } from '@tie/shared/constants';
-import { need } from '@tie/shared/domain/gating';
 import { Btn, Icon } from '@tie/ui';
-import { type ComponentChildren, Fragment } from 'preact';
+import { Fragment } from 'preact';
 import { Blocks } from '../../ui-blocks/Blocks';
 import { fmt, heard, lyricRows, type MicFeedback, pad2, type StepCtx, type StepOut } from './model';
 import { AudioPill, Presentation } from './Presentation';
@@ -68,7 +67,7 @@ function Intro({ Ep, P, a, tap }: StepCtx): StepOut {
 
 // ---------- 2 e 9 · Música (título, tradução, player e instrução fixos; só a letra rola) ----------
 
-function Song({ Ep, cat, s, P, step, a, tap }: StepCtx): StepOut {
+function Song({ Ep, P, step, a, tap }: StepCtx): StepOut {
   const len = Ep.lyrics.length || 1;
   const pct =
     Ep.songAudio && P.aD ? Math.round((P.aT / P.aD) * 100) : Math.round(((P.line + (P.playing ? 1 : 0)) / len) * 100);
@@ -158,36 +157,9 @@ function Song({ Ep, cat, s, P, step, a, tap }: StepCtx): StepOut {
             </div>
           ))}
         </div>
-        {step === STEP.SONG && !need(Ep, s, STEP.SONG) && cat.steps[STEP.SONG] ? (
-          <NextCard icon="play" onClick={tap(a.next)}>
-            <b class="pl-nextt">Próximo: {cat.steps[STEP.SONG]?.name}</b>
-            <span class="sm pl-nexts">{cat.steps[STEP.SONG]?.pt}</span>
-          </NextCard>
-        ) : null}
       </>
     ),
   };
-}
-
-/** The dashed "Próximo: …" card that ends a finished step (the prototype's step-2 hint), as a Next shortcut. */
-function NextCard({
-  icon,
-  onClick,
-  children,
-}: {
-  icon: string;
-  onClick: (ev: Event) => void;
-  children: ComponentChildren;
-}) {
-  return (
-    <button type="button" class="card row pl-next" onClick={onClick} style={{ '--gap': '14px' }}>
-      <span class="pl-cico">
-        <Icon name={icon} size={22} />
-      </span>
-      <span class="grow pl-nextx">{children}</span>
-      <Icon name="next" size={20} />
-    </button>
-  );
 }
 
 // ---------- 3 · Take a Look ----------
