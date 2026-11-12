@@ -13,6 +13,7 @@ import {
   EbookExtraCard,
   EpisodeDone,
   EpisodeStatus,
+  EpisodeVoices,
   ExtraCast,
   ExtraLine,
   KaraokeLine,
@@ -283,6 +284,8 @@ export const EpisodeRow = z.object({
   awayExp: z.array(AwayExp),
   awayWords: z.array(z.string()),
   done: EpisodeDone.nullable(),
+  /** PROD (0016): the lesson's ElevenLabs voices (narration and characters). */
+  voices: EpisodeVoices.default({}),
   updatedAt: Timestamp,
   updatedBy: z.string().nullable(),
 });

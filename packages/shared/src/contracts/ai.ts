@@ -167,6 +167,12 @@ export const TtsBody = z.object({
   gender: TtsGender,
   /** Speaker name from the allowlist (TTS_SPEAKERS) or an assistant key. */
   voice: z.string().min(1).max(40),
+  /**
+   * PROD (spec 05 "Lesson voices"): the lesson (episode) being studied and who speaks: TTS_NARRATOR_ROLE
+   * or a character's name. The server then reads with that lesson's voice, else the course voice.
+   */
+  ep: z.int().positive().max(10_000).optional(),
+  role: z.string().trim().min(1).max(40).optional(),
 });
 export type TtsBody = z.infer<typeof TtsBody>;
 

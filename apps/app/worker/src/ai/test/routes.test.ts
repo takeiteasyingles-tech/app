@@ -1555,6 +1555,52 @@ describe('POST /api/tts', () => {
     }
   });
 
+  it('reads a lesson line with the voice that lesson sets for its role (spec 05 "Lesson voices")', async () => {
+    const real = globalThis.fetch;
+    const voices: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      voices.push(url.split('/text-to-speech/')[1]?.split('/')[0] ?? '');
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'HyqisByK1ozCXL4PglY3', narrator: 'CourseNarrator001' }),
+      });
+      const lesson = JSON.stringify({ narrator: 'LessonNarrator01', cast: { Zach: 'LessonZachVoice1' } });
+      await baseEnv.DB.prepare(
+        "INSERT OR REPLACE INTO episodes(num, title, status, voices, updated_at) VALUES(1, 'Ep 1', 'published', ?1, 1), (3, 'Ep 3', 'draft', ?1, 1)",
+      )
+        .bind(lesson)
+        .run();
+      // Lesson 1 (published): its narration, and Zach by name in any case.
+      expect((await tts(env, u1, { text: 'Kitchen.', voice: 'margaret', ep: 1, role: 'narrator' })).status).toBe(200);
+      expect((await tts(env, u1, { text: 'Mom! Say hello!', voice: 'zach', ep: 1, role: 'zach' })).status).toBe(200);
+      // A character the lesson leaves out keeps the course voice of its assistant.
+      expect((await tts(env, u1, { text: 'Good morning.', voice: 'margaret', ep: 1, role: 'Margaret' })).status).toBe(
+        200,
+      );
+      // A draft lesson's voices are not used: the course narration reads it.
+      expect((await tts(env, u1, { text: 'Window.', voice: 'margaret', ep: 3, role: 'narrator' })).status).toBe(200);
+      // Outside a lesson: the speaker's assistant, as before.
+      expect((await tts(env, u1, { text: 'Hello there.', voice: 'margaret' })).status).toBe(200);
+      expect(voices).toEqual([
+        'LessonNarrator01',
+        'LessonZachVoice1',
+        'HyqisByK1ozCXL4PglY3',
+        'CourseNarrator001',
+        'HyqisByK1ozCXL4PglY3',
+      ]);
+      // The same text in another voice is another cache entry, never the first voice's audio.
+      await tts(env, u1, { text: 'Kitchen.', voice: 'margaret', ep: 3, role: 'narrator' });
+      expect(voices.at(-1)).toBe('CourseNarrator001');
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('enforces the 400-char limit and the quota', async () => {
     const long = await tts(testEnv(), u1, { text: 'a'.repeat(401), voice: 'margaret' });
     expect(long.status).toBe(400);

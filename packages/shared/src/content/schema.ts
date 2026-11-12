@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { STEP_COUNT } from '../constants';
+import { ELEVEN_VOICE_ID_RE, STEP_COUNT } from '../constants';
 
 // Published content snapshots (R2 content/{ver}/*). Field names follow the prototype's js/data/* so the
 // screen port stays mechanical; tuples ([en, pt], [name, ini, color]) became objects.
@@ -455,6 +455,17 @@ export const EpisodeDone = z.object({
 });
 export type EpisodeDone = z.infer<typeof EpisodeDone>;
 
+/**
+ * PROD (spec 05 "Lesson voices", 0016): the ElevenLabs voices of one lesson. `narrator` reads what no
+ * character says (vocabulary, Mic phrases, Take Away, exercises); `cast` maps a character name (as in
+ * the dialogue) to its voice. Anything not set uses the course voice (Configurações → Vozes).
+ */
+export const EpisodeVoices = z.object({
+  narrator: z.string().regex(ELEVEN_VOICE_ID_RE).nullable().optional(),
+  cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+});
+export type EpisodeVoices = z.infer<typeof EpisodeVoices>;
+
 export const Episode = z.object({
   num: z.int().positive(),
   title: z.string(),
@@ -489,6 +500,8 @@ export const Episode = z.object({
   awayWords: z.array(z.string()),
   ex: z.array(Exercise),
   done: EpisodeDone,
+  /** PROD (0016): the lesson's voices; absent or empty = the course voices. */
+  voices: EpisodeVoices.optional(),
 });
 export type Episode = z.infer<typeof Episode>;
 

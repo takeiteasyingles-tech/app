@@ -1,7 +1,7 @@
 // Configurações → Vozes: the ElevenLabs API key (write-only: only its last 4 characters come back), the
 // model and the cloned voice of each assistant, used by the student app's HD voice (/api/tts). A voice
 // can be cloned here from an audio sample (Instant Voice Clone) and tested before learners hear it.
-import { ELEVEN_MODELS, type ElevenModel } from '@tie/shared/constants';
+import { ELEVEN_MODELS, ELEVEN_NARRATOR_KEY, type ElevenModel } from '@tie/shared/constants';
 import { adminVoicesApi, type VoiceSettings, type VoiceSettingsBody } from '@tie/shared/contracts/voices';
 import { ApiError, isErrorEnvelope } from '@tie/shared/errors';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -12,6 +12,7 @@ import { Icon } from '../ui/icons';
 import { Async, Button, Card, Field, Pill, Sel, TextIn } from '../ui/kit';
 import { confirmAction } from '../ui/modal';
 import { toast } from '../ui/toast';
+import { VoicePick } from '../ui/voices';
 
 const MODEL_LABEL: Record<ElevenModel, string> = {
   eleven_turbo_v2_5: 'Turbo v2.5 (rápido, recomendado)',
@@ -193,14 +194,22 @@ function AssistantRow({
         {current ? <Pill label="Voz clonada" tone="gr" icon="check" /> : <Pill label="Voz padrão" />}
       </div>
       <div class="row wrapx" style={{ '--gap': '8px', alignItems: 'flex-end' }}>
-        <Field id={id} label="ID da voz na ElevenLabs" cls="grow">
-          <TextIn
+        <Field id={id} label="Voz na ElevenLabs" cls="grow">
+          <VoicePick
             id={id}
+            value={voice.trim() || null}
+            onValue={(x) => setVoice(x ?? '')}
+            emptyLabel="Voz padrão (sem ElevenLabs)"
+          />
+        </Field>
+        <Field id={`${id}-raw`} label="ou cole o ID">
+          <TextIn
+            id={`${id}-raw`}
             value={voice}
             onValue={setVoice}
             spellcheck={false}
             maxLength={40}
-            placeholder="ex.: 21m00Tcm4TlvDq8ikWAM"
+            placeholder="21m00Tcm4TlvDq8ikWAM"
           />
         </Field>
         <Button
@@ -251,7 +260,11 @@ function AssistantRow({
         <div class="stack" style={{ '--gap': '4px' }}>
           {/* biome-ignore lint/a11y/useMediaCaption: voice test; its text is shown right below. */}
           <audio ref={audioRef} src={audioUrl} controls preload="auto" style={{ width: '100%' }} />
-          <span class="xs">"Hi! I'm {a.name}. Let's practice a little English together today."</span>
+          <span class="xs">
+            {a.key === ELEVEN_NARRATOR_KEY
+              ? '"Good morning! Kitchen, window, table, coffee. Nice to meet you."'
+              : `"Hi! I'm ${a.name}. Let's practice a little English together today."`}
+          </span>
         </div>
       ) : null}
     </li>
@@ -271,10 +284,12 @@ export function VoicesSettings() {
           <>
             <KeyCard s={s} onSaved={setS} />
             <Card
-              title="Vozes das assistentes"
-              sub="Cole o ID de uma voz que já existe na sua conta ElevenLabs, ou clone a partir de uma amostra (1 a 3 minutos de fala limpa, MP3 ou WAV até 10 MB). A voz nova vale para as próximas falas do Mic."
+              title="Vozes do curso"
+              sub="A voz de cada personagem e a da narração no curso inteiro. Escolha uma voz da conta ElevenLabs, busque na biblioteca, cole o ID ou clone a partir de uma amostra (1 a 3 minutos de fala limpa, MP3 ou WAV até 10 MB). Cada lição pode trocar estas vozes no editor do episódio (Geral → Vozes desta lição)."
             >
               <ul class="stack" style={{ '--gap': '0', listStyle: 'none', margin: 0, padding: 0 }}>
+                {/* PROD (spec 05 "Lesson voices"): the course narration, then each assistant. */}
+                <AssistantRow a={{ key: ELEVEN_NARRATOR_KEY, name: 'Narração do curso' }} s={s} onSaved={setS} />
                 {s.assistants.map((a) => (
                   <AssistantRow key={a.key} a={a} s={s} onSaved={setS} />
                 ))}

@@ -2,13 +2,23 @@
 // Model ids live in app_settings (SETTINGS.model*) so an admin can swap them without a deploy;
 // DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
 // them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
-import { DEFAULT_MODELS, FLAGS, SETTINGS } from '@tie/shared';
+import {
+  DEFAULT_MODELS,
+  ELEVEN_NARRATOR_KEY,
+  ELEVEN_VOICE_ID_RE,
+  FLAGS,
+  SETTINGS,
+  TTS_NARRATOR_ROLE,
+} from '@tie/shared';
+import type { EpisodeVoices } from '@tie/shared/content/schema';
 import {
   all,
+  type ContentService,
   type Env,
   elevenSpeakTimed,
   type FlagSubject,
   isEnabled,
+  one,
   readElevenConfig,
   type TimedSpeech,
 } from '@tie/worker-core';
@@ -200,10 +210,66 @@ export interface ElevenVoice {
 
 /** Configurações → Vozes (admin, app_settings) with the ELEVENLABS_* env vars as a fallback. */
 export async function elevenFor(env: Env, db: D1Database, assistantKey: string | null): Promise<ElevenVoice | null> {
-  if (!assistantKey) return null;
+  return elevenForRole(env, db, { assistantKey });
+}
+
+export interface VoicePick {
+  /** The speaker's assistant (a character with a course voice), when there is one. */
+  assistantKey: string | null;
+  /** TTS_NARRATOR_ROLE or a character's name (lesson audio); absent outside a lesson. */
+  role?: string | null;
+  /** The voice the lesson sets for that role (lessonVoiceId). */
+  lessonVoice?: string | null;
+}
+
+/**
+ * PROD (spec 05 "Lesson voices"): the ElevenLabs voice for one line, most specific first: the lesson's
+ * voice for the role, then the course voice (the narration's for TTS_NARRATOR_ROLE, else the speaker's
+ * assistant). null = no key or no voice anywhere: the Workers AI voice reads it.
+ */
+export async function elevenForRole(env: Env, db: D1Database, pick: VoicePick): Promise<ElevenVoice | null> {
+  if (!pick.assistantKey && !pick.role && !pick.lessonVoice) return null;
   const cfg = await readElevenConfig(db, env);
-  const voiceId = cfg.voices[assistantKey];
-  return cfg.apiKey && voiceId ? { apiKey: cfg.apiKey, model: cfg.model, voiceId } : null;
+  if (!cfg.apiKey) return null;
+  const narration = pick.role === TTS_NARRATOR_ROLE ? cfg.voices[ELEVEN_NARRATOR_KEY] : undefined;
+  const voiceId = pick.lessonVoice || narration || (pick.assistantKey ? cfg.voices[pick.assistantKey] : undefined);
+  return voiceId ? { apiKey: cfg.apiKey, model: cfg.model, voiceId } : null;
+}
+
+/**
+ * The voice a published lesson sets for `role` (its narration, or a character by name, any case), or
+ * null. Reads the published episode file, or D1 (published rows only) before the first publish.
+ */
+export async function lessonVoiceId(
+  db: D1Database,
+  content: ContentService,
+  ep: number,
+  role: string,
+): Promise<string | null> {
+  let voices: EpisodeVoices | null | undefined;
+  try {
+    voices = (await content.current()) ? ((await content.episode(ep))?.voices ?? null) : undefined;
+  } catch {
+    voices = undefined;
+  }
+  if (voices === undefined) {
+    const row = await one<{ voices: string }>(
+      db,
+      "SELECT voices FROM episodes WHERE num = ? AND status = 'published'",
+      ep,
+    );
+    try {
+      voices = row ? (JSON.parse(row.voices) as EpisodeVoices) : null;
+    } catch {
+      voices = null;
+    }
+  }
+  if (!voices) return null;
+  const ok = (id: unknown): string | null => (typeof id === 'string' && ELEVEN_VOICE_ID_RE.test(id) ? id : null);
+  if (role === TTS_NARRATOR_ROLE) return ok(voices.narrator);
+  const r = role.toLowerCase();
+  const hit = Object.entries(voices.cast ?? {}).find(([name]) => name.toLowerCase() === r);
+  return hit ? ok(hit[1]) : null;
 }
 
 /** Text → mp3 with an ElevenLabs (cloned) voice, plus when each word is heard (for the avatar's mouth). */

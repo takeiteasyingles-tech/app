@@ -189,3 +189,117 @@ export async function elevenClone(apiKey: string, name: string, sample: File, de
     throw new ElevenError('ElevenLabs clone: no voice id', 502);
   return j.voice_id;
 }
+
+// ---------- Voice pickers (spec 05 "Lesson voices") ----------
+
+/** A voice of the ElevenLabs account: cloned, premade, or added from the Voice Library. */
+export interface ElevenVoiceInfo {
+  id: string;
+  name: string;
+  /** ElevenLabs category: 'cloned', 'premade', 'professional', 'generated'… */
+  category: string;
+  gender: string | null;
+  accent: string | null;
+  description: string | null;
+}
+
+/** A Voice Library voice (shared by another user); it must be added to the account before use. */
+export interface ElevenLibraryVoice extends ElevenVoiceInfo {
+  ownerId: string;
+  language: string | null;
+  /** Public sample on ElevenLabs' storage (ELEVEN_SAMPLE_HOSTS), or null. */
+  previewUrl: string | null;
+}
+
+const str = (v: unknown, max = 200): string | null =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
+
+/** Where Voice Library samples live; the admin proxies only these (no open fetch). */
+export const ELEVEN_SAMPLE_HOSTS: readonly string[] = ['storage.googleapis.com'];
+export const ELEVEN_SAMPLE_PATH = /^\/eleven-public-(prod|cdn)\//;
+
+export function isElevenSampleUrl(u: string): boolean {
+  try {
+    const url = new URL(u);
+    return (
+      url.protocol === 'https:' && ELEVEN_SAMPLE_HOSTS.includes(url.hostname) && ELEVEN_SAMPLE_PATH.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Every voice of the account (GET /v1/voices), sorted by name. */
+export async function elevenListVoices(apiKey: string): Promise<ElevenVoiceInfo[]> {
+  const r = await fetch(`${API}/voices`, { headers: { 'xi-api-key': apiKey, Accept: 'application/json' } });
+  if (!r.ok) throw new ElevenError(`ElevenLabs voices ${r.status}`, r.status, await detailOf(r));
+  const j = (await r.json()) as { voices?: unknown };
+  const list = Array.isArray(j.voices) ? (j.voices as Record<string, unknown>[]) : [];
+  const out: ElevenVoiceInfo[] = [];
+  for (const v of list) {
+    const id = str(v.voice_id, 40);
+    if (!id || !VOICE_ID_RE.test(id)) continue;
+    const labels = (v.labels && typeof v.labels === 'object' ? v.labels : {}) as Record<string, unknown>;
+    out.push({
+      id,
+      name: str(v.name, 100) ?? id,
+      category: str(v.category, 40) ?? 'premade',
+      gender: str(labels.gender, 40),
+      accent: str(labels.accent, 60),
+      description: str(v.description, 300) ?? str(labels.description, 300),
+    });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Voice Library search (GET /v1/shared-voices), English voices, up to `size`. */
+export async function elevenSearchLibrary(
+  apiKey: string,
+  opts: { q?: string; gender?: 'male' | 'female'; size?: number } = {},
+): Promise<ElevenLibraryVoice[]> {
+  const p = new URLSearchParams({ page_size: String(opts.size ?? 30), language: 'en' });
+  if (opts.q) p.set('search', opts.q);
+  if (opts.gender) p.set('gender', opts.gender);
+  const r = await fetch(`${API}/shared-voices?${p}`, { headers: { 'xi-api-key': apiKey, Accept: 'application/json' } });
+  if (!r.ok) throw new ElevenError(`ElevenLabs library ${r.status}`, r.status, await detailOf(r));
+  const j = (await r.json()) as { voices?: unknown };
+  const list = Array.isArray(j.voices) ? (j.voices as Record<string, unknown>[]) : [];
+  const out: ElevenLibraryVoice[] = [];
+  for (const v of list) {
+    const id = str(v.voice_id, 40);
+    const ownerId = str(v.public_owner_id, 100);
+    if (!id || !VOICE_ID_RE.test(id) || !ownerId || !/^[A-Za-z0-9]{8,100}$/.test(ownerId)) continue;
+    const preview = str(v.preview_url, 600);
+    out.push({
+      id,
+      ownerId,
+      name: str(v.name, 100) ?? id,
+      category: str(v.category, 40) ?? 'library',
+      gender: str(v.gender, 40),
+      accent: str(v.accent, 60),
+      language: str(v.language, 20),
+      description: str(v.description, 300) ?? str(v.descriptive, 300),
+      previewUrl: preview && isElevenSampleUrl(preview) ? preview : null,
+    });
+  }
+  return out;
+}
+
+/** Adds a Voice Library voice to the account (POST /v1/voices/add/{owner}/{voice}); its id in the account. */
+export async function elevenAddLibraryVoice(
+  apiKey: string,
+  ownerId: string,
+  voiceId: string,
+  name: string,
+): Promise<string> {
+  const r = await fetch(`${API}/voices/add/${encodeURIComponent(ownerId)}/${encodeURIComponent(voiceId)}`, {
+    method: 'POST',
+    headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_name: name }),
+  });
+  if (!r.ok) throw new ElevenError(`ElevenLabs add voice ${r.status}`, r.status, await detailOf(r));
+  const j = (await r.json()) as { voice_id?: unknown };
+  const id = typeof j.voice_id === 'string' ? j.voice_id : voiceId;
+  if (!VOICE_ID_RE.test(id)) throw new ElevenError('ElevenLabs add voice: no voice id', 502);
+  return id;
+}

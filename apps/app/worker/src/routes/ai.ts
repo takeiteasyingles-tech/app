@@ -85,8 +85,9 @@ import {
 import { background, flagSubject } from '../ai/http';
 import {
   aiEnabled,
-  elevenFor,
+  elevenForRole,
   hasAiBinding,
+  lessonVoiceId,
   loadModels,
   runJson,
   synthesize,
@@ -636,9 +637,13 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
 
   const { speaker, assistantKey } = await resolveSpeaker(db, body.voice, body.gender);
   const models = await loadModels(db);
-  // An assistant with a cloned voice speaks through ElevenLabs; everyone else through Workers AI.
-  // Key, model and voices come from Configurações → Vozes in the admin (env vars as a fallback).
-  const eleven = await elevenFor(c.env, db, assistantKey);
+  // A line with an ElevenLabs voice (the lesson's for this role, else the course's: the narration's or the
+  // speaker's assistant) speaks through ElevenLabs; everything else through Workers AI. Key, model and
+  // course voices come from Configurações → Vozes (env vars as a fallback), lesson voices from the
+  // published episode (spec 05 "Lesson voices").
+  const lessonVoice =
+    body.ep != null && body.role ? await lessonVoiceId(db, c.get('services').content, body.ep, body.role) : null;
+  const eleven = await elevenForRole(c.env, db, { assistantKey, role: body.role ?? null, lessonVoice });
   const ttsModel = eleven ? eleven.model : models.tts;
   const voiceTag = eleven ? `eleven:${eleven.voiceId}` : speaker;
   const hash = await ttsKey(ttsModel, voiceTag, text);

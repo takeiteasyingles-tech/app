@@ -101,6 +101,23 @@ describe('assistant speech', () => {
     expect(f.state.value.settings.hd).toBe(false);
   });
 
+  it('inside a lesson asks for its voice: the narration, or the character by name (spec 05 "Lesson voices")', async () => {
+    const speech = await import('../src/core/speech');
+    speech.setLesson(7);
+    try {
+      const word = speech.say('Kitchen.', { hd: true });
+      await vi.runAllTimersAsync();
+      await word;
+      expect(f.tts).toHaveBeenLastCalledWith('Kitchen.', 'female', 'margaret', { ep: 7, role: 'narrator' });
+      const line = speech.say('Hello! I’m Margaret.', { who: 'Margaret', hd: true });
+      await vi.runAllTimersAsync();
+      await line;
+      expect(f.tts).toHaveBeenLastCalledWith('Hello! I’m Margaret.', 'female', 'margaret', { ep: 7, role: 'Margaret' });
+    } finally {
+      speech.setLesson(null);
+    }
+  });
+
   it('keeps the profile preference for speech outside the Mic', async () => {
     const speech = await import('../src/core/speech');
     await speech.say('Hello.');

@@ -3,14 +3,26 @@
 // services/eleven.ts). The key is sealed (worker-core secrets.ts) and write-only: responses and the audit
 // log carry only its last 4 characters. Clone (Instant Voice Clone from a sample) and test call ElevenLabs
 // with the stored key.
-import { ApiError, adminApi, ELEVEN_SAMPLE_MIME, SETTINGS, type VoiceSettings } from '@tie/shared';
+import {
+  ApiError,
+  adminApi,
+  ELEVEN_NARRATOR_KEY,
+  ELEVEN_SAMPLE_MIME,
+  type ElevenVoice,
+  SETTINGS,
+  type VoiceSettings,
+} from '@tie/shared';
 import {
   type AppEnv,
   all,
   assertContentLength,
   ElevenError,
+  elevenAddLibraryVoice,
   elevenClone,
+  elevenListVoices,
+  elevenSearchLibrary,
   elevenSpeak,
+  isElevenSampleUrl,
   one,
   type Query,
   q,
@@ -19,7 +31,7 @@ import {
   secretHint,
 } from '@tie/worker-core';
 import { Hono } from 'hono';
-import { actor, auditStmt, bodyOf, type Ctx, route } from '../lib/http';
+import { actor, auditStmt, bodyOf, type Ctx, queryOf, route } from '../lib/http';
 
 const routes = new Hono<AppEnv>();
 const api = adminApi.voices;
@@ -116,7 +128,8 @@ route(routes, api.put, async (c) => {
     diff.model = { from: before.model, to: body.model };
   }
   if (body.voices !== undefined) {
-    const known = new Set((await assistants(db)).map((a) => a.key));
+    // The course narration (ELEVEN_NARRATOR_KEY) sits next to the assistants (spec 05 "Lesson voices").
+    const known = new Set([ELEVEN_NARRATOR_KEY, ...(await assistants(db)).map((a) => a.key)]);
     const unknown = Object.keys(body.voices).filter((k) => !known.has(k));
     if (unknown.length) throw new ApiError('validation_failed', `Assistente desconhecida: ${unknown.join(', ')}.`);
     const next = { ...before.voices };
@@ -159,7 +172,10 @@ route(routes, api.clone, async (c) => {
   }
   if (typeof key !== 'string') throw new ApiError('bad_request', 'Diga de qual assistente é a voz.');
   const db = c.env.DB;
-  const who = await one<{ key: string; name: string }>(db, 'SELECT key, name FROM assistants WHERE key = ?', key);
+  const who =
+    key === ELEVEN_NARRATOR_KEY
+      ? { key: ELEVEN_NARRATOR_KEY, name: 'Narração' }
+      : await one<{ key: string; name: string }>(db, 'SELECT key, name FROM assistants WHERE key = ?', key);
   if (!who) throw new ApiError('not_found', 'Assistente não encontrada.');
   const cfg = await readElevenConfig(db, c.env);
   if (!cfg.apiKey) throw new ApiError('conflict', 'Salve a chave da ElevenLabs antes de clonar uma voz.');
@@ -197,17 +213,24 @@ route(routes, api.clone, async (c) => {
 route(routes, api.test, async (c) => {
   const body = await bodyOf(c, api.test.body);
   const db = c.env.DB;
-  const who = await one<{ key: string; name: string }>(
-    db,
-    'SELECT key, name FROM assistants WHERE key = ?',
-    body.assistantKey,
-  );
+  const who =
+    body.assistantKey === ELEVEN_NARRATOR_KEY
+      ? { key: ELEVEN_NARRATOR_KEY, name: 'a narração do curso' }
+      : await one<{ key: string; name: string }>(
+          db,
+          'SELECT key, name FROM assistants WHERE key = ?',
+          body.assistantKey,
+        );
   if (!who) throw new ApiError('not_found', 'Assistente não encontrada.');
   const cfg = await readElevenConfig(db, c.env);
   if (!cfg.apiKey) throw new ApiError('conflict', 'Salve a chave da ElevenLabs antes de testar.');
   const voiceId = cfg.voices[who.key];
   if (!voiceId) throw new ApiError('conflict', `${who.name} ainda não tem uma voz da ElevenLabs.`);
-  const text = body.text ?? `Hi! I'm ${who.name}. Let's practice a little English together today.`;
+  const text =
+    body.text ??
+    (who.key === ELEVEN_NARRATOR_KEY
+      ? PREVIEW_LINE
+      : `Hi! I'm ${who.name}. Let's practice a little English together today.`);
   let audio: Uint8Array<ArrayBuffer>;
   try {
     audio = await elevenSpeak(cfg.apiKey, cfg.model, voiceId, text);
@@ -217,6 +240,99 @@ route(routes, api.test, async (c) => {
   return new Response(audio, {
     headers: { 'Content-Type': 'audio/mpeg', 'Content-Length': String(audio.byteLength), 'Cache-Control': 'no-store' },
   });
+});
+
+// ---------- Lesson voice pickers (spec 05 "Lesson voices"; content.edit) ----------
+
+/** The line a voice reads in a preview: vocabulary and a short phrase, like the lessons. */
+const PREVIEW_LINE = 'Good morning! Kitchen, window, table, coffee. Nice to meet you.';
+
+const mp3 = (audio: Uint8Array<ArrayBuffer>): Response =>
+  new Response(audio, {
+    headers: { 'Content-Type': 'audio/mpeg', 'Content-Length': String(audio.byteLength), 'Cache-Control': 'no-store' },
+  });
+
+async function keyOrFail(c: Ctx): Promise<{ apiKey: string; model: string }> {
+  const cfg = await readElevenConfig(c.env.DB, c.env);
+  if (!cfg.apiKey) {
+    throw new ApiError('conflict', 'Falta a chave da ElevenLabs: um admin salva em Configurações → Vozes.');
+  }
+  return { apiKey: cfg.apiKey, model: cfg.model };
+}
+
+route(routes, api.account, async (c) => {
+  const { apiKey } = await keyOrFail(c);
+  try {
+    return c.json({ voices: await elevenListVoices(apiKey) });
+  } catch (err) {
+    elevenFail(err, 'listar as vozes');
+  }
+});
+
+route(routes, api.library, async (c) => {
+  const query = queryOf(c, api.library.query);
+  const { apiKey } = await keyOrFail(c);
+  try {
+    const found = await elevenSearchLibrary(apiKey, { q: query.q || undefined, gender: query.gender });
+    return c.json({ voices: found.map(({ previewUrl, ...v }) => ({ ...v, sampleUrl: previewUrl })) });
+  } catch (err) {
+    elevenFail(err, 'buscar na biblioteca');
+  }
+});
+
+route(routes, api.libraryAdd, async (c) => {
+  const body = await bodyOf(c, api.libraryAdd.body);
+  const { apiKey } = await keyOrFail(c);
+  let id: string;
+  try {
+    id = await elevenAddLibraryVoice(apiKey, body.ownerId, body.voiceId, body.name);
+  } catch (err) {
+    elevenFail(err, 'adicionar a voz à conta');
+  }
+  const now = Date.now();
+  // The voice lives in the ElevenLabs account, not in D1: the audit row is the only write here.
+  await (
+    await auditStmt(
+      c,
+      {
+        action: 'voice.library_add',
+        targetType: 'voice',
+        targetId: id,
+        diff: { name: body.name, libraryVoiceId: body.voiceId, ownerId: body.ownerId },
+      },
+      now,
+    )
+  ).stmt.run();
+  let voice: ElevenVoice | undefined;
+  try {
+    voice = (await elevenListVoices(apiKey)).find((v) => v.id === id);
+  } catch {
+    voice = undefined;
+  }
+  return c.json({
+    voice: voice ?? { id, name: body.name, category: 'professional', gender: null, accent: null, description: null },
+  });
+});
+
+route(routes, api.librarySample, async (c) => {
+  const { url } = queryOf(c, api.librarySample.query);
+  // Only ElevenLabs' public sample bucket: never an open proxy.
+  if (!isElevenSampleUrl(url)) throw new ApiError('validation_failed', 'Amostra inválida.', { field: 'url' });
+  const r = await fetch(url, { headers: { Accept: 'audio/mpeg' } });
+  if (!r.ok) throw new ApiError('not_found', 'A ElevenLabs não tem mais esta amostra.');
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (bytes.byteLength > 5 * 1024 * 1024) throw new ApiError('payload_too_large');
+  return mp3(bytes);
+});
+
+route(routes, api.preview, async (c) => {
+  const body = await bodyOf(c, api.preview.body);
+  const { apiKey, model } = await keyOrFail(c);
+  try {
+    return mp3(await elevenSpeak(apiKey, model, body.voiceId, body.text ?? PREVIEW_LINE));
+  } catch (err) {
+    elevenFail(err, 'gerar o áudio');
+  }
 });
 
 export default routes;

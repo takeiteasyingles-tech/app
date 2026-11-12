@@ -2,6 +2,7 @@
 // child rows: `mic` (Take the Mic phrases) and `ex` (Take Action exercises, each with its `items`).
 import type { Spec } from '../../ui/form';
 import { EpisodeExtraPicker } from './EpisodeReferences';
+import { EpisodeVoicesField } from './EpisodeVoices';
 
 export type TabId =
   | 'geral'
@@ -57,6 +58,7 @@ const GERAL: Spec[] = [
     ph: 'Nome e Enter',
     hint: 'Quem aparece no episódio (Take a Look e Take It In). Cada personagem ganha uma cor própria, na ordem desta lista.',
   },
+  { t: 'custom', k: 'voices', label: 'Vozes desta lição', wide: true, render: EpisodeVoicesField },
 ];
 
 // 1 · Apresentação do Episódio: the audio of the opening (the orb plays with it) and the episode text.

@@ -172,6 +172,7 @@ const episodes: Entity = {
     f('awayExp', 'away_exp', 'json'),
     f('awayWords', 'away_words', 'json'),
     f('done', 'done', 'jsonNull'),
+    f('voices', 'voices', 'json'),
   ],
   orderBy: 'num',
   stamp: { updatedAt: true, updatedBy: true },

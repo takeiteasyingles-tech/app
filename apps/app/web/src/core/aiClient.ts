@@ -167,11 +167,22 @@ export interface TtsAudio {
 }
 
 /** ai.tts(text, gender, voice): HD voice (mp3) and its word timing, or null so speech falls back to browser TTS. */
-export async function tts(text: string, gender: TtsBody['gender'], voice: string): Promise<TtsAudio | null> {
+export async function tts(
+  text: string,
+  gender: TtsBody['gender'],
+  voice: string,
+  lesson?: { ep: number; role: string },
+): Promise<TtsAudio | null> {
   let words: WordSpan[] | null = null;
   try {
     const audio = await call(aiApi.tts, {
-      body: { text: text.slice(0, 400), gender, voice },
+      // PROD (spec 05 "Lesson voices"): inside a lesson the server reads with that lesson's voice for the role.
+      body: {
+        text: text.slice(0, 400),
+        gender,
+        voice,
+        ...(lesson ? { ep: lesson.ep, role: lesson.role.slice(0, 40) } : {}),
+      },
       onResponse: (res) => {
         words = decodeWordSpans(res.headers.get(TTS_WORDS_HEADER));
       },

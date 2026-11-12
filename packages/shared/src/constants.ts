@@ -281,6 +281,15 @@ export const BACKUP_EXCLUDED_TABLES: readonly string[] = [
 export const ELEVEN_MODELS = ['eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_multilingual_v2'] as const;
 export type ElevenModel = (typeof ELEVEN_MODELS)[number];
 export const ELEVEN_DEFAULT_MODEL: ElevenModel = 'eleven_turbo_v2_5';
+/** An ElevenLabs voice id (cloned, premade or added from the Voice Library). */
+export const ELEVEN_VOICE_ID_RE = /^[A-Za-z0-9]{8,40}$/;
+/**
+ * PROD (spec 05 "Lesson voices"): key of the course's narration voice in the voices setting, next to the
+ * assistants' keys. The narration reads what no character says: vocabulary, Mic phrases, Take Away…
+ */
+export const ELEVEN_NARRATOR_KEY = 'narrator';
+/** The /api/tts role of the narration (any other role is a character's name). */
+export const TTS_NARRATOR_ROLE = 'narrator';
 /** Voice sample for Instant Voice Clone: an audio file up to this size. */
 export const ELEVEN_SAMPLE_MAX_BYTES = 10 * 1024 * 1024;
 export const ELEVEN_SAMPLE_MIME = [

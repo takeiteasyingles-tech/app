@@ -293,6 +293,12 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     };
   }, [P.micOpen]);
 
+  // PROD (spec 05 "Lesson voices"): while the lesson is open, its lines ask for the lesson's voices.
+  useEffect(() => {
+    speech.setLesson(Ep.num);
+    return () => speech.setLesson(null);
+  }, [Ep.num]);
+
   // The intro/song duration shows before the first play ("0:00 / 0:58", not the prototype's "0:00 / —"):
   // only the file's metadata is fetched.
   useEffect(() => {

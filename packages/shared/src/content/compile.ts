@@ -82,6 +82,8 @@ export interface EpisodeRowDb {
   scene_media: Text;
   /** 0014: Take a Look's context audio. */
   look_media?: Text;
+  /** 0016: the lesson's ElevenLabs voices (EpisodeVoices JSON). */
+  voices?: Text;
   scene_note: Text;
   dialog_title: Text;
   dialog_sub: Text;
@@ -797,6 +799,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
         })),
       })),
       done: J(e.done, null, w('done')),
+      voices: J<Record<string, unknown>>(e.voices ?? '{}', {}, w('voices')),
     };
     files[file] = JSON.stringify(validate(Episode, draft, file, issues));
     episodeNums.push(e.num);

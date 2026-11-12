@@ -2,7 +2,7 @@
 // HD voice from /api/tts when requested by the Mic or settings.hd and the AI is online), listen (Web Speech API, en-US
 // with interim results) and record a 16 kHz mono PCM16 WAV for /api/pronounce.
 
-import { DEFAULT_ASSISTANT } from '@tie/shared/constants';
+import { DEFAULT_ASSISTANT, TTS_NARRATOR_ROLE } from '@tie/shared/constants';
 import type { AssistantPublic } from '@tie/shared/content/schema';
 import type { WordSpan } from '@tie/shared/contracts/ai';
 import { assistantByName, getAssistant } from '@tie/shared/domain/assist';
@@ -195,9 +195,19 @@ function currentAssistant(): AssistantPublic | null {
   return list.length ? getAssistant(list, state.value.profile?.assistant || DEFAULT_ASSISTANT) : null;
 }
 
+/**
+ * PROD (spec 05 "Lesson voices"): the lesson (episode) on screen. While set, every server voice is asked
+ * for that lesson's voice: the character's for a line with `who`, the narration's for the rest.
+ */
+let lessonEp: number | null = null;
+export function setLesson(ep: number | null): void {
+  lessonEp = ep;
+}
+
 /** speech.say(text, opt): resolves when the line finishes (or is stopped). */
 export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   stop();
+  const lesson = lessonEp != null ? { ep: lessonEp, role: opt.who?.trim() || TTS_NARRATOR_ROLE } : undefined;
   const o = { rate: 1, who: currentAssistant()?.name ?? 'Maggie', ...opt };
   const prof = assistantByName(assistants(), o.who);
   const vo = prof ? prof.voice : null;
@@ -225,7 +235,8 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   if ((o.hd ?? state.value.settings.hd) && aiOnline.value) {
     try {
       // An assistant is sent by key, so the server can pick its own voice (a cloned one, see /api/tts).
-      const got = await tts(text, gender, prof?.k || vo?.tts || (gender === 'male' ? 'orion' : 'asteria'));
+      const voice = prof?.k || vo?.tts || (gender === 'male' ? 'orion' : 'asteria');
+      const got = await (lesson ? tts(text, gender, voice, lesson) : tts(text, gender, voice));
       if (job.cancelled) return;
       if (got) return await playBuffer(got.audio, job, o, text, got.words);
     } catch {
@@ -577,4 +588,15 @@ export function voicedMsOf(pcm: Float32Array, rate: number): number {
 }
 
 /** TIE.speech */
-export const speech = { say, stop, listen, record, canListen, canRecord, hasTTS, VIS, MIN_VOICED_MS } as const;
+export const speech = {
+  say,
+  stop,
+  listen,
+  record,
+  setLesson,
+  canListen,
+  canRecord,
+  hasTTS,
+  VIS,
+  MIN_VOICED_MS,
+} as const;

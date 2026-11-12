@@ -41,6 +41,41 @@ export const VoiceTestBody = z.strictObject({
   text: z.string().trim().min(1).max(300).optional(),
 });
 
+/** A voice of the ElevenLabs account (cloned, premade or added from the Voice Library). */
+export const ElevenVoice = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.string(),
+  gender: z.string().nullable(),
+  accent: z.string().nullable(),
+  description: z.string().nullable(),
+});
+export type ElevenVoice = z.infer<typeof ElevenVoice>;
+
+/** A Voice Library voice; `sampleUrl` is its public sample, played through `librarySample`. */
+export const LibraryVoice = ElevenVoice.extend({
+  ownerId: z.string(),
+  language: z.string().nullable(),
+  sampleUrl: z.string().nullable(),
+});
+export type LibraryVoice = z.infer<typeof LibraryVoice>;
+
+export const LibraryQuery = z.object({
+  q: z.string().trim().max(80).optional(),
+  gender: z.enum(['male', 'female']).optional(),
+});
+
+export const LibraryAddBody = z.strictObject({
+  ownerId: z.string().regex(/^[A-Za-z0-9]{8,100}$/),
+  voiceId: VoiceId,
+  name: z.string().trim().min(1).max(100),
+});
+
+export const VoicePreviewBody = z.strictObject({
+  voiceId: VoiceId,
+  text: z.string().trim().min(1).max(300).optional(),
+});
+
 export const adminVoicesApi = {
   get: endpoint({
     method: 'GET',
@@ -74,6 +109,52 @@ export const adminVoicesApi = {
     access: 'staff',
     perm: 'settings.manage',
     body: VoiceTestBody,
+    res: 'binary',
+    rateLimit: 'RL_AI',
+  }),
+  // PROD (spec 05 "Lesson voices"): pickers of the episode editor (content.edit), with the stored key.
+  /** Every voice of the ElevenLabs account. */
+  account: endpoint({
+    method: 'GET',
+    path: '/admin-api/voices/eleven',
+    access: 'staff',
+    perm: 'content.edit',
+    res: z.object({ voices: z.array(ElevenVoice) }),
+  }),
+  /** Voice Library search (English voices). */
+  library: endpoint({
+    method: 'GET',
+    path: '/admin-api/voices/library',
+    access: 'staff',
+    perm: 'content.edit',
+    query: LibraryQuery,
+    res: z.object({ voices: z.array(LibraryVoice) }),
+  }),
+  /** Adds a Voice Library voice to the account, so lessons can use it. Audited. */
+  libraryAdd: endpoint({
+    method: 'POST',
+    path: '/admin-api/voices/library',
+    access: 'staff',
+    perm: 'content.edit',
+    body: LibraryAddBody,
+    res: z.object({ voice: ElevenVoice }),
+  }),
+  /** A Voice Library sample (audio/mpeg), fetched from ElevenLabs' public storage only. */
+  librarySample: endpoint({
+    method: 'GET',
+    path: '/admin-api/voices/library/sample',
+    access: 'staff',
+    perm: 'content.edit',
+    query: z.object({ url: z.string().url().max(600) }),
+    res: 'binary',
+  }),
+  /** Any account voice reading a short line (audio/mpeg). */
+  preview: endpoint({
+    method: 'POST',
+    path: '/admin-api/voices/preview',
+    access: 'staff',
+    perm: 'content.edit',
+    body: VoicePreviewBody,
     res: 'binary',
     rateLimit: 'RL_AI',
   }),
