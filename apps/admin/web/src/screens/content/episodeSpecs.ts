@@ -30,7 +30,8 @@ export const TABS: readonly (readonly [TabId, string])[] = [
   ['fim', 'Conclusão'],
 ];
 
-// PROD (spec 05 "Lesson voices"): the voice of what the learner taps to hear, on every tab that has it.
+// PROD (spec 05 "Lesson voices"): the voice of what the learner taps to hear, at the end of every tab that
+// has it (below the files, so loading the voice list never shifts them under a click).
 const voiceSpec = (k: string, render: (p: CustomProps) => VNode | null): Spec => ({
   t: 'custom',
   k: 'voices',
@@ -118,7 +119,6 @@ const MUSICA: Spec[] = [
 ];
 
 const OLHAR: Spec[] = [
-  VOICE_OLHAR,
   {
     t: 'media',
     k: 'lookMedia',
@@ -141,10 +141,10 @@ const OLHAR: Spec[] = [
       { t: 'text', k: 'pt', label: 'Tradução' },
     ],
   },
+  VOICE_OLHAR,
 ];
 
 const DIALOGO: Spec[] = [
-  VOICE_DIALOGO,
   { t: 'text', k: 'dialogTitle', label: 'Título do diálogo', opt: 'null' },
   { t: 'text', k: 'dialogSub', label: 'Subtítulo', opt: 'null' },
   {
@@ -169,10 +169,10 @@ const DIALOGO: Spec[] = [
       { t: 'text', k: 'hook', label: 'Destaque', opt: 'undef' },
     ],
   },
+  VOICE_DIALOGO,
 ];
 
 const MIC: Spec[] = [
-  VOICE_MIC,
   {
     t: 'list',
     k: 'mic',
@@ -187,6 +187,7 @@ const MIC: Spec[] = [
       { t: 'bool', k: 'blue', label: 'Retorno em azul (ajuste)', hint: 'Mostra o retorno demo como correção.' },
     ],
   },
+  VOICE_MIC,
 ];
 
 const ROW_SPECS: Spec[] = [
@@ -224,7 +225,6 @@ export const BLOCK_SPECS: Spec[] = [
 ];
 
 const LICAO: Spec[] = [
-  VOICE_LICAO,
   {
     t: 'list',
     k: 'lesson',
@@ -268,10 +268,10 @@ const LICAO: Spec[] = [
       { t: 'strings', k: 'words', label: 'Palavras para treinar', wide: true },
     ],
   },
+  VOICE_LICAO,
 ];
 
 const AWAY: Spec[] = [
-  VOICE_AWAY,
   {
     t: 'list',
     k: 'awayExp',
@@ -286,6 +286,7 @@ const AWAY: Spec[] = [
     ],
   },
   { t: 'strings', k: 'awayWords', label: 'Palavras-chave', wide: true },
+  VOICE_AWAY,
 ];
 
 const ITEM_SPECS: Spec[] = [
@@ -296,7 +297,6 @@ const ITEM_SPECS: Spec[] = [
 ];
 
 const EXERCICIOS: Spec[] = [
-  VOICE_EXERCICIOS,
   {
     t: 'list',
     k: 'ex',
@@ -339,6 +339,7 @@ const EXERCICIOS: Spec[] = [
       },
     ],
   },
+  VOICE_EXERCICIOS,
 ];
 
 const FIM: Spec[] = [
