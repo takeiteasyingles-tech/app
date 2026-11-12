@@ -1,8 +1,9 @@
 // Form specs of the episode editor, one list per tab. The document edited is the episode row plus its
 // child rows: `mic` (Take the Mic phrases) and `ex` (Take Action exercises, each with its `items`).
-import type { Spec } from '../../ui/form';
+import type { VNode } from 'preact';
+import type { CustomProps, Spec } from '../../ui/form';
 import { EpisodeExtraPicker } from './EpisodeReferences';
-import { EpisodeVoicesField } from './EpisodeVoices';
+import { CastVoicesField, EpisodeVoicesField, narrationVoiceField } from './EpisodeVoices';
 
 export type TabId =
   | 'geral'
@@ -28,6 +29,21 @@ export const TABS: readonly (readonly [TabId, string])[] = [
   ['exercicios', '8 · Take Action'],
   ['fim', 'Conclusão'],
 ];
+
+// PROD (spec 05 "Lesson voices"): the voice of what the learner taps to hear, on every tab that has it.
+const voiceSpec = (k: string, render: (p: CustomProps) => VNode | null): Spec => ({
+  t: 'custom',
+  k: 'voices',
+  label: k,
+  wide: true,
+  render,
+});
+const VOICE_OLHAR = voiceSpec('Voz do vocabulário', narrationVoiceField('Take a Look'));
+const VOICE_DIALOGO = voiceSpec('Vozes dos personagens', CastVoicesField);
+const VOICE_MIC = voiceSpec('Voz das frases', narrationVoiceField('Take the Mic'));
+const VOICE_LICAO = voiceSpec('Voz das palavras', narrationVoiceField('Take a Lesson'));
+const VOICE_AWAY = voiceSpec('Voz do Take Away', narrationVoiceField('Take Away'));
+const VOICE_EXERCICIOS = voiceSpec('Voz dos exercícios', narrationVoiceField('Take Action'));
 
 const GERAL: Spec[] = [
   { t: 'text', k: 'title', label: 'Título', max: 200 },
@@ -102,6 +118,7 @@ const MUSICA: Spec[] = [
 ];
 
 const OLHAR: Spec[] = [
+  VOICE_OLHAR,
   {
     t: 'media',
     k: 'lookMedia',
@@ -127,6 +144,7 @@ const OLHAR: Spec[] = [
 ];
 
 const DIALOGO: Spec[] = [
+  VOICE_DIALOGO,
   { t: 'text', k: 'dialogTitle', label: 'Título do diálogo', opt: 'null' },
   { t: 'text', k: 'dialogSub', label: 'Subtítulo', opt: 'null' },
   {
@@ -154,6 +172,7 @@ const DIALOGO: Spec[] = [
 ];
 
 const MIC: Spec[] = [
+  VOICE_MIC,
   {
     t: 'list',
     k: 'mic',
@@ -205,6 +224,7 @@ export const BLOCK_SPECS: Spec[] = [
 ];
 
 const LICAO: Spec[] = [
+  VOICE_LICAO,
   {
     t: 'list',
     k: 'lesson',
@@ -251,6 +271,7 @@ const LICAO: Spec[] = [
 ];
 
 const AWAY: Spec[] = [
+  VOICE_AWAY,
   {
     t: 'list',
     k: 'awayExp',
@@ -275,6 +296,7 @@ const ITEM_SPECS: Spec[] = [
 ];
 
 const EXERCICIOS: Spec[] = [
+  VOICE_EXERCICIOS,
   {
     t: 'list',
     k: 'ex',

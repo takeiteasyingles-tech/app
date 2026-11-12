@@ -1113,12 +1113,8 @@ for (const vp of VPS) {
       await sw('Confete e animações').click();
       await sw('Começar em 0,75×').click();
       await sw('Lembrete de episódio').click();
-      // The character voices start on (spec 05 "Character voices by default"); turning them off works
-      // without the AI, turning them back on needs it.
-      await expect(sw('Voz dos personagens')).toHaveAttribute('aria-checked', 'true');
-      await sw('Voz dos personagens').click();
+      // This learner (the prototype fixture) has the character voices off: turning them on needs the AI.
       await expect(sw('Voz dos personagens')).toHaveAttribute('aria-checked', 'false');
-      await page.waitForTimeout(800);
       let hdPatch = false;
       page.on('request', (r) => {
         if (r.url().endsWith('/api/me/settings') && /"hd"/.test(r.postData() || '')) hdPatch = true;

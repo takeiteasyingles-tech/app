@@ -79,7 +79,7 @@ export function freshUser(onbStep = 1): Any {
     settings: {
       ts: 1,
       sound: true,
-      hd: false,
+      hd: true, // PROD (spec 05 "Character voices by default")
       trans: true,
       slow: false,
       remind: true,

@@ -290,6 +290,15 @@ test('Mic uses the configured assistant voice with profile HD switched off', asy
     await route.fulfill({ status: 200, contentType: 'audio/wav', body: audio });
   });
   await signup(page);
+  // The character voices start on (spec 05 "Character voices by default"): switch them off first, so
+  // this checks that the Mic still asks for the assistant's voice.
+  const origin = new URL(page.url()).origin;
+  const off = await page.request.patch('/api/me/settings', {
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', Origin: origin },
+    data: JSON.stringify({ hd: false }),
+  });
+  expect(off.status()).toBe(200);
+  await page.reload();
   const current = await page.request.get('/api/me/state');
   expect((await current.json()).settings.hd).toBe(false);
   await openLobby(page);

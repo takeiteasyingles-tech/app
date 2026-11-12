@@ -1,11 +1,19 @@
-// Episode editor → Geral → "Vozes desta lição" (spec 05 "Lesson voices"): the ElevenLabs voice the
-// lesson's audio is read with. Narração: what no character says (vocabulary, Mic phrases, Take Away,
-// exercises). Then one voice per character of the episode (Personagens), used for their dialogue lines.
-// Empty = the course voice (Configurações → Vozes). Reaches students at the next publish.
+// Episode editor → "Vozes desta lição" (spec 05 "Lesson voices"): the ElevenLabs voice the lesson's audio
+// is read with, on every tab where the learner taps to hear something. Narração: what no character says
+// (Take a Look vocabulary, Take the Mic phrases, Take a Lesson words, Take Away, Take Action audio): one
+// voice for the whole lesson, shown on each of those tabs. Personagens: one voice per character of the
+// episode, for their Take It In lines. Geral shows both. Empty = the course voice (Configurações → Vozes).
+// Reaches students at the next publish.
+import { ELEVEN_NARRATOR_KEY } from '@tie/shared/constants';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
+import { adminVoicesApi } from '@tie/shared/contracts/voices';
+import type { VNode } from 'preact';
+import { useState } from 'preact/hooks';
+import { call, errorMessage } from '../../api';
 import { can } from '../../session';
 import type { CustomProps } from '../../ui/form';
-import { Field } from '../../ui/kit';
+import { Button, Field } from '../../ui/kit';
+import { toast } from '../../ui/toast';
 import { VoicePick } from '../../ui/voices';
 
 /** Drops empty entries, so an untouched lesson stays `{}`. */
@@ -17,14 +25,71 @@ function clean(v: EpisodeVoices): EpisodeVoices {
   return out;
 }
 
-export function EpisodeVoicesField({ value, parent, set, id, err }: CustomProps) {
+/**
+ * "Usar em todas as lições": makes the chosen voice the course voice (Configurações → Vozes, settings.manage),
+ * live for every lesson that does not set its own, with no publish. `who` = null for the narration, else
+ * a character name, matched to its assistant by key or name. Hidden without settings.manage.
+ */
+function UseForAll({ voiceId, who }: { voiceId: string | null; who: string | null }) {
+  const [busy, setBusy] = useState(false);
+  if (!can('settings.manage')) return null;
+  const apply = async () => {
+    if (!voiceId) return;
+    setBusy(true);
+    try {
+      let key: string = ELEVEN_NARRATOR_KEY;
+      if (who) {
+        const { settings } = await call(adminVoicesApi.get);
+        const w = who.toLowerCase();
+        const a = settings.assistants.find((x) => x.key.toLowerCase() === w || x.name.toLowerCase() === w);
+        if (!a) {
+          toast(`${who} não é um personagem com voz no curso (Configurações → Vozes).`, 'err');
+          return;
+        }
+        key = a.key;
+      }
+      await call(adminVoicesApi.put, { body: { voices: { [key]: voiceId } } });
+      toast(
+        who
+          ? `Esta é a voz de ${who} em todas as lições agora (as que não escolhem outra).`
+          : 'Esta é a narração de todas as lições agora (as que não escolhem outra). Já vale para os alunos.',
+      );
+    } catch (e) {
+      toast(errorMessage(e), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div>
+      <Button
+        label="Usar em todas as lições"
+        kind="light"
+        busy={busy}
+        disabled={!voiceId || busy}
+        title={
+          voiceId ? 'Vira a voz do curso: vale na hora, sem publicar, em toda lição sem voz própria' : 'Escolha uma voz'
+        }
+        onClick={() => void apply()}
+      />
+    </div>
+  );
+}
+
+const NARRATION_USE =
+  'Vocabulário do Take a Look, frases do Take the Mic, palavras do Take a Lesson, Take Away e Take Action';
+
+type Show = 'all' | 'narration' | 'cast';
+
+function LessonVoices({ value, parent, set, id, err, show, step }: CustomProps & { show: Show; step?: string }) {
+  if (!can('content.edit')) return null;
   const v = (value && typeof value === 'object' ? value : {}) as EpisodeVoices;
   const castNames = Array.isArray(parent.castNames) ? (parent.castNames as string[]).filter(Boolean) : [];
   // A voice kept for someone no longer in the cast list still shows, so it can be removed.
   const names = [...castNames, ...Object.keys(v.cast ?? {}).filter((n) => !castNames.includes(n))];
   const dialog = Array.isArray(parent.dialog) ? (parent.dialog as { who?: string; en?: string }[]) : [];
   const visual = Array.isArray(parent.visual) ? (parent.visual as { en?: string }[]) : [];
-  const narrationLine = visual
+  const words = visual
     .map((w) => w.en)
     .filter(Boolean)
     .slice(0, 6)
@@ -32,44 +97,72 @@ export function EpisodeVoicesField({ value, parent, set, id, err }: CustomProps)
   const lineOf = (name: string) => dialog.find((d) => d.who?.toLowerCase() === name.toLowerCase() && d.en)?.en;
   const setCast = (name: string, voiceId: string | null) =>
     set(clean({ ...v, cast: { ...(v.cast ?? {}), [name]: voiceId ?? '' } }));
-  if (!can('content.edit')) return null;
+  const label =
+    show === 'cast'
+      ? 'Vozes dos personagens nesta lição (ElevenLabs)'
+      : show === 'narration'
+        ? `Voz do áudio ${step ? `do ${step}` : 'desta etapa'} (ElevenLabs)`
+        : 'Vozes desta lição (ElevenLabs)';
+  const hint =
+    show === 'narration'
+      ? `Quando o aluno toca para ouvir nesta etapa, quem lê é a narração da lição. É a mesma voz em: ${NARRATION_USE}. Trocar aqui troca em todas. Sem escolha, vale a voz do curso (Configurações → Vozes). Muda para os alunos depois de publicar.`
+      : show === 'cast'
+        ? 'Cada fala do Take It In sai com a voz do personagem escolhida aqui: uma voz clonada da conta ou uma da biblioteca da ElevenLabs. Sem escolha, vale a voz do personagem no curso (Configurações → Vozes). Muda para os alunos depois de publicar.'
+        : 'Cada áudio que o aluno toca nesta lição sai com a voz escolhida aqui: uma voz clonada da conta ou uma da biblioteca da ElevenLabs. Sem escolha, vale a voz do curso (Configurações → Vozes). Muda para os alunos depois de publicar.';
   return (
-    <Field
-      id={`${id}-narr`}
-      label="Vozes desta lição (ElevenLabs)"
-      wide
-      err={err}
-      hint="Cada áudio que o aluno toca nesta lição sai com a voz escolhida aqui: uma voz clonada da conta ou uma da biblioteca da ElevenLabs. Sem escolha, vale a voz do curso (Configurações → Vozes). Muda para os alunos depois de publicar."
-    >
+    <Field id={`${id}-v0`} label={label} wide err={err} hint={hint}>
       <div class="stack" style={{ '--gap': '10px' }}>
-        <div class="stack" style={{ '--gap': '4px' }}>
-          <b class="sm">Narração</b>
-          <span class="xs">Vocabulário visual, frases do Take the Mic, Take Away e áudios dos exercícios.</span>
-          <VoicePick
-            id={`${id}-narr`}
-            value={v.narrator ?? null}
-            onValue={(x) => set(clean({ ...v, narrator: x }))}
-            emptyLabel="Voz do curso"
-            previewText={narrationLine ? `${narrationLine}.` : undefined}
-          />
-        </div>
-        {names.map((name, i) => (
-          <div key={name} class="stack" style={{ '--gap': '4px' }}>
-            <b class="sm">
-              {name}
-              {castNames.includes(name) ? null : <span class="xs"> · fora da lista de personagens</span>}
-            </b>
+        {show !== 'cast' ? (
+          <div class="stack" style={{ '--gap': '4px' }}>
+            <b class="sm">Narração</b>
+            {show === 'all' ? <span class="xs">{NARRATION_USE}.</span> : null}
             <VoicePick
-              id={`${id}-c${i}`}
-              value={v.cast?.[name] ?? null}
-              onValue={(x) => setCast(name, x)}
-              emptyLabel={`Voz de ${name} no curso`}
-              previewText={lineOf(name)}
+              id={`${id}-v0`}
+              value={v.narrator ?? null}
+              onValue={(x) => set(clean({ ...v, narrator: x }))}
+              emptyLabel="Voz do curso"
+              previewText={words ? `${words}.` : undefined}
             />
+            <UseForAll voiceId={v.narrator ?? null} who={null} />
           </div>
-        ))}
-        {names.length ? null : <span class="xs">Adicione os personagens acima para escolher a voz de cada um.</span>}
+        ) : null}
+        {show !== 'narration'
+          ? names.map((name, i) => (
+              <div key={name} class="stack" style={{ '--gap': '4px' }}>
+                <b class="sm">
+                  {name}
+                  {castNames.includes(name) ? null : <span class="xs"> · fora da lista de personagens</span>}
+                </b>
+                <VoicePick
+                  id={`${id}-v${i + 1}`}
+                  value={v.cast?.[name] ?? null}
+                  onValue={(x) => setCast(name, x)}
+                  emptyLabel={`Voz de ${name} no curso`}
+                  previewText={lineOf(name)}
+                />
+                <UseForAll voiceId={v.cast?.[name] ?? null} who={name} />
+              </div>
+            ))
+          : null}
+        {show !== 'narration' && !names.length ? (
+          <span class="xs">Adicione os personagens na aba Geral para escolher a voz de cada um.</span>
+        ) : null}
       </div>
     </Field>
   );
 }
+
+/** Geral: the narration and every character. */
+export function EpisodeVoicesField(p: CustomProps): VNode | null {
+  return <LessonVoices {...p} show="all" />;
+}
+
+/** Take It In: one voice per character. */
+export function CastVoicesField(p: CustomProps): VNode | null {
+  return <LessonVoices {...p} show="cast" />;
+}
+
+/** A tab whose taps are read by the narration (Take a Look, Take the Mic, Take a Lesson, Take Away, Take Action). */
+export const narrationVoiceField =
+  (step: string) =>
+  (p: CustomProps): VNode | null => <LessonVoices {...p} show="narration" step={step} />;
