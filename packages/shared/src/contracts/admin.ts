@@ -1065,6 +1065,22 @@ export const adminContentApi = {
     body: PublishBody,
     res: z.object({ release: Release }),
   }),
+  /**
+   * PROD (spec 05 "Saving publishes"): publishes the draft if it changed, after a save made of several
+   * requests sent with X-Publish: defer (the episode editor). Single-request saves publish by themselves.
+   */
+  autoPublish: endpoint({
+    method: 'POST',
+    path: '/admin-api/content/publish/auto',
+    access: 'staff',
+    perm: 'content.edit',
+    body: z.strictObject({ what: z.string().trim().min(1).max(200) }),
+    res: z.object({
+      status: z.enum(['published', 'unchanged', 'failed']),
+      version: z.string().nullable(),
+      message: z.string().nullable(),
+    }),
+  }),
 } as const;
 
 export const adminAiApi = {

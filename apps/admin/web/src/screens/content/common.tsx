@@ -163,8 +163,8 @@ export function PubPill({ status }: { status: 'draft' | 'published' }) {
 export function DraftNote() {
   return (
     <div class="ad-note bl">
-      <Icon name="rocket" size={18} /> Edições ficam no rascunho. Os alunos só veem depois de uma publicação
-      (Publicações).
+      <Icon name="rocket" size={18} /> Ao salvar, a mudança já vai para o app dos alunos. Tudo fica registrado na
+      Auditoria.
     </div>
   );
 }

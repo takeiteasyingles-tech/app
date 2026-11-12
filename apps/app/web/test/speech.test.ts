@@ -103,12 +103,12 @@ describe('assistant speech', () => {
 
   it('inside a lesson asks for its voice: the narration, or the character by name (spec 05 "Lesson voices")', async () => {
     const speech = await import('../src/core/speech');
-    speech.setLesson(7);
+    speech.setLesson(7, 3);
     try {
       const word = speech.say('Kitchen.', { hd: true });
       await vi.runAllTimersAsync();
       await word;
-      expect(f.tts).toHaveBeenLastCalledWith('Kitchen.', 'female', 'margaret', { ep: 7, role: 'narrator' });
+      expect(f.tts).toHaveBeenLastCalledWith('Kitchen.', 'female', 'margaret', { ep: 7, role: 'narrator@3' });
       const line = speech.say('Hello! I’m Margaret.', { who: 'Margaret', hd: true });
       await vi.runAllTimersAsync();
       await line;

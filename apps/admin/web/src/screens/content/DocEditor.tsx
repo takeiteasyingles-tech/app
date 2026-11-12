@@ -95,7 +95,7 @@ export function DocEditor<D extends Record<string, unknown>>(p: DocEditorProps<D
       setBase(next);
       setDraft(next);
       setSavedAt(Date.now());
-      toast(`${p.noun} salvo no rascunho.`);
+      toast(`${p.noun} salvo. Já está no app.`);
     } catch (e) {
       if (e instanceof PartialSave) {
         setBase(e.base as D);

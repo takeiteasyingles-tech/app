@@ -2,14 +2,7 @@
 // Model ids live in app_settings (SETTINGS.model*) so an admin can swap them without a deploy;
 // DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
 // them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
-import {
-  DEFAULT_MODELS,
-  ELEVEN_NARRATOR_KEY,
-  ELEVEN_VOICE_ID_RE,
-  FLAGS,
-  SETTINGS,
-  TTS_NARRATOR_ROLE,
-} from '@tie/shared';
+import { DEFAULT_MODELS, ELEVEN_NARRATOR_KEY, ELEVEN_VOICE_ID_RE, FLAGS, parseRole, SETTINGS } from '@tie/shared';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
 import {
   all,
@@ -231,7 +224,7 @@ export async function elevenForRole(env: Env, db: D1Database, pick: VoicePick): 
   if (!pick.assistantKey && !pick.role && !pick.lessonVoice) return null;
   const cfg = await readElevenConfig(db, env);
   if (!cfg.apiKey) return null;
-  const narration = pick.role === TTS_NARRATOR_ROLE ? cfg.voices[ELEVEN_NARRATOR_KEY] : undefined;
+  const narration = pick.role && parseRole(pick.role).narrator ? cfg.voices[ELEVEN_NARRATOR_KEY] : undefined;
   const voiceId = pick.lessonVoice || narration || (pick.assistantKey ? cfg.voices[pick.assistantKey] : undefined);
   return voiceId ? { apiKey: cfg.apiKey, model: cfg.model, voiceId } : null;
 }
@@ -266,7 +259,10 @@ export async function lessonVoiceId(
   }
   if (!voices) return null;
   const ok = (id: unknown): string | null => (typeof id === 'string' && ELEVEN_VOICE_ID_RE.test(id) ? id : null);
-  if (role === TTS_NARRATOR_ROLE) return ok(voices.narrator);
+  const parsed = parseRole(role);
+  // A step of the lesson with its own voice, else the lesson narration (spec 05 "Lesson voices").
+  if (parsed.narrator)
+    return ok(parsed.step != null ? voices.steps?.[String(parsed.step)] : undefined) ?? ok(voices.narrator);
   const r = role.toLowerCase();
   const hit = Object.entries(voices.cast ?? {}).find(([name]) => name.toLowerCase() === r);
   return hit ? ok(hit[1]) : null;

@@ -20,6 +20,8 @@ import { VoicePick } from '../../ui/voices';
 function clean(v: EpisodeVoices): EpisodeVoices {
   const out: EpisodeVoices = {};
   if (v.narrator) out.narrator = v.narrator;
+  const steps = Object.fromEntries(Object.entries(v.steps ?? {}).filter(([, id]) => !!id));
+  if (Object.keys(steps).length) out.steps = steps;
   const cast = Object.fromEntries(Object.entries(v.cast ?? {}).filter(([, id]) => !!id));
   if (Object.keys(cast).length) out.cast = cast;
   return out;
@@ -67,9 +69,7 @@ function UseForAll({ voiceId, who }: { voiceId: string | null; who: string | nul
         kind="light"
         busy={busy}
         disabled={!voiceId || busy}
-        title={
-          voiceId ? 'Vira a voz do curso: vale na hora, sem publicar, em toda lição sem voz própria' : 'Escolha uma voz'
-        }
+        title={voiceId ? 'Vira a voz do curso: vale na hora em toda lição sem voz própria' : 'Escolha uma voz'}
         onClick={() => void apply()}
       />
     </div>
@@ -81,7 +81,16 @@ const NARRATION_USE =
 
 type Show = 'all' | 'narration' | 'cast';
 
-function LessonVoices({ value, parent, set, id, err, show, step }: CustomProps & { show: Show; step?: string }) {
+function LessonVoices({
+  value,
+  parent,
+  set,
+  id,
+  err,
+  show,
+  step,
+  stepN,
+}: CustomProps & { show: Show; step?: string; stepN?: number }) {
   if (!can('content.edit')) return null;
   const v = (value && typeof value === 'object' ? value : {}) as EpisodeVoices;
   const castNames = Array.isArray(parent.castNames) ? (parent.castNames as string[]).filter(Boolean) : [];
@@ -101,29 +110,34 @@ function LessonVoices({ value, parent, set, id, err, show, step }: CustomProps &
     show === 'cast'
       ? 'Vozes dos personagens nesta lição (ElevenLabs)'
       : show === 'narration'
-        ? `Voz do áudio ${step ? `do ${step}` : 'desta etapa'} (ElevenLabs)`
+        ? `Voz do áudio do ${step ?? 'etapa'} (ElevenLabs)`
         : 'Vozes desta lição (ElevenLabs)';
   const hint =
     show === 'narration'
-      ? `Quando o aluno toca para ouvir nesta etapa, quem lê é a narração da lição. É a mesma voz em: ${NARRATION_USE}. Trocar aqui troca em todas. Sem escolha, vale a voz do curso (Configurações → Vozes). Muda para os alunos depois de publicar.`
+      ? 'Só nesta etapa desta lição: quando o aluno toca para ouvir aqui, quem lê é esta voz. As outras etapas e lições não mudam. Sem escolha, vale a Narração da lição (aba Geral) e, sem ela, a voz do curso (Configurações → Vozes). Vale para os alunos assim que salvar.'
       : show === 'cast'
-        ? 'Cada fala do Take It In sai com a voz do personagem escolhida aqui: uma voz clonada da conta ou uma da biblioteca da ElevenLabs. Sem escolha, vale a voz do personagem no curso (Configurações → Vozes). Muda para os alunos depois de publicar.'
-        : 'Cada áudio que o aluno toca nesta lição sai com a voz escolhida aqui: uma voz clonada da conta ou uma da biblioteca da ElevenLabs. Sem escolha, vale a voz do curso (Configurações → Vozes). Muda para os alunos depois de publicar.';
+        ? 'Cada fala do Take It In sai com a voz do personagem escolhida aqui: uma voz clonada da conta ou uma da biblioteca da ElevenLabs. Sem escolha, vale a voz do personagem no curso (Configurações → Vozes). Vale para os alunos assim que salvar.'
+        : 'A Narração daqui vale nas etapas desta lição que não escolheram uma voz própria (cada aba pode ter a sua). Os personagens falam com a voz escolhida para eles. Sem escolha, vale a voz do curso (Configurações → Vozes). Vale para os alunos assim que salvar.';
+  // One step's own narration (steps[n]) on its tab; the lesson default (narrator) on Geral.
+  const own = show === 'narration' && stepN != null;
+  const narration = own ? (v.steps?.[String(stepN)] ?? null) : (v.narrator ?? null);
+  const setNarration = (x: string | null) =>
+    set(clean(own ? { ...v, steps: { ...(v.steps ?? {}), [String(stepN)]: x ?? '' } } : { ...v, narrator: x }));
   return (
     <Field id={`${id}-v0`} label={label} wide err={err} hint={hint}>
       <div class="stack" style={{ '--gap': '10px' }}>
         {show !== 'cast' ? (
           <div class="stack" style={{ '--gap': '4px' }}>
-            <b class="sm">Narração</b>
-            {show === 'all' ? <span class="xs">{NARRATION_USE}.</span> : null}
+            <b class="sm">{own ? `Narração do ${step}` : 'Narração da lição (padrão)'}</b>
+            {show === 'all' ? <span class="xs">{NARRATION_USE}, nas etapas sem voz própria.</span> : null}
             <VoicePick
               id={`${id}-v0`}
-              value={v.narrator ?? null}
-              onValue={(x) => set(clean({ ...v, narrator: x }))}
-              emptyLabel="Voz do curso"
+              value={narration}
+              onValue={setNarration}
+              emptyLabel={own && v.narrator ? 'Narração da lição (aba Geral)' : 'Voz do curso'}
               previewText={words ? `${words}.` : undefined}
             />
-            <UseForAll voiceId={v.narrator ?? null} who={null} />
+            <UseForAll voiceId={narration} who={null} />
           </div>
         ) : null}
         {show !== 'narration'
@@ -164,5 +178,5 @@ export function CastVoicesField(p: CustomProps): VNode | null {
 
 /** A tab whose taps are read by the narration (Take a Look, Take the Mic, Take a Lesson, Take Away, Take Action). */
 export const narrationVoiceField =
-  (step: string) =>
-  (p: CustomProps): VNode | null => <LessonVoices {...p} show="narration" step={step} />;
+  (step: string, stepN: number) =>
+  (p: CustomProps): VNode | null => <LessonVoices {...p} show="narration" step={step} stepN={stepN} />;

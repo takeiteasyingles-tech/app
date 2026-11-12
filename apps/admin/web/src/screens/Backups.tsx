@@ -244,7 +244,7 @@ function RemoveNewSwitch({ opt }: { opt: { removeNew: boolean } }) {
       <label for="bk-remove-new" class="ad-flag-t">
         <span class="ad-bool-l">Remover o que foi criado depois do backup</span>
         <span class="sm">
-          Episódios, exercícios e outros itens novos saem do rascunho. Itens que já têm progresso ou respostas de alunos
+          Episódios, exercícios e outros itens novos são removidos. Itens que já têm progresso ou respostas de alunos
           ficam.
         </span>
       </label>
@@ -255,7 +255,7 @@ function RemoveNewSwitch({ opt }: { opt: { removeNew: boolean } }) {
 function RestoreDone({ r, onClose }: { r: RestoreResult; onClose: () => void }) {
   return (
     <div class="card gr stack" style={{ '--gap': '10px' }} role="status">
-      <div class="lbl gr">Conteúdo restaurado no rascunho</div>
+      <div class="lbl gr">Conteúdo restaurado</div>
       <Facts
         rows={[
           ['Itens restaurados', `${fmtInt(r.upserted)} em ${plural(r.tables, 'tabela', 'tabelas')}`],
@@ -268,8 +268,8 @@ function RestoreDone({ r, onClose }: { r: RestoreResult; onClose: () => void }) 
       />
       <div class="row wrapx between" style={{ '--gap': '8px' }}>
         <span class="xs">
-          Os alunos ainda veem a versão publicada. Confira e publique em <a href="#/publicacoes">Publicações</a>. Para
-          desfazer, restaure o backup "Antes de restaurar" que acabou de ser criado.
+          O conteúdo restaurado já está no app dos alunos. Para desfazer, restaure o backup "Antes de restaurar" que
+          acabou de ser criado.
         </span>
         <Button label="Ok" kind="light" onClick={onClose} />
       </div>
@@ -298,8 +298,8 @@ function BackupList({
         <div class="stack" style={{ '--gap': '10px' }}>
           <p class="sm">
             Temporadas, episódios, exercícios, e-books, testes, Extras e o resto do curso voltam a ser como neste
-            backup, no rascunho. Alunos, progresso e pontos não mudam. Antes, o painel guarda um backup do conteúdo
-            atual.
+            backup, e vão direto para o app. Alunos, progresso e pontos não mudam. Antes, o painel guarda um backup do
+            conteúdo atual.
           </p>
           <RemoveNewSwitch opt={opt} />
         </div>
@@ -313,7 +313,7 @@ function BackupList({
       },
     }).then((ok) => {
       if (ok && result) {
-        toast('Conteúdo restaurado no rascunho.');
+        toast('Conteúdo restaurado. Já está no app.');
         onRestored(result);
         onChanged();
       }

@@ -290,6 +290,16 @@ export const ELEVEN_VOICE_ID_RE = /^[A-Za-z0-9]{8,40}$/;
 export const ELEVEN_NARRATOR_KEY = 'narrator';
 /** The /api/tts role of the narration (any other role is a character's name). */
 export const TTS_NARRATOR_ROLE = 'narrator';
+/** The narration of one step ("narrator@5"), so each step of a lesson can read with its own voice. */
+export const narratorRole = (step?: number | null): string =>
+  step ? TTS_NARRATOR_ROLE + '@' + String(step) : TTS_NARRATOR_ROLE;
+/** A /api/tts role: the narration (of a step, when it names one) or a character. */
+export function parseRole(role: string): { narrator: boolean; step: number | null; who: string } {
+  const [base = '', s] = role.split('@');
+  const narrator = base === TTS_NARRATOR_ROLE;
+  const step = narrator && s && /^[0-9]{1,2}$/.test(s) ? Number(s) : null;
+  return { narrator, step, who: narrator ? '' : role };
+}
 /** Voice sample for Instant Voice Clone: an audio file up to this size. */
 export const ELEVEN_SAMPLE_MAX_BYTES = 10 * 1024 * 1024;
 export const ELEVEN_SAMPLE_MIME = [

@@ -242,6 +242,21 @@ export async function publishRelease(c: Ctx, notes: string | undefined, writer: 
     throw err;
   }
   const previous = await currentVersion(db);
+  return commitRelease(c, compiled, previous, writer, body.notes, { files: Object.keys(compiled.files).length }, now);
+}
+
+/** Uploads a compiled set and points learners at it, audited in the same batch as the pointer move. */
+async function commitRelease(
+  c: Ctx,
+  compiled: CompiledContent,
+  previous: string | null,
+  writer: Writer,
+  notes: string | undefined,
+  extra: Record<string, unknown>,
+  now: number,
+): Promise<Release> {
+  const db = c.env.DB;
+  const body = { notes };
   await uploadRelease(c.env.MEDIA, compiled);
   // Media the snapshot uses, so a file stays undeletable while this release can be served.
   await writeReleaseIndex(c.env.MEDIA, compiled.version, compiled.files);
@@ -274,7 +289,7 @@ export async function publishRelease(c: Ctx, notes: string | undefined, writer: 
         targetId: ver,
         diff: {
           current: { from: previous, to: ver },
-          files: Object.keys(compiled.files).length,
+          ...extra,
           notes: body.notes ?? null,
         },
       },
@@ -284,6 +299,80 @@ export async function publishRelease(c: Ctx, notes: string | undefined, writer: 
   const row = await one<ReleaseDb>(db, 'SELECT * FROM content_releases WHERE version = ?', ver);
   return releaseOf(row as ReleaseDb);
 }
+
+export type AutoPublish =
+  | { status: 'published'; version: string; changed: string[] }
+  | { status: 'unchanged'; version: string | null }
+  | { status: 'failed'; message: string };
+
+/** Content saves that publish at once (staff routes; the MCP keeps its explicit publish_release tool). */
+export function publishesContent(method: string, path: string): boolean {
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
+  if (path === C.publish.path || path === C.preview.path || path === C.autoPublish.path) return false;
+  return (
+    path.startsWith('/admin-api/content/') ||
+    path === '/admin-api/gamification' ||
+    path.startsWith('/admin-api/assistants/') ||
+    /^\/admin-api\/backups\/[^/]+\/restore$/.test(path)
+  );
+}
+
+/**
+ * PROD (spec 05 "Saving publishes"): after a content save, compiles the draft and, when the set
+ * changed, publishes it like Publicações did. Audited as `content.publish` with `auto: true`, the save
+ * that caused it (method + path) and the files that changed; a draft that does not compile records
+ * `content.publish_failed` with its problems and keeps the version learners have.
+ */
+export async function autoPublish(
+  c: Ctx,
+  writer: Writer,
+  trigger: { method: string; path: string; what?: string },
+): Promise<AutoPublish> {
+  const db = c.env.DB;
+  const now = Date.now();
+  let compiled: CompiledContent;
+  try {
+    compiled = await compileNow(db, now);
+  } catch (err) {
+    if (!(err instanceof ContentCompileError)) throw err;
+    const issues = err.issues.slice(0, 20).map((i) => `${i.file}${i.path ? `#${i.path}` : ''}: ${i.message}`);
+    await batchRun(db, [
+      await writer.audit(
+        {
+          action: 'content.publish_failed',
+          targetType: 'content_release',
+          targetId: 'auto',
+          diff: { auto: true, trigger, issues },
+        },
+        now,
+      ),
+    ]);
+    return { status: 'failed', message: err.issues[0]?.message ?? 'O conteúdo tem erros.' };
+  }
+  const previous = await currentVersion(db);
+  if (previous === compiled.version) return { status: 'unchanged', version: previous };
+  const changed = await changedFiles(c, compiled);
+  await commitRelease(
+    c,
+    compiled,
+    previous,
+    writer,
+    'Publicação automática ao salvar',
+    { auto: true, trigger, changed: changed.slice(0, 100), files: Object.keys(compiled.files).length },
+    now,
+  );
+  return { status: 'published', version: compiled.version, changed };
+}
+
+route(routes, C.autoPublish, async (c) => {
+  const body = await bodyOf(c, C.autoPublish.body);
+  const r = await autoPublish(c, staffWriter(c), { method: 'POST', path: c.req.path, what: body.what });
+  return c.json({
+    status: r.status,
+    version: r.status === 'failed' ? null : r.version,
+    message: r.status === 'failed' ? r.message : null,
+  });
+});
 
 /** Every release (newest first) and the one learners get (staff route and MCP list_releases). */
 export async function listReleases(db: D1Database): Promise<{ items: Release[]; current: string | null }> {

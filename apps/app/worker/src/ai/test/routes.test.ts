@@ -1569,7 +1569,11 @@ describe('POST /api/tts', () => {
         ELEVENLABS_API_KEY: 'test-key',
         ELEVENLABS_VOICES: JSON.stringify({ margaret: 'HyqisByK1ozCXL4PglY3', narrator: 'CourseNarrator001' }),
       });
-      const lesson = JSON.stringify({ narrator: 'LessonNarrator01', cast: { Zach: 'LessonZachVoice1' } });
+      const lesson = JSON.stringify({
+        narrator: 'LessonNarrator01',
+        steps: { '5': 'MicStepVoice0001' },
+        cast: { Zach: 'LessonZachVoice1' },
+      });
       await baseEnv.DB.prepare(
         "INSERT OR REPLACE INTO episodes(num, title, status, voices, updated_at) VALUES(1, 'Ep 1', 'published', ?1, 1), (3, 'Ep 3', 'draft', ?1, 1)",
       )
@@ -1578,6 +1582,11 @@ describe('POST /api/tts', () => {
       // Lesson 1 (published): its narration, and Zach by name in any case.
       expect((await tts(env, u1, { text: 'Kitchen.', voice: 'margaret', ep: 1, role: 'narrator' })).status).toBe(200);
       expect((await tts(env, u1, { text: 'Mom! Say hello!', voice: 'zach', ep: 1, role: 'zach' })).status).toBe(200);
+      // A step with its own voice (Take the Mic) reads with it; a step without one, with the lesson's.
+      expect((await tts(env, u1, { text: 'Bye! See you.', voice: 'margaret', ep: 1, role: 'narrator@5' })).status).toBe(
+        200,
+      );
+      expect((await tts(env, u1, { text: 'Table.', voice: 'margaret', ep: 1, role: 'narrator@3' })).status).toBe(200);
       // A character the lesson leaves out keeps the course voice of its assistant.
       expect((await tts(env, u1, { text: 'Good morning.', voice: 'margaret', ep: 1, role: 'Margaret' })).status).toBe(
         200,
@@ -1589,6 +1598,8 @@ describe('POST /api/tts', () => {
       expect(voices).toEqual([
         'LessonNarrator01',
         'LessonZachVoice1',
+        'MicStepVoice0001',
+        'LessonNarrator01',
         'HyqisByK1ozCXL4PglY3',
         'CourseNarrator001',
         'HyqisByK1ozCXL4PglY3',

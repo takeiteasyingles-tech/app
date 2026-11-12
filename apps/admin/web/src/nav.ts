@@ -36,7 +36,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: 'conteudo/missoes', label: 'Missões do Mic', icon: 'target', perm: 'content.edit' },
       { href: 'conteudo/cadastro', label: 'Cadastro', icon: 'list', perm: 'content.edit' },
       { href: 'conteudo/gamificacao', label: 'Gamificação', icon: 'trophy', perm: 'game.rules' },
-      { href: 'publicacoes', label: 'Publicações', icon: 'rocket', perm: ['content.publish', 'releases.manage'] },
     ],
   },
   {

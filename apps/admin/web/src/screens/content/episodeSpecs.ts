@@ -1,5 +1,6 @@
 // Form specs of the episode editor, one list per tab. The document edited is the episode row plus its
 // child rows: `mic` (Take the Mic phrases) and `ex` (Take Action exercises, each with its `items`).
+import { STEP } from '@tie/shared/constants';
 import type { VNode } from 'preact';
 import type { CustomProps, Spec } from '../../ui/form';
 import { EpisodeExtraPicker } from './EpisodeReferences';
@@ -39,12 +40,12 @@ const voiceSpec = (k: string, render: (p: CustomProps) => VNode | null): Spec =>
   wide: true,
   render,
 });
-const VOICE_OLHAR = voiceSpec('Voz do vocabulário', narrationVoiceField('Take a Look'));
+const VOICE_OLHAR = voiceSpec('Voz do vocabulário', narrationVoiceField('Take a Look', STEP.LOOK));
 const VOICE_DIALOGO = voiceSpec('Vozes dos personagens', CastVoicesField);
-const VOICE_MIC = voiceSpec('Voz das frases', narrationVoiceField('Take the Mic'));
-const VOICE_LICAO = voiceSpec('Voz das palavras', narrationVoiceField('Take a Lesson'));
-const VOICE_AWAY = voiceSpec('Voz do Take Away', narrationVoiceField('Take Away'));
-const VOICE_EXERCICIOS = voiceSpec('Voz dos exercícios', narrationVoiceField('Take Action'));
+const VOICE_MIC = voiceSpec('Voz das frases', narrationVoiceField('Take the Mic', STEP.MIC));
+const VOICE_LICAO = voiceSpec('Voz das palavras', narrationVoiceField('Take a Lesson', STEP.LESSON));
+const VOICE_AWAY = voiceSpec('Voz do Take Away', narrationVoiceField('Take Away', STEP.AWAY));
+const VOICE_EXERCICIOS = voiceSpec('Voz dos exercícios', narrationVoiceField('Take Action', STEP.ACTION));
 
 const GERAL: Spec[] = [
   { t: 'text', k: 'title', label: 'Título', max: 200 },

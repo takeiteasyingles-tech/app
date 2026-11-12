@@ -17,7 +17,7 @@ import {
 } from '@tie/shared/contracts/admin';
 import { lyricTimesOutOfOrder } from '@tie/shared/domain/songSync';
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { call, errorMessage, issuesOf } from '../../api';
+import { call, errorMessage, issuesOf, savePublishing } from '../../api';
 import { fmtAgo, fmtDateTime } from '../../format';
 import { useEmails } from '../../people';
 import { go, setLeaveGuard, setQuery } from '../../router';
@@ -204,55 +204,58 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
     let failed = false;
     let stage = 'o episódio';
     try {
-      const epPatch = patchOf(pick(b, EP_KEYS), pick(d, EP_KEYS), EP_KEYS);
-      if (Object.keys(epPatch).length) {
-        const res = await call(C.episodes.update, { params: { id: String(num) }, body: epPatch as never });
-        Object.assign(b, pick(res.item as unknown as Obj, EP_KEYS));
-        setInfo({ updatedAt: res.item.updatedAt, updatedBy: res.item.updatedBy });
-      }
-      // Mic phrases
-      stage = 'as frases do Mic';
-      await applyRows(
-        C.micPhrases as CrudApi,
-        diffRows(b.mic as Obj[], d.mic as Obj[], (r) => String(r.id), MIC_KEYS),
-        MIC_KEYS,
-        (kind, id, row) => {
-          b.mic = applyToBase(b.mic as Obj[], kind, id, row, (r) => String(r.id)) as MicPhraseRow[];
-        },
-        (r) => String(r.id),
-      );
-      // Exercises (rows without their items), then each exercise's items
-      const exBase = b.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
-      const exDraft = d.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
-      stage = 'os exercícios';
-      await applyRows(
-        C.exercises as CrudApi,
-        diffRows(exBase, exDraft, (r) => String(r.id), EX_KEYS),
-        EX_KEYS,
-        (kind, id, row) => {
-          if (kind === 'remove') b.ex = b.ex.filter((x) => x.id !== id);
-          else if (kind === 'create' && row) b.ex.push({ ...(row as unknown as ExerciseRow), items: [] });
-          else if (row)
-            b.ex = b.ex.map((x) => (x.id === id ? { ...(row as unknown as ExerciseRow), items: x.items } : x));
-        },
-        (r) => String(r.id),
-      );
-      for (const x of d.ex) {
-        const bx = b.ex.find((e) => e.id === x.id);
-        if (!bx) continue;
-        stage = `as questões de "${x.title}"`;
+      // PROD (spec 05 "Saving publishes"): the rows go out deferred and the episode goes live once, at the end.
+      await savePublishing(`Episódio ${num}`, async () => {
+        const epPatch = patchOf(pick(b, EP_KEYS), pick(d, EP_KEYS), EP_KEYS);
+        if (Object.keys(epPatch).length) {
+          const res = await call(C.episodes.update, { params: { id: String(num) }, body: epPatch as never });
+          Object.assign(b, pick(res.item as unknown as Obj, EP_KEYS));
+          setInfo({ updatedAt: res.item.updatedAt, updatedBy: res.item.updatedBy });
+        }
+        // Mic phrases
+        stage = 'as frases do Mic';
         await applyRows(
-          C.items as CrudApi,
-          diffRows(bx.items as unknown as Obj[], x.items as unknown as Obj[], (r) => String(r.id), ITEM_KEYS),
-          ITEM_KEYS,
+          C.micPhrases as CrudApi,
+          diffRows(b.mic as Obj[], d.mic as Obj[], (r) => String(r.id), MIC_KEYS),
+          MIC_KEYS,
           (kind, id, row) => {
-            bx.items = applyToBase(bx.items as unknown as Obj[], kind, id, row, (r) =>
-              String(r.id),
-            ) as unknown as ExerciseItemRow[];
+            b.mic = applyToBase(b.mic as Obj[], kind, id, row, (r) => String(r.id)) as MicPhraseRow[];
           },
           (r) => String(r.id),
         );
-      }
+        // Exercises (rows without their items), then each exercise's items
+        const exBase = b.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
+        const exDraft = d.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
+        stage = 'os exercícios';
+        await applyRows(
+          C.exercises as CrudApi,
+          diffRows(exBase, exDraft, (r) => String(r.id), EX_KEYS),
+          EX_KEYS,
+          (kind, id, row) => {
+            if (kind === 'remove') b.ex = b.ex.filter((x) => x.id !== id);
+            else if (kind === 'create' && row) b.ex.push({ ...(row as unknown as ExerciseRow), items: [] });
+            else if (row)
+              b.ex = b.ex.map((x) => (x.id === id ? { ...(row as unknown as ExerciseRow), items: x.items } : x));
+          },
+          (r) => String(r.id),
+        );
+        for (const x of d.ex) {
+          const bx = b.ex.find((e) => e.id === x.id);
+          if (!bx) continue;
+          stage = `as questões de "${x.title}"`;
+          await applyRows(
+            C.items as CrudApi,
+            diffRows(bx.items as unknown as Obj[], x.items as unknown as Obj[], (r) => String(r.id), ITEM_KEYS),
+            ITEM_KEYS,
+            (kind, id, row) => {
+              bx.items = applyToBase(bx.items as unknown as Obj[], kind, id, row, (r) =>
+                String(r.id),
+              ) as unknown as ExerciseItemRow[];
+            },
+            (r) => String(r.id),
+          );
+        }
+      });
     } catch (e) {
       failed = true;
       const iss = issuesOf(e);
@@ -266,7 +269,7 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
       if (!failed) {
         setDraft(b);
         setSavedAt(Date.now());
-        toast('Episódio salvo no rascunho.');
+        toast('Episódio salvo. Já está no app para os alunos.');
       }
       setBusy(false);
     }

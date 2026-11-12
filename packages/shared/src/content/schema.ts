@@ -462,6 +462,8 @@ export type EpisodeDone = z.infer<typeof EpisodeDone>;
  */
 export const EpisodeVoices = z.object({
   narrator: z.string().regex(ELEVEN_VOICE_ID_RE).nullable().optional(),
+  /** PROD: one step's own narration (step number → voice id), over `narrator` for that step. */
+  steps: z.record(z.string().regex(/^[0-9]{1,2}$/), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
   cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
 });
 export type EpisodeVoices = z.infer<typeof EpisodeVoices>;

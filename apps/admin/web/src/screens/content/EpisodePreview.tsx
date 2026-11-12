@@ -1,13 +1,93 @@
 // Live preview of the episode being edited, drawn with the student app's own tie.css classes inside a
 // phone frame: the part shown follows the editor tab (lyrics, dialogue, lesson blocks, exercises…).
-import type { Block, BlockRow } from '@tie/shared/content/schema';
+
+import { DEFAULT_ASSISTANT, ELEVEN_NARRATOR_KEY, STEP } from '@tie/shared/constants';
+import type { Block, BlockRow, EpisodeVoices } from '@tie/shared/content/schema';
+import { adminVoicesApi } from '@tie/shared/contracts/voices';
 import { lyricLineAt } from '@tie/shared/domain/songSync';
+import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { call, errorMessage } from '../../api';
 import { Icon } from '../../ui/icons';
 import { MediaPreview, useMedia } from '../../ui/media';
+import { toast } from '../../ui/toast';
+import { previewVoice } from '../../ui/voices';
 import type { TabId } from './episodeSpecs';
 
 type Any = Record<string, unknown>;
+
+// ---------- Tap to hear (spec 05 "Lesson voices") ----------
+// The preview speaks like the app: the lesson's voice for the role (the narration, or the character), else
+// the course voice (Configurações → Vozes; read only by staff with settings.manage), through ElevenLabs.
+
+let course: Promise<{ voices: Record<string, string>; assistants: { key: string; name: string }[] } | null> | null =
+  null;
+const courseVoices = () =>
+  (course ??= call(adminVoicesApi.get)
+    .then((r) => ({ voices: r.settings.voices, assistants: r.settings.assistants }))
+    .catch(() => null));
+
+async function speak(d: Any, text: string, who?: string, step?: number): Promise<void> {
+  if (!text.trim()) return;
+  const v = (d.voices && typeof d.voices === 'object' ? d.voices : {}) as EpisodeVoices;
+  const w = who?.toLowerCase();
+  let id: string | undefined = w
+    ? Object.entries(v.cast ?? {}).find(([n]) => n.toLowerCase() === w)?.[1]
+    : ((step != null ? v.steps?.[String(step)] : undefined) ?? v.narrator ?? undefined);
+  if (!id) {
+    const c = await courseVoices();
+    if (c) {
+      const a = w ? c.assistants.find((x) => x.key.toLowerCase() === w || x.name.toLowerCase() === w) : null;
+      id = w ? (a ? c.voices[a.key] : undefined) : (c.voices[ELEVEN_NARRATOR_KEY] ?? c.voices[DEFAULT_ASSISTANT]);
+    }
+  }
+  if (!id) {
+    toast(
+      who
+        ? `${who} não tem voz da ElevenLabs nesta lição nem no curso.`
+        : 'Escolha a voz da narração (Vozes desta lição) para ouvir.',
+      'err',
+    );
+    return;
+  }
+  try {
+    await previewVoice(id, text);
+  } catch (e) {
+    toast(errorMessage(e), 'err');
+  }
+}
+
+/** A preview item that speaks its text on click, like the app's tap-to-hear cards. */
+function Say({
+  d,
+  text,
+  who,
+  step,
+  cls,
+  style,
+  children,
+}: {
+  d: Any;
+  text: string;
+  who?: string;
+  /** The step whose narration reads it (its own voice, else the lesson's). */
+  step?: number;
+  cls: string;
+  style?: Record<string, string>;
+  children: ComponentChildren;
+}) {
+  return (
+    <button
+      type="button"
+      class={`${cls} ad-psay`}
+      style={{ ...style, textAlign: 'left', cursor: 'pointer', font: 'inherit', width: '100%' }}
+      title="Ouvir com a voz da lição"
+      onClick={() => void speak(d, text, who, step)}
+    >
+      {children}
+    </button>
+  );
+}
 
 /**
  * One hue per character, in cast order: the student app's castColor() fallback (apps/app/web
@@ -342,10 +422,17 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
           {scene}
           <div class="grid2">
             {v.map((w, i) => (
-              <div key={i} class="card stack" style={{ '--gap': '4px', padding: '14px' }}>
+              <Say
+                key={i}
+                d={d}
+                text={str(w.en)}
+                step={STEP.LOOK}
+                cls="card stack"
+                style={{ '--gap': '4px', padding: '14px' }}
+              >
                 <span class="en">{str(w.en)}</span>
                 <span class="pt sm">{str(w.pt)}</span>
-              </div>
+              </Say>
             ))}
           </div>
         </>
@@ -365,7 +452,13 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
           {lines.length ? (
             <div class="stack" style={{ '--gap': '4px' }}>
               {lines.map((l, i) => (
-                <div key={i} class={`dialog-line${l.stage ? ' stage' : ''}`}>
+                <Say
+                  key={i}
+                  d={d}
+                  text={l.stage ? '' : str(l.en)}
+                  who={str(l.who)}
+                  cls={`dialog-line${l.stage ? ' stage' : ''}`}
+                >
                   {str(l.who) && !l.stage ? (
                     <div class="who ad-who" style={{ '--c': castHue(arr<string>(d.castNames), str(l.who)) }}>
                       <i aria-hidden="true" />
@@ -375,7 +468,7 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
                   <div class="en">{str(l.en)}</div>
                   <div class="pt">{str(l.pt)}</div>
                   {str(l.err) ? <div class="note err">{str(l.err)}</div> : null}
-                </div>
+                </Say>
               ))}
             </div>
           ) : (
@@ -389,7 +482,7 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
       return ph.length ? (
         <div class="stack" style={{ '--gap': '10px' }}>
           {ph.map((p, i) => (
-            <div key={i} class="card stack" style={{ '--gap': '8px' }}>
+            <Say key={i} d={d} text={str(p.en)} step={STEP.MIC} cls="card stack" style={{ '--gap': '8px' }}>
               <div class="row between">
                 <span class="lbl or">Frase {i + 1}</span>
                 <Icon name="mic" size={18} />
@@ -399,7 +492,7 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
               </div>
               {str(p.tip) ? <div class="fb tip">{str(p.tip)}</div> : null}
               {str(p.fb) ? <div class={`fb ${p.blue ? 'fix' : 'ok'}`}>{str(p.fb)}</div> : null}
-            </div>
+            </Say>
           ))}
         </div>
       ) : (
@@ -459,7 +552,7 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
           {exps.length ? (
             <div class="card">
               {exps.map((x, i) => (
-                <div key={i} class="listrow" style={{ alignItems: 'flex-start' }}>
+                <Say key={i} d={d} text={str(x.en)} step={STEP.AWAY} cls="listrow" style={{ alignItems: 'flex-start' }}>
                   <div class="grow">
                     <div class="en">{str(x.en)}</div>
                     <div class="pt sm">{str(x.pt)}</div>
@@ -469,7 +562,7 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
                       </div>
                     ) : null}
                   </div>
-                </div>
+                </Say>
               ))}
             </div>
           ) : (
@@ -560,7 +653,7 @@ export function EpisodePreview({ doc, tab, dirty }: { doc: Any; tab: TabId; dirt
     <aside class="ad-preview" aria-label="Prévia para o aluno">
       <div class="row between wrapx" style={{ '--gap': '6px' }}>
         <span class="lbl">Prévia no app</span>
-        <span class="xs">{dirty ? 'Com as edições ainda não salvas' : 'Versão do rascunho (vale após publicar)'}</span>
+        <span class="xs">{dirty ? 'Com as edições ainda não salvas' : 'Como está no app'}</span>
       </div>
       <div class="ad-phone">
         <div class="ad-phone-in">

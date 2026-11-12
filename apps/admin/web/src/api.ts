@@ -13,8 +13,53 @@ import {
   type ResOf,
 } from '@tie/shared/contracts/http';
 import { ApiError, type ErrorCode, isErrorEnvelope } from '@tie/shared/errors';
+import { toast } from './ui/toast';
 
 export { ApiError };
+
+// ---------- Saving publishes (spec 05) ----------
+// Every content save goes live at once (the server publishes after it). A save made of several requests
+// (the episode editor) sends them with X-Publish: defer and publishes once at the end (savePublishing).
+
+let deferred = 0;
+
+const NOT_LIVE = 'Salvo, mas não foi para os alunos:';
+
+/** Shows the server's word when the automatic publish after a save did not go through. */
+function notePublish(res: Response): void {
+  if (res.headers.get('X-Content-Publish') !== 'failed') return;
+  const raw = res.headers.get('X-Content-Publish-Error');
+  let why = 'o conteúdo tem um erro.';
+  if (raw) {
+    try {
+      why = decodeURIComponent(raw);
+    } catch {
+      // Keep the generic line.
+    }
+  }
+  toast(`${NOT_LIVE} ${why}`, 'err');
+}
+
+/**
+ * Runs a save made of several requests without publishing after each one, then publishes once. `what`
+ * names the save in the audit log ("Episódio 3"). When the save throws, nothing is published.
+ */
+export async function savePublishing<T>(what: string, run: () => Promise<T>): Promise<T> {
+  deferred++;
+  let out: T;
+  try {
+    out = await run();
+  } finally {
+    deferred--;
+  }
+  try {
+    const r = await call(adminApi.content.autoPublish, { body: { what } });
+    if (r.status === 'failed') toast(`${NOT_LIVE} ${r.message ?? 'o conteúdo tem um erro.'}`, 'err');
+  } catch (e) {
+    toast(`${NOT_LIVE} ${errorMessage(e)}`, 'err');
+  }
+  return out;
+}
 
 export interface CallOptions<E extends EndpointDef> {
   params?: ParamsIn<E>;
@@ -79,6 +124,7 @@ function notifyAuth(err: ApiError): void {
 
 export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = {}): Promise<ResOf<E>> {
   const headers: Record<string, string> = { ...opts.headers, Accept: 'application/json' };
+  if (deferred > 0 && ep.method !== 'GET') headers['X-Publish'] = 'defer';
   let body: string | undefined;
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -108,6 +154,7 @@ export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = 
     notifyAuth(err);
     throw err;
   }
+  notePublish(res);
   if (res.status === 204) return undefined as ResOf<E>;
   return (await res.json()) as ResOf<E>;
 }
