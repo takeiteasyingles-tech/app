@@ -18,7 +18,7 @@ import {
 import type { Context } from 'hono';
 
 /** Feature flags the client reads (TieState.flags); server-only flags stay out of the payload. */
-export const CLIENT_FLAGS: readonly string[] = [FLAGS.freeSteps];
+export const CLIENT_FLAGS: readonly string[] = [FLAGS.freeSteps, FLAGS.stepFeedback];
 
 /** Age in whole years on `today` (YYYY-MM-DD) for a YYYY-MM-DD birth date; null when malformed. */
 export function ageOn(birth: string, today: string): number | null {

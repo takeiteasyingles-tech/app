@@ -570,15 +570,12 @@ test.describe('mobile', () => {
     await expect.poll(() => apiHits(page, 'POST', /^\/api\/srs\/cards$/).length).toBe(1);
     expect(apiHits(page, 'POST', /^\/api\/srs\/cards$/)[0]?.status).toBe(200);
     await expectToast(page, /^pts-toast\|\+\d+ pontos$/); // award 'word' from POST /api/srs/cards
-    await expectToast(
-      page,
-      new RegExp(`Levei “${wordEn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}” para os Flashcards\\.`),
-    );
+    await expectToast(page, new RegExp(`Levei “${wordEn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}” para os Cards\\.`));
     await expect.poll(async () => (await apiState(page)).deck.some((d) => d.en === wordEn)).toBe(true);
     expect((await apiState(page)).deck.find((d) => d.en === wordEn)?.scene).toBe('Mic · Maggie');
     await clearToasts(page);
     await pill.click();
-    await expectToast(page, /Já está nos seus Flashcards\./);
+    await expectToast(page, /Já está nos seus Cards\./);
     expect(apiHits(page, 'POST', /^\/api\/srs\/cards$/).length).toBe(1);
 
     await page
@@ -631,7 +628,7 @@ test.describe('mobile', () => {
       '[U6] report fixes:',
       await fixes.count(),
       'save btn:',
-      await page.getByRole('button', { name: /^Levar \d+ para os Flashcards$/ }).count(),
+      await page.getByRole('button', { name: /^Levar \d+ para os Cards$/ }).count(),
       'head:',
       await head.innerText(),
     );
@@ -639,22 +636,19 @@ test.describe('mobile', () => {
     if (process.env.U6_SHOTS)
       await page.screenshot({ path: `${process.env.U6_SHOTS}report-mobile.png`, fullPage: true });
 
-    // Words → Flashcards.
-    const save = page.getByRole('button', { name: /^Levar \d+ para os Flashcards$/ });
+    // Words → Cards.
+    const save = page.getByRole('button', { name: /^Levar \d+ para os Cards$/ });
     if (await save.count()) {
       const deck0 = (await apiState(page)).deck.length;
       await clearToasts(page);
       await save.click();
       await expect.poll(() => apiHits(page, 'POST', /^\/api\/srs\/cards$/).length).toBe(2);
       expect(apiHits(page, 'POST', /^\/api\/srs\/cards$/)[1]?.status).toBe(200);
-      await expectToast(
-        page,
-        /(cartões novos|cartão novo) nos Flashcards\.|Essas palavras já estavam nos seus Flashcards\./,
-      );
+      await expectToast(page, /(cartões novos|cartão novo) nos Cards\.|Essas palavras já estavam nos seus Cards\./);
       expect((await apiState(page)).deck.length).toBeGreaterThanOrEqual(deck0);
       await clearToasts(page);
       await save.click();
-      await expectToast(page, /Essas palavras já estavam nos seus Flashcards\./);
+      await expectToast(page, /Essas palavras já estavam nos seus Cards\./);
     }
 
     // Persisted: server session with transcript + report; reload keeps the report (no second write).
@@ -1042,7 +1036,7 @@ test.describe('desktop', () => {
     if (process.env.U6_SHOTS) await page.screenshot({ path: `${process.env.U6_SHOTS}lobby-desktop.png` });
     await startCall(page);
     await expect(grid.locator('.left .xs')).toContainText(
-      'A legenda mostra a última fala da Maggie. Toque nas palavras azuis para levar para os Flashcards.',
+      'A legenda mostra a última fala da Maggie. Toque nas palavras azuis para levar para os Cards.',
     );
     await expect(grid.locator('.right #mg-tr .bub.her')).toHaveCount(1, { timeout: 15_000 });
     await expect(grid.locator('.right .dock .say #mg-input')).toBeVisible();
@@ -1292,15 +1286,12 @@ test.describe('round 3 · desktop', () => {
     expect(await unnamedControls(page)).toEqual([]);
     if (process.env.U6_SHOTS)
       await page.screenshot({ path: `${process.env.U6_SHOTS}report-desktop.png`, fullPage: true });
-    // Words → Flashcards on desktop.
-    const save = page.getByRole('button', { name: /^Levar \d+ para os Flashcards$/ });
+    // Words → Cards on desktop.
+    const save = page.getByRole('button', { name: /^Levar \d+ para os Cards$/ });
     if (await save.count()) {
       await clearToasts(page);
       await save.click();
-      await expectToast(
-        page,
-        /(cartões novos|cartão novo) nos Flashcards\.|Essas palavras já estavam nos seus Flashcards\./,
-      );
+      await expectToast(page, /(cartões novos|cartão novo) nos Cards\.|Essas palavras já estavam nos seus Cards\./);
     }
     // Back to the lobby: the conversation is listed and opens its report.
     await page.goto('/#/maggie');
@@ -1574,7 +1565,7 @@ test.describe('round 5 · mobile', () => {
     // Focus ring on the report's buttons.
     const bad: string[] = [];
     for (const loc of [
-      page.getByRole('button', { name: /^Levar \d+ para os Flashcards$/ }),
+      page.getByRole('button', { name: /^Levar \d+ para os Cards$/ }),
       page.getByRole('button', { name: /Conversar de novo/ }).or(page.getByRole('link', { name: /Conversar de novo/ })),
       page.locator('.topbar').getByRole('button', { name: 'Voltar' }),
     ]) {

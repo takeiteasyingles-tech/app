@@ -133,6 +133,59 @@ describe('feedback list and summary', () => {
   });
 });
 
+describe('platform feedback by step', () => {
+  let editor: Account;
+  let ana: { id: string; email: string };
+  beforeEach(async () => {
+    await resetDb();
+    await seedCourse();
+    editor = await staff(['editor']);
+    ana = await learner({ name: 'Ana' });
+    for (let i = 1; i <= 3; i++) {
+      await ins('step_feedback', {
+        id: `step-${i}`,
+        user_id: ana.id,
+        episode_num: i === 3 ? 2 : 1,
+        step: i,
+        stars: 4,
+        had_difficulty: i === 1 ? 1 : 0,
+        difficulty: i === 1 ? 'Não achei o botão' : null,
+        improvement: 'Melhorar o contraste',
+        created_at: NOW,
+      });
+    }
+  });
+
+  it('lists platform experiences with context, no email, and deterministic cursor pagination', async () => {
+    const first = await editor.client.json(`${F.steps.path}?limit=2`);
+    expect(first.status).toBe(200);
+    expect(first.body.items.map((r: { id: string }) => r.id)).toEqual(['step-3', 'step-2']);
+    expect(first.body.items[0]).toMatchObject({
+      userName: 'Ana',
+      episodeNum: 2,
+      step: 3,
+      hadDifficulty: false,
+      improvement: 'Melhorar o contraste',
+    });
+    expect(JSON.stringify(first.body)).not.toContain(ana.email);
+    const last = await editor.client.json(`${F.steps.path}?limit=2&cursor=${first.body.nextCursor}`);
+    expect(last.body.items).toHaveLength(1);
+    expect(last.body.items[0]).toMatchObject({ id: 'step-1', hadDifficulty: true, difficulty: 'Não achei o botão' });
+    expect(last.body.nextCursor).toBeNull();
+    // Platform feedback never changes the final episode's NPS.
+    expect((await editor.client.json(F.summary.path)).body.overall.count).toBe(0);
+  });
+
+  it('filters by episode and step, validates inputs, and requires feedback.read', async () => {
+    expect((await editor.client.json(`${F.steps.path}?episode=1`)).body.items).toHaveLength(2);
+    expect((await editor.client.json(`${F.steps.path}?episode=1&step=2`)).body.items).toHaveLength(1);
+    expect((await editor.client.send(`${F.steps.path}?step=11`)).status).toBe(400);
+    expect((await editor.client.send(`${F.steps.path}?cursor=bad!`)).status).toBe(400);
+    const viewer = await staff([]);
+    expect((await viewer.client.send(F.steps.path)).status).toBe(403);
+  });
+});
+
 describe('learning statistics', () => {
   let admin: Account;
   let editor: Account;

@@ -213,7 +213,7 @@ test('EXTRA catalog (mobile): shelves, coverflow, rails, albums, desafio card, e
   const w = await watch(page);
   await signup(page, w);
   await page.goto('/#/extra');
-  await expect(page.locator('.on-navy .topbar .h1')).toHaveText('EXTRA');
+  await expect(page.locator('.on-navy .topbar .h1')).toHaveText('FLIX');
   await expect(page.locator('.topbar .lbl')).toHaveText('Séries, novelas, filmes, animes e música');
   // Mobile: avatar button in the topbar.
   await expect(page.locator('.on-navy .topbar button, .on-navy .topbar a').first()).toBeVisible();
@@ -627,7 +627,7 @@ test('música: karaokê (synth), gap mode right/wrong → /api/karaoke/gap, trac
   await page.goto('/#/extra');
   await page.locator('.cover', { hasText: album.title }).first().click();
   await expect(page).toHaveURL(/#\/extra\/musica\/synth-nights$/);
-  await expect(page.locator('.topbar')).toContainText('EXTRA · Música · A2');
+  await expect(page.locator('.topbar')).toContainText('FLIX · Música · A2');
   const t0 = album.tracks[0] as ProtoTrack;
   await expect(page.locator('.card .h2')).toHaveText(t0.title);
   await expect(page.locator('.card .xs').first()).toHaveText('Original TIE · trilha sintetizada');
@@ -1163,11 +1163,11 @@ test('catalog → detail → watch, with the tab bar where the prototype has it 
   const w = await watch(page);
   await signup(page, w);
   await page.goto('/#/extra');
-  await expect(page.locator('.tabbar .tab.on')).toHaveText('EXTRA');
+  await expect(page.locator('.tabbar .tab.on')).toHaveText('FLIX');
   // A rail cover opens its title page; the tab bar stays, EXTRA active (prototype nav:'extra').
   await page.locator('section.stack .rail .cover').first().click();
   await expect(page).toHaveURL(/#\/extra\/[a-z0-9-]+$/);
-  await expect(page.locator('.tabbar .tab.on')).toHaveText('EXTRA');
+  await expect(page.locator('.tabbar .tab.on')).toHaveText('FLIX');
   // Back button in the bar returns to the catalog.
   await page.locator('.topbar').getByRole('button', { name: 'Voltar' }).click();
   await expect(page).toHaveURL(/#\/extra$/);
@@ -1261,12 +1261,12 @@ test.describe('desktop (round 4)', () => {
     await page.waitForTimeout(200);
     await expect(page).toHaveURL(/#\/extra$/);
     // Side nav on the catalog with EXTRA active.
-    await expect(page.locator('aside.side a.nav.on')).toHaveText('EXTRA');
+    await expect(page.locator('aside.side a.nav.on')).toHaveText('FLIX');
     // Front item click opens.
     const title = await flow.locator('.item.on .cap b').innerText();
     await flow.locator('.item.on').click();
     await expect(page.locator('.hero-extra .h1')).toHaveText(title);
-    await expect(page.locator('aside.side a.nav.on')).toHaveText('EXTRA');
+    await expect(page.locator('aside.side a.nav.on')).toHaveText('FLIX');
 
     await page.goto('/#/extra/woods-and-beans');
     const body = page.locator('.x-det-body');
@@ -1373,7 +1373,7 @@ test.describe('desktop (round 5)', () => {
     await signup(page, w);
     // Catalog → detail via a rail cover; side nav stays on EXTRA.
     await page.goto('/#/extra');
-    await expect(page.locator('aside.side a.nav.on')).toHaveText('EXTRA');
+    await expect(page.locator('aside.side a.nav.on')).toHaveText('FLIX');
     await page.goto('/#/extra/woods-and-beans');
     await button(page, /Assistir com legendas/).click();
     await expect(page).toHaveURL(/#\/extra\/woods-and-beans\/assistir$/);

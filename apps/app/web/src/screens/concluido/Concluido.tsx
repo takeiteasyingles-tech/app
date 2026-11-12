@@ -95,7 +95,7 @@ export default function Concluido({ params }: ScreenProps) {
           </div>
           <div class="stat">
             <div class="num">{cardsOf(E).length}</div>
-            <div class="sm mt8">cartões nos seus Flashcards</div>
+            <div class="sm mt8">novos nos seus Cards</div>
           </div>
         </div>
         {/* PROD (spec 07, NPS per episode): the learner rates the episode they just finished. */}

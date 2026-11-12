@@ -8,7 +8,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SpeechEvent } from '../../../core/speech';
-import { envelope, type Key, MORPHS, type MouthMorph, SHAPES, sample, timeline, type Viseme } from './lipsync';
+import {
+  envelope,
+  type Key,
+  LIP_BONES,
+  LIP_OFFSETS,
+  MORPHS,
+  type MouthMorph,
+  SHAPES,
+  sample,
+  sampleLips,
+  timeline,
+  type Viseme,
+} from './lipsync';
 
 /** Mood of the reply (the AI's Mood enum) → talk clip and expression morphs. */
 const CLIP: Readonly<Record<string, string>> = {
@@ -33,34 +45,39 @@ type Expression = (typeof EXPRESSIONS)[number];
 /**
  * Resting face per mood. Calibrated on 2026-11-09 against three reference clips of Margaret talking
  * neutral, happy and sad (MediaPipe blendshapes per frame): happy almost doubles the smile and widens
- * the mouth ~15 %; sad lifts the inner brows ×2.2 and drops the outer ones, with a narrower mouth.
+ * the mouth ~15 %; sad lifts the inner brows ×2.2 and drops the outer ones, with a narrower mouth. The
+ * photo already smiles (with mouthSmile 0.2 the 3D read 0.69 against the video's 0.51), so the neutral
+ * moods add no smile.
  */
 const MOOD_FACE: Readonly<Record<string, Partial<Record<Expression, number>>>> = {
-  idle: { cheekRaise: 0.1, mouthSmile: 0.12 },
+  idle: { cheekRaise: 0.1 },
   happy: { cheekRaise: 0.55, mouthSmile: 0.7 },
   encouraging: { cheekRaise: 0.75, noseWrinkle: 0.1, mouthSmile: 0.85 },
-  curious: { cheekRaise: 0.15, mouthSmile: 0.2 },
-  thinking: { cheekRaise: 0.1, browFurrow: 0.15, mouthSmile: 0.08 },
-  correcting: { cheekRaise: 0.2, browFurrow: 0.1, mouthSmile: 0.15 },
+  curious: { cheekRaise: 0.1 },
+  thinking: { cheekRaise: 0.1, browFurrow: 0.15 },
+  correcting: { cheekRaise: 0.15, browFurrow: 0.1 },
   sad: { browSad: 0.85, mouthFrown: 0.3 },
 };
 /**
- * How the mood speaks (same clips): `wide` is added to mouthWide while talking, `rate` scales how fast
- * the lips move, `accent` is the brow raise on a stressed syllable and `nod` the head nod (degrees).
- * From the clips: happy talks wider and nods most (pitch SD 6°), sad is narrower, ~10 % slower, nods
- * least (3.5°) and never raises the brows.
+ * How the mood speaks (same clips): `wide` is added to mouthWide and `lift` to upperLipUp while talking,
+ * `jaw` scales the opening, `rate` how fast the lips move, `accent` is the brow raise on a stressed
+ * syllable and `nod` the head nod (degrees). From the clips: happy talks wider (+15 %) and more open
+ * (+25 % lip gap) with the teeth showing and nods most (pitch SD 6°); sad is narrower, ~10 % slower,
+ * nods least (3.5°) and never raises the brows.
  */
 interface Style {
   wide: number;
+  lift: number;
+  jaw: number;
   rate: number;
   accent: number;
   nod: number;
 }
 const STYLE: Readonly<Record<string, Style>> = {
-  neutral: { wide: 0, rate: 1, accent: 0.45, nod: 1.2 },
-  happy: { wide: 0.12, rate: 1.05, accent: 0.6, nod: 1.7 },
-  encouraging: { wide: 0.12, rate: 1.05, accent: 0.65, nod: 1.8 },
-  sad: { wide: -0.08, rate: 0.88, accent: 0, nod: 0.6 },
+  neutral: { wide: 0, lift: 0, jaw: 1, rate: 1, accent: 0.45, nod: 1.2 },
+  happy: { wide: 0.15, lift: 0.15, jaw: 1.15, rate: 1.05, accent: 0.6, nod: 1.7 },
+  encouraging: { wide: 0.15, lift: 0.18, jaw: 1.15, rate: 1.05, accent: 0.65, nod: 1.8 },
+  sad: { wide: -0.08, lift: 0, jaw: 0.92, rate: 0.88, accent: 0, nod: 0.6 },
 };
 const styleOf = (mood: string): Style => STYLE[mood] ?? (STYLE.neutral as Style);
 
@@ -81,8 +98,24 @@ export function spring(x: number, v: number, target: number, w: number, dt: numb
 const FLAP: Readonly<Record<string, Viseme>> = { a: 'aa', o: 'O', e: 'E', m: 'PP', rest: 'sil' };
 
 const P = {
-  jawMax: 0.02, // m; 1 px of the photo = 1 mm, so ~2 cm on open vowels
-  lead: 0.05, // s: the mouth leads the sound
+  // m; 1 px of the photo = 1 mm. Measured 2026-11-09 against the reference video of the same line (MediaPipe
+  // on both): at 20 mm the 3D lips parted less than half as much; 45 mm (with the v5 lip shape keys)
+  // matches its lip gap. ~3.8 cm on a strong open vowel.
+  jawMax: 0.045,
+  /** Lip rig (model v5+): scale of the measured lip offsets (2026-11-09: at 1.8 the 3D lip gap peaked at ~55% of
+   * the reference video's; 2.3 with the limits below gives ~70%, the median near the video's, the same correlation). */
+  lipGain: 2.3,
+  /** Soft limits (mm) of a lip offset: sideways, upper lip, lower lip, chin. */
+  capX: 6,
+  capUp: 10,
+  capLow: 22,
+  capChin: 14,
+  /** Lip offsets scale with the voice energy e (0..1): lipE0 + lipE1·e. */
+  lipE0: 0.55,
+  lipE1: 0.65,
+  lipW: 30,
+  // s: the mouth leads the sound (the reference videos open the lips ~0.1 s before the voice is loud)
+  lead: 0.1,
   energyBase: 0.45,
   energyGain: 0.75,
   jawCap: 1.05,
@@ -160,6 +193,17 @@ export async function createAvatar(host: HTMLElement, modelUrl: string): Promise
   const jawRest = jaw.position.clone();
   const lipUpRest = lipUp.position.clone();
   const cornerSmooth = corners.map((c) => c.position.clone());
+  // The lip rig: three bones per lip and the corners on the real lip points (model v5+). With it the
+  // measured lip offsets move the lips and the jaw; without it the older jaw + lip shape keys do.
+  const lipBones = LIP_BONES.slice(0, 8).map((n) =>
+    gltf.scene.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(n)),
+  );
+  const lipRig = lipBones.every(Boolean) ? (lipBones as THREE.Object3D[]) : null;
+  const lipRest = lipRig?.map((b) => b.position.clone()) ?? [];
+  /** Current lip offsets (mm, x right / y down) and their spring velocities; the 9th is the chin. */
+  const lipNow = LIP_BONES.map(() => [0, 0]);
+  const lipVel = LIP_BONES.map(() => [0, 0]);
+  const right = new THREE.Vector3();
   const setMorph = (name: string, v: number) => {
     for (const m of meshes) {
       const i = m.morphTargetDictionary?.[name];
@@ -232,6 +276,7 @@ export async function createAvatar(host: HTMLElement, modelUrl: string): Promise
     let closing = false;
     let driven = false;
     let accent = 0;
+    let lipT: [number, number][] = LIP_BONES.map(() => [0, 0]);
     if (line) {
       const t = (line.ctx.currentTime - line.startAt) * line.rate + P.lead;
       if (t > line.duration + 0.3) line = null;
@@ -240,9 +285,39 @@ export async function createAvatar(host: HTMLElement, modelUrl: string): Promise
         const s = sample(line.keys, t);
         for (const m of MORPHS) target[m] = s[m];
         // the mood's mouth width while talking (happy wider, sad narrower)
-        if (s.v !== 'sil') target.mouthWide = Math.max(0, Math.min(1, (target.mouthWide ?? 0) + st.wide));
+        if (s.v !== 'sil') {
+          target.mouthWide = Math.max(0, Math.min(1, (target.mouthWide ?? 0) + st.wide));
+          target.upperLipUp = Math.min(1, (target.upperLipUp ?? 0) + st.lift);
+        }
+        // As the jaw drops the corners come in and down (a real mouth opens as an oval): stretching or
+        // lifting the corners over an open mouth reads as a clown's crescent.
+        const open = Math.min(1, jawNow / 0.6);
+        target.mouthWide = (target.mouthWide ?? 0) * (1 - 0.4 * open);
+        target.mouthSmile = (target.mouthSmile ?? 0) * (1 - 0.6 * open);
+        // ...and the upper lip lifts in an arch over the teeth (the key is shaped as an arch).
+        target.upperLipUp = Math.min(1, (target.upperLipUp ?? 0) + 0.3 * open);
         closing = s.v === 'PP';
-        jawT = closing ? 0 : Math.min(P.jawCap, Math.max(0, s.jaw) * (P.energyBase + P.energyGain * e));
+        jawT = closing ? 0 : Math.min(P.jawCap, Math.max(0, s.jaw) * st.jaw * (P.energyBase + P.energyGain * e));
+        if (lipRig) {
+          const g = P.lipGain * st.jaw * (P.lipE0 + P.lipE1 * e);
+          // soft limits like the muscles': the lower lip drops up to ~15 mm, the upper lifts up to ~8 mm, the
+          // chin ~9 mm (a few outlier visemes would otherwise open a dark hole)
+          const sat = (y: number, m: number) => m * Math.tanh(y / m);
+          lipT = sampleLips(line.keys, t).map(([x, y], k) => [
+            sat(x * g, P.capX),
+            sat(y * g, k === 8 ? P.capChin : k >= 5 ? P.capLow : P.capUp),
+          ]);
+          if (s.v !== 'sil') {
+            // the mood's way of talking on the bones: happy spreads and lifts the corners and shows the upper
+            // teeth; sad pulls the corners in and down (mm)
+            const [cl, cr] = [lipT[0] as [number, number], lipT[4] as [number, number]];
+            cl[0] -= st.wide * 12;
+            cr[0] += st.wide * 12;
+            cl[1] -= st.wide * 6;
+            cr[1] -= st.wide * 6;
+            for (const k of [1, 2, 3]) (lipT[k] as [number, number])[1] -= st.lift * 16;
+          }
+        }
         // a stressed syllable: the energy jumps up → brows lift a little and the head nods
         if (
           st.accent + st.nod > 0 &&
@@ -260,6 +335,7 @@ export async function createAvatar(host: HTMLElement, modelUrl: string): Promise
       for (const m of MORPHS) target[m] = sh[m as MouthMorph] ?? 0;
       jawT = sh.jaw * 0.8;
       closing = flap.v === 'PP';
+      if (lipRig) lipT = LIP_OFFSETS[flap.v].map(([x, y]) => [x * P.lipGain * 0.8, y * P.lipGain * 0.8]);
       driven = true;
     }
     if (accent > 0) target.browRaise = Math.max(target.browRaise ?? 0, st.accent * accent);
@@ -270,6 +346,16 @@ export async function createAvatar(host: HTMLElement, modelUrl: string): Promise
       morphVel[k] = v;
       setMorph(k, morphNow[k] as number);
     }
+    // With the lip rig the bones shape the mouth: only the press (M/B/P) and lip-on-teeth (F/V) keys stay.
+    if (lipRig)
+      for (const k of ['mouthWide', 'upperLipUp', 'lowerLipDown', 'mouthRound', 'mouthFunnel']) setMorph(k, 0);
+    lipT.forEach(([x, y], i) => {
+      const n = lipNow[i] as number[];
+      const v = lipVel[i] as number[];
+      const w = closing ? P.closeW : P.lipW * st.rate;
+      [n[0], v[0]] = spring(n[0] as number, v[0] as number, x, w, dt);
+      [n[1], v[1]] = spring(n[1] as number, v[1] as number, y, w, dt);
+    });
     // Only the voice moves the mouth (the talk clip starts while the TTS is still loading): the clip's
     // jaw and lip tracks are always overridden. M/B/P shut faster so the lips really meet.
     [jawNow, jawVel] = spring(jawNow, jawVel, jawT, closing ? P.closeW : P.jawW * st.rate, dt);
@@ -277,7 +363,10 @@ export async function createAvatar(host: HTMLElement, modelUrl: string): Promise
     jaw.parent?.updateWorldMatrix(true, false);
     jaw.parent?.getWorldQuaternion(q).invert();
     down.set(0, -1, 0).applyQuaternion(q);
-    jaw.position.copy(jawRest).addScaledVector(down, jawNow * P.jawMax);
+    if (lipRig) {
+      // the chin follows the measured chin drop (mm → m); the lip bones their own offsets
+      jaw.position.copy(jawRest).addScaledVector(down, Math.max(0, (lipNow[8] as number[])[1] as number) / 1000);
+    } else jaw.position.copy(jawRest).addScaledVector(down, jawNow * P.jawMax);
     // The accent's nod, on top of the clip's head motion (the mixer rewrites the head every frame).
     if (accent > 0 && st.nod > 0 && head.parent) {
       head.parent.updateWorldMatrix(true, false);
@@ -285,13 +374,28 @@ export async function createAvatar(host: HTMLElement, modelUrl: string): Promise
       qn.setFromAxisAngle(X, ((st.nod * Math.PI) / 180) * accent);
       head.quaternion.premultiply(q.clone().invert().multiply(qn).multiply(q));
     }
-    lipUp.position.copy(lipUpRest);
-    // keep the mood smile of the clip, drop its per-syllable corner jitter
-    corners.forEach((c, i) => {
-      const sm = cornerSmooth[i] as THREE.Vector3;
-      sm.lerp(c.position, Math.min(1, 2.5 * dt));
-      c.position.copy(sm);
-    });
+    if (lipRig) {
+      // photo-plane offsets (x right, y down, mm) in the head's space
+      head.updateWorldMatrix(true, false);
+      head.getWorldQuaternion(q).invert();
+      right.set(1, 0, 0).applyQuaternion(q);
+      down.set(0, -1, 0).applyQuaternion(q);
+      lipRig.forEach((b, i) => {
+        const [x, y] = lipNow[i] as number[];
+        b.position
+          .copy(lipRest[i] as THREE.Vector3)
+          .addScaledVector(right, (x as number) / 1000)
+          .addScaledVector(down, (y as number) / 1000);
+      });
+    } else {
+      lipUp.position.copy(lipUpRest);
+      // keep the mood smile of the clip, drop its per-syllable corner jitter
+      corners.forEach((c, i) => {
+        const sm = cornerSmooth[i] as THREE.Vector3;
+        sm.lerp(c.position, Math.min(1, 2.5 * dt));
+        c.position.copy(sm);
+      });
+    }
     renderer.render(scene, camera);
   });
 

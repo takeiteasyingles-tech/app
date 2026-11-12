@@ -219,7 +219,7 @@ const limitToast = (max: number) => toast(`Até ${max}. Desmarque um para trocar
 
 function setToggle(st: Settings, k: ToggleKey) {
   if (k === 'hd' && !st.hd && !aiOnline.value) {
-    toast('A voz HD precisa da IA ligada. Tente de novo mais tarde.');
+    toast('A voz dos personagens precisa da IA ligada. Tente de novo mais tarde.');
     return;
   }
   const on = !st[k];
@@ -541,7 +541,7 @@ function Body({ s, p, c, desk }: { s: TieState; p: Profile; c: Catalog; desk: bo
         <Icon name="bulb" size={18} />
       </span>
       <span>
-        <b>O app se reorganiza na hora.</b> Mude um gosto ou uma dificuldade e veja Hoje, o EXTRA e as missões do Mic
+        <b>O app se reorganiza na hora.</b> Mude um gosto ou uma dificuldade e veja Hoje, o FLIX e as missões do Mic
         mudarem.
       </span>
     </div>
@@ -565,12 +565,12 @@ function Body({ s, p, c, desk }: { s: TieState; p: Profile; c: Catalog; desk: bo
     </Sec>
   );
   const formats = (
-    <Sec title="Formatos que você curte" sub="Define a sua prateleira no EXTRA.">
+    <Sec title="Formatos que você curte" sub="Define a sua prateleira no FLIX.">
       <OptChips
         {...cloud}
         list={O.formats}
         sel={p.formats}
-        onPick={(k) => tg('formats', k, undefined, 'Prateleira do EXTRA reorganizada.')}
+        onPick={(k) => tg('formats', k, undefined, 'Prateleira do FLIX reorganizada.')}
       />
     </Sec>
   );
@@ -723,8 +723,12 @@ function Body({ s, p, c, desk }: { s: TieState; p: Profile; c: Catalog; desk: bo
         onClick={() => setToggle(st, 'fx')}
       />
       <Setting
-        t="Voz HD dos personagens"
-        sub={aiOnline.value ? 'Voz natural gerada pela IA.' : 'Disponível quando a IA estiver ligada'}
+        t="Voz dos personagens"
+        sub={
+          aiOnline.value
+            ? 'Maggie, Robert, Becky, Zach e Barbara com as próprias vozes.'
+            : 'Disponível quando a IA estiver ligada'
+        }
         on={st.hd}
         onClick={() => setToggle(st, 'hd')}
       />

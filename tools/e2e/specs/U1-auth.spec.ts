@@ -980,7 +980,7 @@ for (const vp of VPS) {
         sec('Formatos que você curte').locator('.chip', { hasText: 'Games' }).click(),
       );
       expect(fb.formats).toHaveLength(4);
-      await expect(toast(page, 'Prateleira do EXTRA reorganizada.')).toBeVisible();
+      await expect(toast(page, 'Prateleira do FLIX reorganizada.')).toBeVisible();
       await expect.poll(() => sec('Gêneros').locator('.chip').count()).toBeGreaterThan(genresBefore);
       // genres / themes toggles
       const gen = await nextProfilePut(page, () => sec('Gêneros').locator('.chip:not(.on)').first().click());
@@ -1102,7 +1102,7 @@ for (const vp of VPS) {
       for (const n of [
         'Sons',
         'Confete e animações',
-        'Voz HD dos personagens',
+        'Voz dos personagens',
         'Começar em 0,75×',
         'Lembrete de episódio',
       ])
@@ -1113,14 +1113,19 @@ for (const vp of VPS) {
       await sw('Confete e animações').click();
       await sw('Começar em 0,75×').click();
       await sw('Lembrete de episódio').click();
-      // HD needs the AI
+      // The character voices start on (spec 05 "Character voices by default"); turning them off works
+      // without the AI, turning them back on needs it.
+      await expect(sw('Voz dos personagens')).toHaveAttribute('aria-checked', 'true');
+      await sw('Voz dos personagens').click();
+      await expect(sw('Voz dos personagens')).toHaveAttribute('aria-checked', 'false');
+      await page.waitForTimeout(800);
       let hdPatch = false;
       page.on('request', (r) => {
         if (r.url().endsWith('/api/me/settings') && /"hd"/.test(r.postData() || '')) hdPatch = true;
       });
-      await sw('Voz HD dos personagens').click();
-      await expect(toast(page, 'A voz HD precisa da IA ligada. Tente de novo mais tarde.')).toBeVisible();
-      await expect(sw('Voz HD dos personagens')).toHaveAttribute('aria-checked', 'false');
+      await sw('Voz dos personagens').click();
+      await expect(toast(page, 'A voz dos personagens precisa da IA ligada. Tente de novo mais tarde.')).toBeVisible();
+      await expect(sw('Voz dos personagens')).toHaveAttribute('aria-checked', 'false');
       await expect(v.getByText('Disponível quando a IA estiver ligada')).toBeVisible();
       await page.waitForTimeout(800);
       expect(hdPatch).toBe(false);

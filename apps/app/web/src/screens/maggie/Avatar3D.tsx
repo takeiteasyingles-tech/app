@@ -1,10 +1,11 @@
-// 3D Mic avatar (PROD deviation, docs/spec/05-foundation-notes.md): assistants with a model in MODELS
+// 3D Mic avatar (PROD deviation, docs/spec/05-foundation-notes.md): assistants with no Assistia embed and a model in MODELS
 // render it with three.js (avatar3d/engine, loaded on demand) instead of the prototype's video clips.
 // The mouth follows the line being spoken (core/speech onSpeech). Without WebGL, or if the model fails
 // to load, the video avatar is shown.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { onSpeech } from '../../core/speech';
 import { type AvatarAssistant, AvatarVideo } from './Avatar';
+import { AvatarEmbed, MIC_EMBEDS, micEmbedOn } from './AvatarEmbed';
 import type { AvatarEngine } from './avatar3d/engine';
 
 /**
@@ -14,7 +15,7 @@ import type { AvatarEngine } from './avatar3d/engine';
  * that stretches with the jaw so the lower teeth ride the lower lip; v1 opened in a V.
  */
 const MODELS: Readonly<Record<string, string>> = {
-  margaret: '/avatars/margaret/v4/margaret.gltf',
+  margaret: '/avatars/margaret/v5/margaret.gltf',
 };
 
 let webgl: boolean | null = null;
@@ -29,7 +30,14 @@ function hasWebGL(): boolean {
   return webgl;
 }
 
+/**
+ * The Mic stage's avatar: the Assistia embed when the assistant has one (AvatarEmbed.tsx), else the 3D
+ * model, else the video clips. An embed that never gets ready hands the stage to the 3D/video avatar.
+ */
 export function MicAvatar(props: { a: AvatarAssistant; talking: boolean; mood: string }) {
+  const [embedFailed, setEmbedFailed] = useState(false);
+  const slug = micEmbedOn && !embedFailed ? MIC_EMBEDS[props.a.k] : undefined;
+  if (slug) return <AvatarEmbed a={props.a} talking={props.talking} slug={slug} onFail={() => setEmbedFailed(true)} />;
   const model = MODELS[props.a.k];
   if (!model || !hasWebGL()) return <AvatarVideo {...props} />;
   return <Avatar3D {...props} model={model} />;

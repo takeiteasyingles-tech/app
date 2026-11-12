@@ -4,6 +4,7 @@
 import { STEP } from '@tie/shared/constants';
 import { Btn, Icon } from '@tie/ui';
 import { Fragment } from 'preact';
+import { enterVideoFullscreen, exitVideoFullscreen } from '../../core/screen';
 import { Blocks } from '../../ui-blocks/Blocks';
 import { fmt, heard, lyricRows, type MicFeedback, pad2, type StepCtx, type StepOut } from './model';
 import { AudioPill, Presentation } from './Presentation';
@@ -194,7 +195,12 @@ function Look({ Ep, P, a, tap, homeBg }: StepCtx, onVideoEnd: () => void): StepO
               controls={P.vid}
               playsInline
               preload="metadata"
-              onEnded={onVideoEnd}
+              // A replay from the native controls goes fullscreen again; the end brings the page back.
+              onPlay={(ev) => enterVideoFullscreen(ev.currentTarget)}
+              onEnded={(ev) => {
+                exitVideoFullscreen(ev.currentTarget);
+                onVideoEnd();
+              }}
               onLoadedMetadata={(ev) => a.vidMeta(ev.currentTarget.duration)}
             />
             {P.vid ? null : (
@@ -250,7 +256,7 @@ function Look({ Ep, P, a, tap, homeBg }: StepCtx, onVideoEnd: () => void): StepO
         </div>
         <p class="sm pl-note">
           <Icon name="cards" size={16} />
-          <span>Ao seguir para a próxima etapa, estas palavras entram nos seus Flashcards.</span>
+          <span>Ao seguir para a próxima etapa, estas palavras entram nos seus Cards.</span>
         </p>
       </>
     ),
@@ -743,7 +749,7 @@ function Away({ Ep, desk, a, tap }: StepCtx): StepOut {
       <>
         <p class="p-read">
           Lista fechada. Toque para ouvir: o que você já ouviu fica azul. Ao seguir, as{' '}
-          <span class="nw">expressões-chave</span> entram nos seus Flashcards.
+          <span class="nw">expressões-chave</span> entram nos seus Cards.
         </p>
         <div class="card" style={{ padding: '6px 16px' }}>
           <div class="lbl or" style={{ padding: '12px 0 6px' }}>

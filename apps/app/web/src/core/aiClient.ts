@@ -152,6 +152,11 @@ export async function pronounce(b64: string, target: string, opts: PronounceOpti
     }
   }
   const d = await demo();
+  // PROD (spec 05 "Take the Mic: real scores"): what the browser heard is scored the way the server
+  // scores Whisper's transcript (word alignment, 0 to 10), not by the prototype's word overlap with a
+  // floor of 4. Without a transcript the prototype's rule stays (the caller checks for silence first).
+  const heard = String(opts.heard ?? '').trim();
+  if (heard) return { ...d.scorePronunciation(target, heard), source: 'demo' };
   return d.demoPronounce(target, opts.heard);
 }
 

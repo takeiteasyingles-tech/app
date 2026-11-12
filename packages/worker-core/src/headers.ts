@@ -5,7 +5,7 @@ import type { AppEnv } from './env';
 export const CSP = [
   "default-src 'self'",
   "script-src 'self' https://challenges.cloudflare.com",
-  'frame-src https://challenges.cloudflare.com',
+  'frame-src https://challenges.cloudflare.com https://assistia-backend.perfectdesigner.workers.dev', // Assistia: Mic avatar embed (app)
   "style-src 'self'",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",

@@ -324,7 +324,7 @@ export function freshDraft(): Draft {
 }
 
 export function freshSettings(): Settings {
-  return { ts: 1, sound: true, hd: false, trans: true, slow: false, remind: true, phone: false, fx: true, free: false };
+  return { ts: 1, sound: true, hd: true, trans: true, slow: false, remind: true, phone: false, fx: true, free: false };
 }
 
 /** Defaults mirroring the prototype's store.fresh(), with the free-steps bypass off. */

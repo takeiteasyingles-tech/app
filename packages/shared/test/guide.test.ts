@@ -47,7 +47,11 @@ describe('guide.plan()', () => {
       const s = { ...course, profile, due, game };
       core.setState(clone(s));
       // PROD: "Etapa N de 9" (no e-book step) where the prototype says "de 10"; everything else is equal.
-      const proto = JSON.parse(JSON.stringify(plain(T.guide.plan())).replaceAll(' de 10 · ', ` de ${STEP.LAST} · `));
+      const proto = JSON.parse(
+        JSON.stringify(plain(T.guide.plan()))
+          .replaceAll(' de 10 · ', ` de ${STEP.LAST} · `)
+          .replaceAll('"EXTRA · ', '"FLIX · '),
+      );
       const ts = plan({ state: s, content: C, today, epImg: HOME });
       expect(plain(ts)).toEqual(proto);
       for (const t of ts.tasks) seen.add(t.k);

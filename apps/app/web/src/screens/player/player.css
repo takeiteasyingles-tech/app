@@ -1190,3 +1190,50 @@
 .pl-exlist .pill.gr svg {
   color: var(--green);
 }
+.pl-feedback {
+  max-width: 540px;
+}
+.pl-fb-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.pl-fb-stars {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.pl-fb-stars label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  font-size: 1.7rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pl-fb-stars label.on {
+  color: var(--orange);
+  border-color: var(--orange);
+  background: var(--cream);
+}
+.pl-fb-stars input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.pl-fb-stars label:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.pl-feedback textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 70px;
+}

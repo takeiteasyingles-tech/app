@@ -347,7 +347,7 @@ function Hoje({ c }: { c: Catalog }) {
   const extras = (
     <section class="stack" style={{ '--gap': '10px' }}>
       <div>
-        <div class="lbl or">EXTRA pra você</div>
+        <div class="lbl or">FLIX pra você</div>
         <div
           class="mt4"
           style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px' }}

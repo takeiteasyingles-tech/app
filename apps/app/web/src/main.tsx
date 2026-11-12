@@ -6,6 +6,7 @@ import '@tie/ui/css/tie-ext.css';
 import { configureUi } from '@tie/ui';
 import { render } from 'preact';
 import { startOutbox } from './core/outbox';
+import { startScreenWake } from './core/screen';
 import { playSfx } from './core/sound';
 import { route, startRouter } from './router';
 import { preloadHero } from './screens/entrada/hero';
@@ -16,6 +17,8 @@ import { checkHealth, load, state } from './store';
 // Every data-go/data-act click ticks; +N pontos plays the points arpeggio (gated by settings.sound).
 configureUi({ fxEnabled: () => state.value.settings.fx, sfx: playSfx });
 startRouter();
+// Lessons, songs, scenes and the Mic keep the screen on (core/screen.ts).
+startScreenWake();
 
 // The shell shows no screen until /api/me/state answers (index.html preloads it), so the first
 // screen's chunk and, signed out, the sign-in photo download meanwhile instead of after it.

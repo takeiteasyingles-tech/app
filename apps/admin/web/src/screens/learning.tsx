@@ -355,7 +355,7 @@ export function UserLearning({ userId }: { userId: string }) {
                   <span class="xs">{`em 30 dias · ${fmtMinutes(s.study.maggieSecTotal)} no total`}</span>
                 </div>
                 <div class="ad-kpi">
-                  <span class="lbl">Flashcards</span>
+                  <span class="lbl">Cards</span>
                   <span class="num ad-kpi-v">{fmtInt(s.study.srsCards)}</span>
                   <span class="xs">cartões no baralho</span>
                 </div>

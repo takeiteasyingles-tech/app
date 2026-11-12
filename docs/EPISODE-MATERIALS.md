@@ -18,8 +18,13 @@ ficam no registro de e-book escondido do episódio. No admin, o botão **Take th
 materiais abre o editor: questões, teste ligado ou desligado e nota de corte. Não existe mais
 regra de liberação: o aluno faz o teste ao chegar à etapa 10, e entregar o teste conclui o episódio.
 
+O aluno responde **6 questões** por episódio. Se o editor tiver mais, a publicação escolhe seis:
+primeiro as do próprio episódio (campo "Episódio" da questão), uma de cada parte por vez (Parte A,
+B, C, D, A…), e completa com as de outros episódios se faltar. A nota de corte é ajustada na mesma
+proporção (14 de 20 vira 5 de 6). Para escolher exatamente quais aparecem, deixe só seis no editor.
+
 Detalhes em `docs/spec/05-foundation-notes.md`, linhas "Step order", "No e-book" e
-"In this episode, Take a Look, Take the Test (0014)".
+"In this episode, Take a Look, Take the Test (0014)" e "Take the Test: six questions".
 
 ## Migração e publicação
 

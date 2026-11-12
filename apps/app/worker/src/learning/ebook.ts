@@ -9,6 +9,7 @@ import {
   type TestResult,
   type TestSubmitBody,
 } from '@tie/shared';
+import { episodeTestPassScore, pickEpisodeTest } from '@tie/shared/domain/episodeTest';
 import { testGate } from '@tie/shared/domain/testGate';
 import { all, batch, batchRun, fail, one, type Query, q, run } from '@tie/worker-core';
 import { contentSource, ebookOpen } from './content';
@@ -97,9 +98,9 @@ async function loadTest(d: LearningDeps, n: number) {
         'SELECT num, pass_score, test_enabled, test_required_episodes, test_min_completed, NULL AS pdf_key FROM ebooks WHERE num = ?',
         n,
       ),
-      q<TestQuestionRow>(
+      q<TestQuestionRow & { part_idx: number; ep_num: number | null }>(
         d.db,
-        'SELECT id, n, opts, answer_idx, accept, show FROM ebook_test_questions WHERE ebook_num = ? ORDER BY n',
+        'SELECT id, n, opts, answer_idx, accept, show, part_idx, ep_num FROM ebook_test_questions WHERE ebook_num = ? ORDER BY n',
         n,
       ),
       q<AnswerRow>(
@@ -159,8 +160,13 @@ async function loadTest(d: LearningDeps, n: number) {
     });
   }
 
-  let passScore = row.pass_score;
-  let rows: TestQuestionRow[] = questions;
+  // Unpublished (D1) content follows the same six-question rule publishing applies (domain/episodeTest).
+  const kept = pickEpisodeTest(
+    questions.map((x) => ({ part: x.part_idx, n: x.n, ep: x.ep_num, row: x })),
+    availability.episodes,
+  );
+  let passScore = episodeTestPassScore(row.pass_score, questions.length, kept.length);
+  let rows: TestQuestionRow[] = kept.map((x) => x.row).sort((a, b) => a.n - b.n);
   if (availability.source === 'snapshot') {
     const file = availability.snapshot;
     if (!file) throw fail('content_unavailable');

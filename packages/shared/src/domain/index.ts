@@ -1,5 +1,6 @@
 export * from './assist';
 export * from './daytime';
+export * from './episodeTest';
 export * from './feedback';
 export * from './game';
 export * from './gating';

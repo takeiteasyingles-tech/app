@@ -118,7 +118,7 @@ export function plan<X extends GuideExtra, A extends RankableAlbum>(i: DayPlanIn
   if (p.minutes >= 20 && x) {
     tasks.push({
       k: 'extra',
-      t: `EXTRA · ${x.title}`,
+      t: `FLIX · ${x.title}`,
       sub: `${x.why} · ${x.dur}`,
       min: 8,
       go: `extra/${x.id}/assistir`,

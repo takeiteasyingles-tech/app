@@ -115,4 +115,63 @@ describe('assistant speech', () => {
     expect(f.tts).toHaveBeenCalledWith('Hello.', 'female', 'margaret');
     expect(speak).toHaveBeenCalledOnce();
   });
+
+  describe('external voice (Mic Assistia embed)', () => {
+    it('speaks the assistant’s lines, under any of its names, instead of our voices', async () => {
+      const speech = await import('../src/core/speech');
+      const ext = {
+        k: 'margaret',
+        say: vi.fn((_t: string, onStart: () => void) => {
+          onStart();
+          return Promise.resolve(true);
+        }),
+        stop: vi.fn(),
+      };
+      const off = speech.setExternalVoice(ext);
+      const events: import('../src/core/speech').SpeechEvent[] = [];
+      const offTap = speech.onSpeech((e) => events.push(e));
+      const onStart = vi.fn();
+      await speech.say('Good morning.', { who: 'Margaret', hd: true, onStart });
+      offTap();
+      expect(ext.say).toHaveBeenCalledWith('Good morning.', expect.any(Function));
+      expect(onStart).toHaveBeenCalledOnce();
+      expect(f.tts).not.toHaveBeenCalled();
+      expect(speak).not.toHaveBeenCalled();
+      expect(events).toEqual([{ type: 'end' }]);
+      off();
+      await speech.say('Hello.', { who: 'Maggie' });
+      expect(ext.say).toHaveBeenCalledOnce();
+      expect(speak).toHaveBeenCalledOnce();
+    });
+
+    it('leaves other speakers alone', async () => {
+      const speech = await import('../src/core/speech');
+      const ext = { k: 'robert', say: vi.fn(() => Promise.resolve(true)), stop: vi.fn() };
+      speech.setExternalVoice(ext);
+      await speech.say('Hello.', { who: 'Maggie' });
+      expect(ext.say).not.toHaveBeenCalled();
+      expect(speak).toHaveBeenCalledOnce();
+    });
+
+    it('falls back to our voice when the line cannot start', async () => {
+      const speech = await import('../src/core/speech');
+      speech.setExternalVoice({ k: 'margaret', say: () => Promise.resolve(false), stop: vi.fn() });
+      const saying = speech.say('Hello.', { who: 'Maggie', hd: true });
+      await vi.runAllTimersAsync();
+      await saying;
+      expect(f.tts).toHaveBeenCalledWith('Hello.', 'female', 'margaret');
+    });
+
+    it('stop() stops the external voice and resolves the line', async () => {
+      const speech = await import('../src/core/speech');
+      const ext = { k: 'margaret', say: vi.fn(() => new Promise<boolean>(() => {})), stop: vi.fn() };
+      speech.setExternalVoice(ext);
+      const saying = speech.say('A long line.', { who: 'Maggie' });
+      await Promise.resolve();
+      speech.stop();
+      await saying;
+      expect(ext.stop).toHaveBeenCalled();
+      expect(speak).not.toHaveBeenCalled();
+    });
+  });
 });

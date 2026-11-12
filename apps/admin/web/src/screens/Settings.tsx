@@ -27,7 +27,10 @@ import { VoicesSettings } from './Voices';
 
 const FLAG_INFO: Record<string, string> = {
   [FLAGS.aiEnabled]: 'IA ligada: conversa, pronúncia e voz pelo Workers AI. Desligada, o app usa o modo demo.',
-  [FLAGS.freeSteps]: 'Etapas livres: pula a trava entre as etapas do episódio (testes).',
+  [FLAGS.freeSteps]:
+    'Modo Dev: libera o botão de avançar sem concluir vídeos, áudios, gravações ou exercícios. Vale para os alunos definidos nas regras, sem ativação adicional no perfil.',
+  [FLAGS.stepFeedback]:
+    'Feedback da plataforma: exige uma avaliação da experiência antes de avançar em cada etapa do episódio, inclusive ao concluir. Pergunta sobre dificuldades e sugestões de melhoria da tela.',
   [FLAGS.storeRecordings]: 'Guardar as gravações do Mic (para moderação).',
 };
 

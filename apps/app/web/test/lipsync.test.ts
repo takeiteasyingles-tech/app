@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { spring } from '../src/screens/maggie/avatar3d/engine';
 import {
   envelope,
+  LIP_BONES,
+  LIP_OFFSETS,
   MORPHS,
   ROUND_LEAD,
   SHAPES,
   sample,
+  sampleLips,
   timeline,
   wordVisemes,
 } from '../src/screens/maggie/avatar3d/lipsync';
@@ -114,6 +117,41 @@ describe('lip sync', () => {
     const before = sample(keys, -1);
     before.mouthRound = 1;
     expect(sample(keys, -1).mouthRound).toBe(0);
+  });
+
+  it('moves the lip bones by the measured offsets: closed lips meet, open vowels part them', () => {
+    const at = (v: keyof typeof LIP_OFFSETS, bone: number, axis: 0 | 1) => LIP_OFFSETS[v][bone]?.[axis] ?? Number.NaN;
+    for (const [v, offs] of Object.entries(LIP_OFFSETS)) expect(offs, v).toHaveLength(LIP_BONES.length);
+    expect(LIP_OFFSETS.PP.every(([x, y]) => x === 0 && y === 0)).toBe(true);
+    const gap = (v: keyof typeof LIP_OFFSETS) => at(v, 6, 1) - at(v, 2, 1); // lower lip centre - upper lip centre
+    expect(gap('aa')).toBeGreaterThan(10);
+    expect(gap('aa')).toBeGreaterThan(gap('E'));
+    // U pulls the corners toward the midline, E spreads them
+    expect(at('U', 0, 0)).toBeGreaterThan(0);
+    expect(at('E', 0, 0)).toBeLessThan(0);
+  });
+
+  it('blends the lip offsets between keys and rests outside the line', () => {
+    const keys = [
+      { t: 0, v: 'sil' as const },
+      { t: 0.2, v: 'aa' as const },
+      { t: 0.4, v: 'sil' as const },
+    ];
+    const lowY = (t: number) => sampleLips(keys, t)[6]?.[1] ?? Number.NaN;
+    const open = LIP_OFFSETS.aa[6]?.[1] ?? Number.NaN;
+    expect(
+      sampleLips(keys, -1)
+        .flat()
+        .every((n) => n === 0),
+    ).toBe(true);
+    expect(
+      sampleLips(keys, 9)
+        .flat()
+        .every((n) => n === 0),
+    ).toBe(true);
+    expect(lowY(0.1)).toBeGreaterThan(0);
+    expect(lowY(0.1)).toBeLessThan(open);
+    expect(lowY(0.2)).toBeCloseTo(open, 5);
   });
 
   it('moves the mouth on a critically damped spring: no overshoot, stable at any frame time', () => {

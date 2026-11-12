@@ -9,9 +9,10 @@ import { setQuery } from '../router';
 import { can } from '../session';
 import { useLoad, usePaged } from '../ui/async';
 import { Icon } from '../ui/icons';
-import { Button, Empty, ErrorBox, Kpi, MoreButton, Page, SearchBox, Sel, Skeleton, TextIn } from '../ui/kit';
+import { Button, Empty, ErrorBox, Kpi, MoreButton, Page, SearchBox, Sel, Skeleton, TabsNav, TextIn } from '../ui/kit';
 import { fmtAvg, NpsPill, npsTone, StarDist, Stars } from './learning';
 import type { ScreenProps } from './registry';
+import { StepFeedbacks } from './StepFeedbacks';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -143,7 +144,35 @@ function RatingItem({ r }: { r: AdminFeedbackRow }) {
   );
 }
 
-export function Feedbacks({ q }: ScreenProps) {
+function FeedbackTabs({ platform }: { platform: boolean }) {
+  return (
+    <TabsNav label="Tipos de feedback">
+      <a href="#/feedbacks" class={`ad-tab${platform ? '' : ' on'}`} aria-current={!platform ? 'page' : undefined}>
+        Avaliações dos episódios
+      </a>
+      <a
+        href="#/feedbacks?tipo=plataforma"
+        class={`ad-tab${platform ? ' on' : ''}`}
+        aria-current={platform ? 'page' : undefined}
+      >
+        Plataforma por etapa
+      </a>
+    </TabsNav>
+  );
+}
+
+export function Feedbacks(props: ScreenProps) {
+  if (props.q.tipo === 'plataforma') {
+    return (
+      <Page title="Feedbacks" kicker="Pessoas" bar={<FeedbackTabs platform />}>
+        <StepFeedbacks q={props.q} />
+      </Page>
+    );
+  }
+  return <EpisodeFeedbacks {...props} />;
+}
+
+function EpisodeFeedbacks({ q }: ScreenProps) {
   const ep = /^\d{1,6}$/.test(q.ep ?? '') ? Number(q.ep) : null;
   const stars = /^[1-5]$/.test(q.nota ?? '') ? Number(q.nota) : null;
   const com = q.com === '1' || q.com === '0' ? q.com : '';
@@ -232,6 +261,7 @@ export function Feedbacks({ q }: ScreenProps) {
         </div>
       }
     >
+      <FeedbackTabs platform={false} />
       {/* The period filters the summary and the list; folded away so the bar stays short on a phone. */}
       <details class="card ad-card ad-more" open={!!(from || to)}>
         <summary>

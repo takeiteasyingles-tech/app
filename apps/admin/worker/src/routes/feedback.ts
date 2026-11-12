@@ -8,6 +8,7 @@
 //   the funnel, the test pass rates and the active learners, as on the dashboard (/admin-api/stats).
 import {
   type AdminFeedbackRow,
+  type AdminStepFeedbackRow,
   ApiError,
   adminFeedbackApi,
   adminStatsApi,
@@ -25,6 +26,60 @@ import { likeEscape, paramsOf, queryOf, route } from '../lib/http';
 import { decodeCursor, pageOf } from '../lib/page';
 
 const routes = new Hono<AppEnv>();
+
+route(routes, adminFeedbackApi.steps, async (c) => {
+  const query = queryOf(c, adminFeedbackApi.steps.query);
+  const binds: Bind[] = [];
+  const p = (v: Bind) => {
+    binds.push(v);
+    return `?${binds.length}`;
+  };
+  const where: string[] = [];
+  if (query.episode !== undefined) where.push(`f.episode_num = ${p(query.episode)}`);
+  if (query.step !== undefined) where.push(`f.step = ${p(query.step)}`);
+  const cur = decodeCursor(query.cursor, ['n', 's']);
+  if (cur) where.push(`(f.created_at < ${p(cur[0])} OR (f.created_at = ${p(cur[0])} AND f.id < ${p(cur[1])}))`);
+  const rows = await all<{
+    id: string;
+    user_id: string;
+    user_name: string | null;
+    episode_num: number;
+    episode_title: string | null;
+    step: number;
+    stars: number;
+    had_difficulty: number;
+    difficulty: string | null;
+    improvement: string | null;
+    created_at: number;
+  }>(
+    c.env.DB,
+    `SELECT f.*, pr.name AS user_name, e.title AS episode_title FROM step_feedback f
+    LEFT JOIN profiles pr ON pr.user_id = f.user_id LEFT JOIN episodes e ON e.num = f.episode_num
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY f.created_at DESC, f.id DESC LIMIT ${p(query.limit + 1)}`,
+    ...binds,
+  );
+  return c.json(
+    pageOf(
+      rows,
+      query.limit,
+      (r): AdminStepFeedbackRow => ({
+        id: r.id,
+        userId: r.user_id,
+        userName: r.user_name,
+        episodeNum: r.episode_num,
+        episodeTitle: r.episode_title,
+        step: r.step,
+        stars: r.stars,
+        hadDifficulty: r.had_difficulty === 1,
+        difficulty: r.difficulty,
+        improvement: r.improvement,
+        createdAt: r.created_at,
+      }),
+      (r) => [r.created_at, r.id],
+    ),
+  );
+});
 
 /** SQL: the account `col` holds no staff role (a learner). The alias never clashes with the caller's. */
 const learnerOnly = (col: string) => `NOT EXISTS (SELECT 1 FROM user_roles ur_ WHERE ur_.user_id = ${col})`;

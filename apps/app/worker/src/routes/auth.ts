@@ -137,7 +137,7 @@ routes.post(api.signup.path, vJson(api.signup.body), async (c) => {
       ageBand,
       now,
     ),
-    q(db, 'INSERT INTO user_settings(user_id) VALUES(?)', userId),
+    q(db, 'INSERT INTO user_settings(user_id, hd) VALUES(?, 1)', userId),
     q(db, 'INSERT INTO user_stats(user_id) VALUES(?)', userId),
     q(
       db,

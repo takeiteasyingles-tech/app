@@ -19,6 +19,22 @@ let other = '';
 const path = (n: number) => buildPath(feedbackApi.episode.path, { n });
 
 async function put(n: number, body: unknown, opts: { token?: string | null; headers?: Record<string, string> } = {}) {
+  return putPath(path(n), body, opts);
+}
+
+async function putStep(
+  id: string,
+  body: unknown,
+  opts: { token?: string | null; headers?: Record<string, string> } = {},
+) {
+  return putPath(buildPath(feedbackApi.step.path, { id }), body, opts);
+}
+
+async function putPath(
+  url: string,
+  body: unknown,
+  opts: { token?: string | null; headers?: Record<string, string> } = {},
+) {
   const headers = new Headers({
     Origin: ORIGIN,
     'Sec-Fetch-Site': 'same-origin',
@@ -29,7 +45,7 @@ async function put(n: number, body: unknown, opts: { token?: string | null; head
   if (t) headers.set('Cookie', `tie_s=${t}`);
   const ctx = createExecutionContext();
   const res = await worker.fetch(
-    new Request(ORIGIN + path(n), { method: 'PUT', headers, body: JSON.stringify(body) }),
+    new Request(ORIGIN + url, { method: 'PUT', headers, body: JSON.stringify(body) }),
     testEnv,
     ctx,
   );
@@ -83,6 +99,74 @@ beforeAll(async () => {
   ]);
   token = (await createSession(db, { userId: 'u-fb', audience: 'app' })).token;
   other = (await createSession(db, { userId: 'u-fb2', audience: 'app' })).token;
+});
+
+describe('platform feedback per step', () => {
+  const body = {
+    episodeNum: 1,
+    step: 4,
+    stars: 3,
+    hadDifficulty: true,
+    difficulty: '  O botão ficou escondido  ',
+    improvement: '  Melhorar os controles  ',
+  };
+
+  it('requires a session and same-origin requests', async () => {
+    expect((await putStep('step-auth', body, { token: null })).status).toBe(401);
+    expect(
+      (
+        await putStep('step-csrf', body, {
+          headers: { Origin: 'https://evil.test', 'Sec-Fetch-Site': 'cross-site' },
+        })
+      ).status,
+    ).toBe(403);
+  });
+
+  it('records separate experiences on repeated transitions, and retries do not overwrite them', async () => {
+    expect((await putStep('step-first', body)).status).toBe(200);
+    expect((await putStep('step-first', { ...body, stars: 1 })).status).toBe(200);
+    expect((await putStep('step-second', { ...body, stars: 5, hadDifficulty: false })).status).toBe(200);
+    const rows = await testEnv.DB.prepare('SELECT * FROM step_feedback WHERE id IN (?, ?) ORDER BY id')
+      .bind('step-first', 'step-second')
+      .all();
+    expect(rows.results).toHaveLength(2);
+    expect(rows.results[0]).toMatchObject({
+      stars: 3,
+      step: 4,
+      episode_num: 1,
+      difficulty: 'O botão ficou escondido',
+      improvement: 'Melhorar os controles',
+    });
+    expect(rows.results[1]).toMatchObject({ stars: 5, had_difficulty: 0, difficulty: null });
+    expect((await putStep('step-first', body, { token: other })).status).toBe(404);
+  });
+
+  it('accepts the first reached step, refuses future steps, locked or unpublished episodes', async () => {
+    expect((await putStep('step-one', { ...body, step: 1 }, { token: other })).status).toBe(200);
+    expect((await putStep('step-future', { ...body, step: 2 }, { token: other })).status).toBe(409);
+    expect((await putStep('step-locked', { ...body, episodeNum: 2, step: 1 }, { token: other })).status).toBe(409);
+    expect((await putStep('step-draft', { ...body, episodeNum: 4 })).status).toBe(404);
+    expect((await putStep('step-unknown', { ...body, episodeNum: 99 })).status).toBe(404);
+  });
+
+  it('validates rating, step, difficulty choice and comment lengths', async () => {
+    for (const patch of [
+      { stars: 0 },
+      { step: 0 },
+      { step: 11 },
+      { hadDifficulty: 'yes' },
+      { difficulty: 'a'.repeat(1001) },
+      { improvement: 'a'.repeat(1001) },
+    ]) {
+      expect((await putStep('step-invalid', { ...body, ...patch })).status).toBe(400);
+    }
+    expect((await putStep('step-blank', { ...body, difficulty: ' ', improvement: ' ' })).status).toBe(200);
+    expect(
+      await testEnv.DB.prepare('SELECT difficulty, improvement FROM step_feedback WHERE id = ?')
+        .bind('step-blank')
+        .first(),
+    ).toEqual({ difficulty: null, improvement: null });
+  });
 });
 
 describe('PUT /api/feedback/episodes/:n', () => {

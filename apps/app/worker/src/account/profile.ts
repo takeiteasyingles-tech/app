@@ -158,7 +158,7 @@ export function settingsFromRow(r: SettingsRow | null | undefined, free: boolean
   return {
     ts,
     sound: r ? bool(r.sound) : true,
-    hd: r ? bool(r.hd) : false,
+    hd: r ? bool(r.hd) : true,
     trans: r ? bool(r.trans) : true,
     slow: r ? bool(r.slow) : false,
     remind: r ? bool(r.remind) : true,

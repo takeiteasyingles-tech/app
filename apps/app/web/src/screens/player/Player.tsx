@@ -6,7 +6,7 @@
 // server, and its award results play the prototype's toasts, sfx and confetti.
 
 import { signal } from '@preact/signals';
-import { STEP } from '@tie/shared/constants';
+import { FLAGS, STEP } from '@tie/shared/constants';
 import type { Catalog, Episode } from '@tie/shared/content/schema';
 import type { MicScoreSource } from '@tie/shared/contracts/progress';
 import { gate } from '@tie/shared/domain/gating';
@@ -16,7 +16,8 @@ import { stepKey, type TieState } from '@tie/shared/state';
 import { confetti, Icon, Segs, toast, uiConfig } from '@tie/ui';
 import { Fragment } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { pronounce } from '../../core/aiClient';
+import { aiOnline, pronounce } from '../../core/aiClient';
+import { enterVideoFullscreen } from '../../core/screen';
 import { sfx, synth } from '../../core/sound';
 import { speech } from '../../core/speech';
 import { Overlay, type ScreenProps, useChrome } from '../../frame';
@@ -35,6 +36,7 @@ import {
   state,
   useContent,
 } from '../../store';
+import { submitStepFeedback } from '../../store/feedback';
 import {
   fresh,
   heard,
@@ -49,6 +51,7 @@ import {
   stepAudio,
   type Tap,
 } from './model';
+import { StepFeedback } from './StepFeedback';
 import { renderStep } from './steps';
 import './player.css';
 
@@ -188,6 +191,17 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
   const desk = layoutOf(s) === 'desktop';
   const STEPS = cat.steps;
   const cur = STEPS[step - 1];
+  const [feedback, setFeedback] = useState<{ resume: () => void } | null>(null);
+  const requestFeedback = (resume: () => void) => {
+    if (!state.value.flags[FLAGS.stepFeedback]) {
+      resume();
+      return;
+    }
+    if (feedback) return;
+    stopAll(P);
+    P.sheet = false;
+    setFeedback({ resume });
+  };
 
   useChrome({ title: `Ep. ${Ep.num} · ${cur?.name ?? ''}` });
 
@@ -310,12 +324,16 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
   };
 
   /** setStep(n, award): advancing past prog asks the server (need() + `step` award + unlocked cards). */
-  const setStep = (n: number, award = false) => {
+  const moveStep = (n: number, award = false) => {
     // The new prog is in place before go(): the next route renders as reached, not redirected back.
     if (award && n > (view(state.value).prog[Ep.num] || 1)) {
       void pending({ prog: [String(Ep.num), n] }, () => advanceStep(Ep.num, n));
     }
     go(`episodio/${Ep.num}/${n}`);
+  };
+  const setStep = (n: number, award = false) => {
+    if (n > step) requestFeedback(() => moveStep(n, award));
+    else moveStep(n, award);
   };
 
   const close = () => {
@@ -324,7 +342,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     go('inicio');
   };
 
-  const next = () => {
+  const continueNext = () => {
     if (gate(Ep, view(state.value), step) || P.finishing) return;
     if (step === STEP.LAST) {
       // The done screen opens only once the server has recorded the episode (or queued it offline):
@@ -342,7 +360,11 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       });
       return;
     }
-    setStep(step + 1, true);
+    moveStep(step + 1, true);
+  };
+  const next = () => {
+    if (gate(Ep, view(state.value), step) || P.finishing) return;
+    requestFeedback(continueNext);
   };
 
   function speakFrom(i: number, tk: number): void {
@@ -504,6 +526,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     P.mic = 'rec';
     P.fb = null;
     re();
+    // The recognizer could not run (no mic access for it, no network…), as opposed to hearing nothing.
+    let srBroken = !speech.canListen;
     if (rec && speech.canListen) {
       lis = speech.listen({
         onInterim: (t) => {
@@ -511,6 +535,9 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         },
         onFinal: (t) => {
           said = t;
+        },
+        onError: (err) => {
+          if (err !== 'no-speech' && err !== 'aborted') srBroken = true;
         },
       });
     }
@@ -530,6 +557,24 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       let attempt: string | undefined;
       if (rec) {
         const out = await rec.stop();
+        // PROD (spec 05 "Take the Mic: real scores"): a take with no voice, or one the browser could
+        // not make out while the AI is off, gets no score; the learner records it again.
+        const silent = !!out.b64 && (out.voicedMs ?? 0) < speech.MIN_VOICED_MS;
+        const unheard = !silent && !aiOnline.value && !srBroken && !said.trim();
+        if (silent || unheard) {
+          if (P.dead) return;
+          if (P.micIdx === idx) {
+            P.fb = null;
+            P.mic = 'idle';
+            re();
+          }
+          toast(
+            silent
+              ? 'Não ouvi a sua voz. Toque no microfone e fale a frase.'
+              : 'Não deu para entender. Fale de novo, mais perto do microfone.',
+          );
+          return;
+        }
         const r = await pronounce(out.b64, m.en, { heard: said, phraseId: m.id });
         fb = r;
         source = r.source === 'ia' && r.attempt ? 'ia' : 'demo';
@@ -668,6 +713,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       // The scene and the context audio never play together.
       if (P.playing) stopAll(P);
       P.vid = true;
+      // PROD (spec 05 "Screen stays on; scene in fullscreen"): asked inside the tap, as browsers require.
+      enterVideoFullscreen(v);
       re();
       v?.play().catch(() => {
         toast('O navegador bloqueou o vídeo. Toque de novo.');
@@ -829,6 +876,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       >
         <span style={{ minWidth: '0' }}>
           <span class="kicker">
+            {s.settings.free ? 'Modo Dev · ' : ''}
             {lock ||
               (step === STEP.LAST
                 ? P.finishing
@@ -895,7 +943,20 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
           {main}
         </div>
       )}
-      {P.sheet ? (
+      {feedback ? (
+        <StepFeedback
+          episodeNum={Ep.num}
+          step={step}
+          stepName={cur?.name ?? ''}
+          save={(id, body) => serial(() => submitStepFeedback(id, body))}
+          onCancel={() => setFeedback(null)}
+          onContinue={() => {
+            if (P.dead) return;
+            setFeedback(null);
+            feedback.resume();
+          }}
+        />
+      ) : P.sheet ? (
         <Overlay>
           <div class="overlay">
             {/* biome-ignore lint/a11y/noStaticElementInteractions: the scrim mirrors the close button for pointer users */}

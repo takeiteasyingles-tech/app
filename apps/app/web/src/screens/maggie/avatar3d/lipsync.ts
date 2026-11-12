@@ -74,6 +74,191 @@ export const SHAPES: Readonly<Record<Viseme, Shape>> = {
   HH: { jaw: 0.6, mouthWide: 0.33, lowerLipDown: 0.13 },
 };
 
+/**
+ * Lip bones (model v5+): how far each lip point moves for each viseme, in mm on the photo plane (x right, y
+ * down), in the order of LIP_BONES. Medians measured 2026-11-09 on the real lips of Margaret in two reference
+ * videos of the same line (MediaPipe lip landmarks aligned to the photo, labelled with this file's own
+ * timeline), relative to her closed mouth. sil and PP are shut; CH (not in the line) uses SS.
+ */
+export const LIP_BONES = [
+  'lipCorner.L',
+  'lipUp.L',
+  'lipUp',
+  'lipUp.R',
+  'lipCorner.R',
+  'lipLow.L',
+  'lipLow.C',
+  'lipLow.R',
+  'chin',
+] as const;
+export const LIP_OFFSETS: Readonly<Record<Viseme, readonly (readonly [number, number])[]>> = {
+  sil: [
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+  ],
+  aa: [
+    [-1.8, 0.1],
+    [-2, -3.4],
+    [0, -3.6],
+    [1.2, -3.4],
+    [2, -0.1],
+    [-1.9, 6.6],
+    [-0.1, 7.5],
+    [1.4, 6.9],
+    [-0.1, 4.6],
+  ],
+  E: [
+    [-2.6, -4.7],
+    [-1.4, -4.3],
+    [-0.1, -4.3],
+    [1.1, -4.3],
+    [2, -3.9],
+    [-2, 3.1],
+    [-0.3, 5.3],
+    [0.7, 3.6],
+    [-0.5, -0.3],
+  ],
+  I: [
+    [-6.3, -0.2],
+    [-2.9, -3.4],
+    [-0.1, -3.8],
+    [2.3, -3.3],
+    [3.5, 0.1],
+    [-3.9, 10.3],
+    [-0.4, 12.9],
+    [2, 10.7],
+    [-0.8, 6.7],
+  ],
+  O: [
+    [1.3, 2.8],
+    [0, 0],
+    [-0.1, -2.4],
+    [-0.5, 0.6],
+    [-0.6, 2.7],
+    [-0.8, 4.8],
+    [-0.3, 6.6],
+    [-0.7, 4.8],
+    [-0.9, 2.6],
+  ],
+  U: [
+    [4.4, 2.6],
+    [0.5, -1.2],
+    [-0.5, -2.6],
+    [-0.9, -1.3],
+    [-2.6, 3.5],
+    [0.1, 6.2],
+    [-0.4, 7.8],
+    [-0.5, 7],
+    [-1, 8],
+  ],
+  RR: [
+    [1.5, -0.2],
+    [-0.1, -2.8],
+    [-0.4, -3.2],
+    [-0.3, -2.9],
+    [-0.7, -0.2],
+    [-0.6, 4],
+    [-0.4, 5.7],
+    [-0.2, 3.6],
+    [-0.4, 1.3],
+  ],
+  PP: [
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+  ],
+  FF: [
+    [-0.1, 1.1],
+    [-1.5, -5.4],
+    [-0.2, -6.8],
+    [0.8, -4.9],
+    [0.4, 2.3],
+    [-1.4, 1.1],
+    [-0.1, 0.6],
+    [0.6, 1.7],
+    [0.8, 4.2],
+  ],
+  TH: [
+    [-3.5, -2.1],
+    [-1.6, -5.5],
+    [-0.4, -6.3],
+    [1.7, -5.1],
+    [1.9, -1.1],
+    [-2.9, 10.9],
+    [-1, 14.6],
+    [0.5, 11.1],
+    [-1, 8],
+  ],
+  DD: [
+    [-3.3, -0.8],
+    [-2, -4.3],
+    [0, -4.9],
+    [2.1, -4.3],
+    [3, -1.1],
+    [-2.3, 6.3],
+    [-0.3, 7.8],
+    [2, 5.9],
+    [-0.4, 4.2],
+  ],
+  kk: [
+    [-4.7, -2.8],
+    [-2.3, -3.4],
+    [-0.2, -3.9],
+    [0.6, -3],
+    [1.6, -1.3],
+    [-3.5, 4.8],
+    [-0.5, 5.6],
+    [1, 4.4],
+    [-0.8, 1],
+  ],
+  CH: [
+    [4.2, 3],
+    [0.1, -2.8],
+    [-0.4, -4.1],
+    [1.8, -2.6],
+    [1.6, 3.5],
+    [-0.7, 5.7],
+    [-0.5, 5.9],
+    [0.9, 5.8],
+    [-0.1, 4.7],
+  ],
+  SS: [
+    [4.2, 3],
+    [0.1, -2.8],
+    [-0.4, -4.1],
+    [1.8, -2.6],
+    [1.6, 3.5],
+    [-0.7, 5.7],
+    [-0.5, 5.9],
+    [0.9, 5.8],
+    [-0.1, 4.7],
+  ],
+  HH: [
+    [-2.2, -6.8],
+    [-1.1, -4.4],
+    [0.6, -3.7],
+    [1.7, -4.9],
+    [2.8, -6.6],
+    [-1.3, -5.3],
+    [0.5, -5.3],
+    [1.5, -6.2],
+    [0.9, -11.5],
+  ],
+};
+
 const MULTI: readonly (readonly [string, readonly Viseme[]])[] = [
   ['tion', ['CH', 'aa', 'DD']],
   ['sion', ['CH', 'aa', 'DD']],
@@ -405,4 +590,23 @@ export function sample(keys: readonly Key[], t: number): Sample {
   out.mouthRound = Math.max(out.mouthRound, 0.6 * ahead.mouthRound);
   out.mouthFunnel = Math.max(out.mouthFunnel, 0.6 * ahead.mouthFunnel);
   return out;
+}
+
+/** Lip bone offsets (mm, x right / y down, LIP_BONES order) at time t: the two surrounding keys blended. */
+export function sampleLips(keys: readonly Key[], t: number): [number, number][] {
+  const zero = () => LIP_BONES.map(() => [0, 0] as [number, number]);
+  const first = keys[0];
+  if (!first || t <= first.t) return zero();
+  const i = keys.findIndex((k) => k.t > t);
+  if (i < 0) return zero();
+  const a = keys[i - 1] as Key;
+  const b = keys[i] as Key;
+  const f = ease((t - a.t) / Math.max(1e-3, b.t - a.t));
+  const A = LIP_OFFSETS[a.v];
+  const B = LIP_OFFSETS[b.v];
+  return LIP_BONES.map((_, k) => {
+    const pa = A[k] as readonly [number, number];
+    const pb = B[k] as readonly [number, number];
+    return [pa[0] + (pb[0] - pa[0]) * f, pa[1] + (pb[1] - pa[1]) * f];
+  });
 }

@@ -126,6 +126,7 @@ export const OUTBOX_PATHS: readonly RegExp[] = [
   // v1 (spec 07): the season test saves and submit (like the e-book test) and the NPS rating.
   /^\/api\/seasons\/\d+\/test\/(answers|submit)$/,
   /^\/api\/feedback\/episodes\/\d+$/,
+  /^\/api\/feedback\/steps\/[\w-]+$/,
 ];
 
 export const isOutboxPath = (pathname: string): boolean => OUTBOX_PATHS.some((re) => re.test(pathname));
@@ -151,6 +152,7 @@ export const DEFAULT_TERMS_VERSION = '2026-10';
 export const FLAGS = {
   aiEnabled: 'ai.enabled',
   freeSteps: 'dev.free_steps',
+  stepFeedback: 'feedback.steps',
   storeRecordings: 'mic.store_recordings',
 } as const;
 

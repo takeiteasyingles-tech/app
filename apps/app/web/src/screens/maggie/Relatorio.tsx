@@ -48,9 +48,7 @@ async function repSave(c: Catalog, sess: MicSession): Promise<void> {
   if (!r) return;
   const n = r.added;
   toast(
-    n
-      ? `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} nos Flashcards.`
-      : 'Essas palavras já estavam nos seus Flashcards.',
+    n ? `${n}${n > 1 ? ' cartões novos' : ' cartão novo'} nos Cards.` : 'Essas palavras já estavam nos seus Cards.',
   );
 }
 
@@ -448,7 +446,7 @@ export default function Relatorio({ params }: ScreenProps) {
       </div>
       <div style={{ marginTop: 'auto' }}>
         <Btn
-          label={`Levar ${words.length} para os Flashcards`}
+          label={`Levar ${words.length} para os Cards`}
           icon="plus"
           kind="blue"
           cls="block"

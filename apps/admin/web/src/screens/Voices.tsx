@@ -63,7 +63,7 @@ function KeyCard({ s, onSaved }: { s: VoiceSettings; onSaved: (s: VoiceSettings)
   return (
     <Card
       title="ElevenLabs"
-      sub="Com a chave e uma voz clonada, a assistente fala com a própria voz na voz HD do Mic. Sem elas, usa a voz padrão."
+      sub="Com a chave e uma voz clonada, cada personagem fala com a própria voz no app inteiro (Mic, diálogos, vocabulário). Sem elas, usa a voz padrão da IA."
     >
       <div class="stack" style={{ '--gap': '12px' }}>
         <div class="row wrapx" style={{ '--gap': '8px' }}>

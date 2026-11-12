@@ -8,6 +8,7 @@
 
 import type { z } from 'zod';
 import { mediaUrl } from '../contracts/content';
+import { episodeTestPassScore, pickEpisodeTest } from '../domain/episodeTest';
 import {
   type Album,
   type AssistantPublic,
@@ -466,6 +467,17 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     questionsByEbook.set(q.ebook_num, list);
   }
   const epsOfEbook = (n: number) => episodesSorted.filter((e) => e.ebook_num === n).map((e) => e.num);
+  // PROD (spec 05 "Take the Test: six questions"): each test keeps EPISODE_TEST_SIZE of its questions;
+  // the pass score keeps its share of the full test (episodeTestPassScore).
+  const fullTestSize = new Map<number, number>();
+  for (const [n, list] of questionsByEbook) {
+    fullTestSize.set(n, list.length);
+    const cands = list.map((row) => ({ part: row.part_idx, n: row.n, ep: row.ep_num ?? null, row }));
+    questionsByEbook.set(
+      n,
+      pickEpisodeTest(cands, epsOfEbook(n)).map((c) => c.row),
+    );
+  }
 
   /** An e-book is available when it has its own pages or a test (the prototype only has e-book 1). */
   const ebookAvailable = (e: EbookRowDb): boolean =>
@@ -833,7 +845,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       chat: J(eb.chat, [], `ebooks.${eb.num}.chat`),
       extrasCards: J(eb.extras_cards, [], `ebooks.${eb.num}.extras_cards`),
       pdf: url(eb.pdf_media, `ebooks.${eb.num}.pdf_media`),
-      passScore: eb.pass_score,
+      passScore: episodeTestPassScore(eb.pass_score, fullTestSize.get(eb.num) ?? 0, qs.length),
       testEnabled: eb.test_enabled !== 0,
       testRequiredEpisodes: J<number[]>(
         eb.test_required_episodes ?? '[]',

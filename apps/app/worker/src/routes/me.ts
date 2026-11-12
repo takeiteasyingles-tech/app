@@ -86,7 +86,7 @@ const profileQuery = (db: D1Database, userId: string): Query<ProfileRow> =>
 const learnerRows = (db: D1Database, userId: string, now: number) =>
   [
     q(db, 'INSERT OR IGNORE INTO profiles(user_id, updated_at) VALUES(?, ?)', userId, now),
-    q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', userId),
+    q(db, 'INSERT OR IGNORE INTO user_settings(user_id, hd) VALUES(?, 1)', userId),
     q(db, 'INSERT OR IGNORE INTO user_stats(user_id) VALUES(?)', userId),
   ] as const;
 
@@ -192,7 +192,7 @@ routes.post(api.profileComplete.path, requireUser(), rateLimit('RL_API'), async 
   const firstTime = 'EXISTS (SELECT 1 FROM profiles WHERE user_id = ?1 AND onb_completed_at IS NULL)';
 
   const [, , , , settingsRows] = await batch(db, [
-    q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', s.userId),
+    q(db, 'INSERT OR IGNORE INTO user_settings(user_id, hd) VALUES(?, 1)', s.userId),
     q(db, `UPDATE user_settings SET slow = ?2 WHERE user_id = ?1 AND ${firstTime}`, s.userId, slow),
     q(db, 'INSERT OR IGNORE INTO user_stats(user_id) VALUES(?)', s.userId),
     // Same rule as shared touchStreak() and the S4 engine, done in SQL so a concurrent award cannot be lost.
@@ -231,7 +231,7 @@ routes.patch(api.settings.path, requireUser(), rateLimit('RL_API'), vJson(Settin
   // A student's preferences cannot enable or disable the admin's Dev mode.
   const patch = { ...body, free: undefined };
   const { sets, binds } = settingsSet(patch);
-  const stmts: Query<unknown>[] = [q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', s.userId)];
+  const stmts: Query<unknown>[] = [q(db, 'INSERT OR IGNORE INTO user_settings(user_id, hd) VALUES(?, 1)', s.userId)];
   if (sets.length)
     stmts.push(q(db, `UPDATE user_settings SET ${sets.join(', ')} WHERE user_id = ?`, ...binds, s.userId));
   stmts.push(settingsQuery(db, s.userId));
