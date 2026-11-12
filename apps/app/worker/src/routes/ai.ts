@@ -647,6 +647,10 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
   const ttsModel = eleven ? eleven.model : models.tts;
   const voiceTag = eleven ? `eleven:${eleven.voiceId}` : speaker;
   const hash = await ttsKey(ttsModel, voiceTag, text);
+  // Where a fresh audio is cached and billed: changed when ElevenLabs refuses and Workers AI speaks.
+  let cacheHash = hash;
+  let cacheTag = voiceTag;
+  let usedModel = ttsModel;
   const quota = quotaOf(c.env, c.get('services'));
 
   let source: 'cache' | 'r2' | 'ai' = 'cache';
@@ -662,8 +666,23 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
     const started = Date.now();
     try {
       if (eleven) {
-        const timed = await synthesizeEleven(eleven, text);
-        audio = { bytes: timed.audio, words: timed.words ? encodeWordSpans(timed.words) : null };
+        try {
+          const timed = await synthesizeEleven(eleven, text);
+          audio = { bytes: timed.audio, words: timed.words ? encodeWordSpans(timed.words) : null };
+        } catch (err) {
+          // PROD (spec 05 "Lesson voices"): a voice ElevenLabs refuses (gone from the account after a key
+          // change, no credits) still speaks with the speaker's own Workers AI voice (a man for Robert),
+          // never the browser's. Cached under that voice, so the ElevenLabs one is tried again next time.
+          logWarn('eleven tts failed, using the workers ai voice', err);
+          usedModel = models.tts;
+          cacheTag = speaker;
+          cacheHash = await ttsKey(models.tts, speaker, text);
+          audio = (await cacheGet(cacheHash)) ??
+            (await r2Get(c.env.MEDIA, cacheHash)) ?? {
+              bytes: await synthesize(c.env, models.tts, text, speaker),
+              words: null,
+            };
+        }
       } else audio = { bytes: await synthesize(c.env, models.tts, text, speaker), words: null };
     } catch (err) {
       logWarn('tts failed', err);
@@ -672,11 +691,11 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
       throw fail('ai_unavailable');
     }
     source = 'ai';
-    background(c, quota.finish(r.eventId, { ok: true, latencyMs: Date.now() - started, model: ttsModel }));
+    background(c, quota.finish(r.eventId, { ok: true, latencyMs: Date.now() - started, model: usedModel }));
     // The audio is delivered (and billed) whether or not the caches can be written.
     const fresh = audio;
-    background(c, r2Put(c.env.MEDIA, hash, fresh, voiceTag));
-    background(c, cachePut(hash, fresh));
+    background(c, r2Put(c.env.MEDIA, cacheHash, fresh, cacheTag));
+    background(c, cachePut(cacheHash, fresh));
   } else {
     background(c, quota.log(s.userId, 'tts', { ok: true, model: ttsModel }));
   }

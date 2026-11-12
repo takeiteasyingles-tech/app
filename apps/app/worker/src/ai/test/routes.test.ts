@@ -1612,6 +1612,35 @@ describe('POST /api/tts', () => {
     }
   });
 
+  it('speaks with the Workers AI voice when ElevenLabs refuses the voice (gone from the account)', async () => {
+    const real = globalThis.fetch;
+    let elevenCalls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      elevenCalls++;
+      return Response.json({ detail: { status: 'voice_not_found' } }, { status: 404 });
+    }) as typeof fetch;
+    try {
+      const ai = mockAi();
+      const env = testEnv({
+        AI: ai as unknown as Ai,
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'GoneFromAccount01' }),
+      });
+      const res = await tts(env, u1, { text: 'Good morning, everybody.', voice: 'margaret', role: 'Margaret' });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('audio/mpeg');
+      expect(elevenCalls).toBe(1);
+      // Not cached as the ElevenLabs voice: it is asked again, and Workers AI's cached line answers.
+      const again = await tts(env, u1, { text: 'Good morning, everybody.', voice: 'margaret', role: 'Margaret' });
+      expect(again.status).toBe(200);
+      expect(elevenCalls).toBe(2);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('enforces the 400-char limit and the quota', async () => {
     const long = await tts(testEnv(), u1, { text: 'a'.repeat(401), voice: 'margaret' });
     expect(long.status).toBe(400);

@@ -8,13 +8,13 @@ import { ELEVEN_NARRATOR_KEY } from '@tie/shared/constants';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
 import { adminVoicesApi } from '@tie/shared/contracts/voices';
 import type { VNode } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { call, errorMessage } from '../../api';
 import { can } from '../../session';
 import type { CustomProps } from '../../ui/form';
 import { Button, Field } from '../../ui/kit';
 import { toast } from '../../ui/toast';
-import { VoicePick } from '../../ui/voices';
+import { accountVoices, VoicePick } from '../../ui/voices';
 
 /** Drops empty entries, so an untouched lesson stays `{}`. */
 function clean(v: EpisodeVoices): EpisodeVoices {
@@ -76,6 +76,40 @@ function UseForAll({ voiceId, who }: { voiceId: string | null; who: string | nul
   );
 }
 
+// ---------- What "the course voice" is (Configurações → Vozes) ----------
+
+type Course = { voices: Record<string, string>; assistants: { key: string; name: string }[] };
+let courseLoad: Promise<Course | null> | null = null;
+/** The course voices, read once (staff with settings.manage; null for the others). */
+function useCourse(): Course | null {
+  const [c, setC] = useState<Course | null>(null);
+  useEffect(() => {
+    courseLoad ??= call(adminVoicesApi.get)
+      .then((r) => ({ voices: r.settings.voices, assistants: r.settings.assistants }))
+      .catch(() => null);
+    void courseLoad.then(setC);
+  }, []);
+  return c;
+}
+
+/**
+ * "Voz de Robert no curso: Brian" / "…: ID c5YCwn… fora da conta da ElevenLabs (toca a voz da IA)" /
+ * "…: voz da IA". `who` null = the narration.
+ */
+function courseLabel(c: Course | null, who: string | null, base: string): string {
+  if (!c) return base;
+  const w = who?.toLowerCase();
+  const key = w
+    ? c.assistants.find((a) => a.key.toLowerCase() === w || a.name.toLowerCase() === w)?.key
+    : ELEVEN_NARRATOR_KEY;
+  const id = key ? c.voices[key] : undefined;
+  if (!id) return `${base}: voz da IA (sem ElevenLabs)`;
+  const list = accountVoices.value;
+  if (!list) return `${base}: ID ${id.slice(0, 6)}…`;
+  const v = list.find((x) => x.id === id);
+  return v ? `${base}: ${v.name}` : `${base}: ID ${id.slice(0, 6)}… fora da conta da ElevenLabs (toca a voz da IA)`;
+}
+
 const NARRATION_USE =
   'Vocabulário do Take a Look, frases do Take the Mic, palavras do Take a Lesson, Take Away e Take Action';
 
@@ -91,6 +125,7 @@ function LessonVoices({
   step,
   stepN,
 }: CustomProps & { show: Show; step?: string; stepN?: number }) {
+  const course = useCourse();
   if (!can('content.edit')) return null;
   const v = (value && typeof value === 'object' ? value : {}) as EpisodeVoices;
   const castNames = Array.isArray(parent.castNames) ? (parent.castNames as string[]).filter(Boolean) : [];
@@ -134,7 +169,9 @@ function LessonVoices({
               id={`${id}-v0`}
               value={narration}
               onValue={setNarration}
-              emptyLabel={own && v.narrator ? 'Narração da lição (aba Geral)' : 'Voz do curso'}
+              emptyLabel={
+                own && v.narrator ? 'Narração da lição (aba Geral)' : courseLabel(course, null, 'Voz do curso')
+              }
               previewText={words ? `${words}.` : undefined}
             />
             <UseForAll voiceId={narration} who={null} />
@@ -151,7 +188,7 @@ function LessonVoices({
                   id={`${id}-v${i + 1}`}
                   value={v.cast?.[name] ?? null}
                   onValue={(x) => setCast(name, x)}
-                  emptyLabel={`Voz de ${name} no curso`}
+                  emptyLabel={courseLabel(course, name, `Voz de ${name} no curso`)}
                   previewText={lineOf(name)}
                 />
                 <UseForAll voiceId={v.cast?.[name] ?? null} who={name} />
