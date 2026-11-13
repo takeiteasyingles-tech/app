@@ -96,10 +96,10 @@ Every tool takes a JSON object. `tools/list` publishes its JSON Schema, generate
 | `update_season` | edit | `{n, patch, expectedUpdatedAt?}`: edits the title, synopsis, `testPassPct` or `testQuestionCount`. |
 | `list_episodes` | read | `{seasonN?, status?}`: number, title, season, status, e-book. |
 | `get_episode` | read | `{num, sections?, include?}`: one episode. `sections` limits the answer to some keys (`lyrics`, `dialog`, `lesson`…), and `include` adds `micPhrases` and `exercises`, which are read-only. |
-| `update_episode` | edit | `{num, patch, expectedUpdatedAt?}`: each key replaces that whole section. It cannot change the number or the status. |
+| `update_episode` | edit | `{num, patch, expectedUpdatedAt?}`: each key replaces that whole section. It cannot change the number or the status. Lesson voices: `voices` = `{narrator?, steps?: {"3": id…}, cast?: {"Zach": id}}` (ElevenLabs voice ids). Take the Mic phrases (`mic-phrases` via `update_content`) take `who` ("Quem fala"). |
 | `list_ebooks` | read | Every e-book (number, title, episodes label, pass score). |
 | `get_ebook` | read | `{num, includeTest?}`: one e-book, optionally with its test questions. |
-| `update_ebook` | edit | `{num, patch, expectedUpdatedAt?}`: replaces sections (`five`, `real`, `lead`, `chat`, `extrasCards`, `title`…). |
+| `update_ebook` | edit | `{num, patch, expectedUpdatedAt?}`: replaces sections (`five`, `real`, `lead`, `chat`, `extrasCards`, `extrasOn`, `title`…). Each episode has its own e-book row (`get_episode` → `ebookNum`) holding its **Take Some Extras** (end of the episode) and its Take the Test questions; `extrasOn` picks which extras show (`five`, `lead`, `real`, `out`). Editing one episode never changes another. |
 | `list_season_test_questions` | read | `{seasonN, status?}`: the season test questions, with their answers. |
 | `draft_season_test_questions` | edit | `{seasonN, questions[1..30]}`: creates questions with status **draft** and source `agent`. |
 | `update_season_test_question` | edit | `{seasonN, id, patch}`: edits a question. Any edit sends it back to **draft**. |
@@ -117,7 +117,7 @@ Every tool takes a JSON object. `tools/list` publishes its JSON Schema, generate
 | `review_season_test_questions` | publish | `{seasonN, ids, status}`: approves, rejects or returns questions to draft. |
 | `publish_season_test` | publish | `{seasonN, published}`: opens or closes the season test (it needs enough approved questions). |
 | `list_releases` | read | Published releases, newest first, and the current one. |
-| `publish_release` | publish | `{notes?}`: publishes the draft to every learner, like Publicações. Refused when `preview_release` reports problems. |
+| `publish_release` | publish | `{notes?}`: publishes the draft to every learner. Refused when `preview_release` reports problems. Agent edits otherwise go live at the next save of anyone in the admin (every admin save publishes the whole draft). |
 | `rollback_release` | publish | `{id}`: makes an earlier release current. The draft does not change. |
 
 Entities of the `*_content` tools: `seasons`, `episodes`, `mic-phrases`, `exercises`, `items` (exercise items), `ebooks`, `test-questions` (e-book test), `extras`, `albums`, `tracks`, `assistants`, `missions`. The episode's Concluído screen is its `done` key.

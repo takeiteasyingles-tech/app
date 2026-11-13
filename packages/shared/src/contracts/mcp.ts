@@ -227,7 +227,7 @@ export const MCP_TOOLS = {
   update_season: tool({
     title: 'Update season',
     description:
-      'Edits a season (title, synopsis in Brazilian Portuguese, test pass percentage, test question count). Learners see title/synopsis only after a human publishes a release.',
+      'Edits a season (title, synopsis in Brazilian Portuguese, test pass percentage, test question count). Learners see it once it is published: publish_release, or the next save of anyone in the admin (every admin save publishes the whole draft).',
     scope: 'content.edit',
     readOnly: false,
     input: z.strictObject({ n: SeasonN, patch: AgentSeasonPatch, expectedUpdatedAt: ExpectedUpdatedAt }),
@@ -261,7 +261,7 @@ export const MCP_TOOLS = {
   update_episode: tool({
     title: 'Update episode',
     description:
-      'Replaces whole sections of an episode (e.g. {"lesson": [...]} or {"synopsis": "..."}); omitted sections stay. Cannot change the number or the status. Content copy is Brazilian Portuguese; English lines stay English. Nothing reaches learners until a human publishes a release.',
+      'Replaces whole sections of an episode (e.g. {"lesson": [...]} or {"synopsis": "..."}); omitted sections stay. Cannot change the number or the status. Content copy is Brazilian Portuguese; English lines stay English. Lesson voices: voices = {narrator?, steps?: {"3": id}, cast?: {"Zach": id}} (ElevenLabs voice ids; steps 3, 5, 6, 7, 8 = Take a Look, Mic, Lesson, Away, Action). Learners see it once it is published: publish_release, or the next save of anyone in the admin.',
     scope: 'content.edit',
     readOnly: false,
     input: z.strictObject({ num: EpisodeNum, patch: AgentEpisodePatch, expectedUpdatedAt: ExpectedUpdatedAt }),
@@ -290,7 +290,7 @@ export const MCP_TOOLS = {
   update_ebook: tool({
     title: 'Update e-book',
     description:
-      'Replaces whole sections of an e-book (five, real, lead, chat, extrasCards, title…); omitted sections stay. Nothing reaches learners until a human publishes a release.',
+      'Replaces whole sections of an e-book (five, real, lead, chat, extrasCards, extrasOn, title…); omitted sections stay. Every episode has its own e-book row (get_episode → ebookNum) holding its Take Some Extras (shown at the end of that episode) and its Take the Test questions, so editing one episode never changes another. extrasOn lists which extras show: "five", "lead", "real", "out" (Take Five, Take the Lead, Take it for Real, Take It Out). Learners see it once it is published: publish_release, or the next save of anyone in the admin.',
     scope: 'content.edit',
     readOnly: false,
     input: z.strictObject({ num: EbookNum, patch: AgentEbookPatch, expectedUpdatedAt: ExpectedUpdatedAt }),
@@ -492,7 +492,7 @@ export const MCP_TOOLS = {
   publish_release: tool({
     title: 'Publish release',
     description:
-      'Publishes the current draft to every learner at once (same as Admin → Publicações). Run preview_release first: a release with problems is refused. Write short pt-BR notes saying what changed.',
+      'Publishes the current draft to every learner at once (what every save in the admin also does). Run preview_release first: a release with problems is refused. Write short pt-BR notes saying what changed.',
     scope: 'content.publish',
     readOnly: false,
     input: PublishBody,
