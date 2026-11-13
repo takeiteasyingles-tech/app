@@ -1,5 +1,7 @@
 // E-books: the list and the editor (Take Five blocks, Take it for Real cards, Take the Lead turns,
 // the chat, the Extras cards, the PDF) with the e-book test questions as child rows.
+
+import { EBOOK_EXTRAS, type EbookExtra } from '@tie/shared/constants';
 import {
   adminContentApi,
   type EbookRow,
@@ -10,7 +12,7 @@ import {
 import { call } from '../../api';
 import { useLoad } from '../../ui/async';
 import type { CustomProps, Obj, Spec } from '../../ui/form';
-import { Async } from '../../ui/kit';
+import { Async, Field, Switch } from '../../ui/kit';
 import { prefixErrors, zodErrors } from '../../ui/validate';
 import type { ScreenProps } from '../registry';
 import { applyRows, applyToBase, type CrudApi, diffRows, keysOf, patchOf, pick } from './common';
@@ -73,7 +75,43 @@ const OPT_SPECS: Spec[] = [
   { t: 'text', k: 'fix', label: 'Correção (se errada)', opt: 'undef' },
 ];
 
+/** PROD (0018): which of the e-book extras the episode's Concluído screen offers. */
+const EXTRA_NAMES: Record<EbookExtra, string> = {
+  five: 'Take Five · páginas culturais',
+  lead: 'Take the Lead · conversa com a Margaret',
+  real: 'Take it for Real · o livro × a rua',
+  out: 'Take It Out · quadrinhos (em produção)',
+};
+
+function ExtrasOnField({ value, set, id }: CustomProps) {
+  const on = new Set<string>(Array.isArray(value) ? (value as string[]) : EBOOK_EXTRAS);
+  const toggle = (k: EbookExtra, v: boolean) => {
+    const next = new Set(on);
+    if (v) next.add(k);
+    else next.delete(k);
+    set(EBOOK_EXTRAS.filter((x) => next.has(x)));
+  };
+  return (
+    <Field
+      id={`${id}-five`}
+      label="Aparecem no fim do episódio"
+      wide
+      hint="Os extras ligados aparecem na tela de conclusão do episódio, em “Take some extras · opcionais”. Desligue os que não devem ficar. O conteúdo de cada um fica nas abas ao lado."
+    >
+      <div class="stack" style={{ '--gap': '10px' }}>
+        {EBOOK_EXTRAS.map((k) => (
+          <div key={k} class="row" style={{ '--gap': '10px' }}>
+            <Switch id={`${id}-${k}`} on={on.has(k)} onChange={(v) => toggle(k, v)} label={EXTRA_NAMES[k]} />
+            <span>{EXTRA_NAMES[k]}</span>
+          </div>
+        ))}
+      </div>
+    </Field>
+  );
+}
+
 const SPECS: Record<string, readonly Spec[]> = {
+  quais: [{ t: 'custom', k: 'extrasOn', label: 'Aparecem no fim do episódio', wide: true, render: ExtrasOnField }],
   geral: [
     { t: 'text', k: 'title', label: 'Título' },
     { t: 'text', k: 'epsLabel', label: 'Episódios cobertos', opt: 'null', hint: 'Ex.: "Episódios 01 e 02".' },
@@ -350,6 +388,15 @@ function Preview({ d, tab }: { d: Doc; tab: string }) {
  * last step (Take the Test). The episode editor opens this with testOnly: the questions, then the test
  * switch and the pass mark. The release rule (episodes to complete) no longer applies: the test is step 10.
  */
+/** PROD (0018): an episode's Take Some Extras (admin → episode → Take Some Extras). */
+const EXTRAS_TABS = [
+  ['quais', 'Quais aparecem'],
+  ['five', 'Take Five'],
+  ['lead', 'Take the Lead'],
+  ['real', 'Take it for Real'],
+  ['extras', 'Cartões'],
+] as const;
+
 const TEST_TABS = [
   ['teste', 'Questões'],
   ['regras', 'Configuração'],
@@ -359,17 +406,34 @@ const TEST_SPECS: Record<string, readonly Spec[]> = {
   regras: (SPECS.regras ?? []).filter((x) => x.k === 'testEnabled' || x.k === 'passScore'),
 };
 
-export function EbookEdit({ params, q, testOnly = false }: ScreenProps & { testOnly?: boolean }) {
+export function EbookEdit({
+  params,
+  q,
+  testOnly = false,
+  extrasOnly = false,
+}: ScreenProps & { testOnly?: boolean; extrasOnly?: boolean }) {
   const num = Number(params.num);
-  const tabs = testOnly ? TEST_TABS : params.ep ? TABS.filter(([id]) => id !== 'regras' && id !== 'teste') : TABS;
+  const tabs = testOnly
+    ? TEST_TABS
+    : extrasOnly
+      ? EXTRAS_TABS
+      : params.ep
+        ? TABS.filter(([id]) => id !== 'regras' && id !== 'teste')
+        : TABS;
   return (
     <DocEditor<Doc>
       load={(signal) => loadDoc(num, signal)}
       deps={[num, testOnly]}
-      title={(d) => (testOnly ? `Take the Test · episódio ${params.ep}` : `E-book ${d.num} · ${String(d.title || '')}`)}
-      kicker={testOnly ? 'Teste do episódio' : 'E-book do episódio'}
+      title={(d) =>
+        testOnly
+          ? `Take the Test · episódio ${params.ep}`
+          : extrasOnly
+            ? `Take Some Extras · episódio ${params.ep}`
+            : `E-book ${d.num} · ${String(d.title || '')}`
+      }
+      kicker={testOnly ? 'Teste do episódio' : extrasOnly ? 'Extras do fim do episódio' : 'E-book do episódio'}
       back={params.ep ? `conteudo/episodios/${params.ep}` : 'conteudo/temporadas'}
-      noun={testOnly ? 'Teste' : 'E-book'}
+      noun={testOnly ? 'Teste' : extrasOnly ? 'Extras' : 'E-book'}
       tabs={tabs}
       tab={tabs.some(([id]) => id === q.aba) ? q.aba : tabs[0]?.[0]}
       specs={testOnly ? TEST_SPECS : SPECS}
@@ -400,7 +464,7 @@ export function EbookEdit({ params, q, testOnly = false }: ScreenProps & { testO
         )
       }
       remove={
-        testOnly
+        testOnly || extrasOnly
           ? undefined
           : {
               id: String(num),

@@ -32,6 +32,7 @@ export const SCREENS: Readonly<Record<ScreenName, ScreenDef>> = {
   perfil: { component: lazy(() => import('./perfil/Perfil')), chrome: { tabs: true } },
   conquistas: { component: lazy(() => import('./conquistas/Conquistas')), chrome: { tabs: true } },
   // v1 (spec 07, feature B).
+  ebookx: { component: lazy(() => import('./ebook/EbookPart')), chrome: { tabs: false } },
   temporadaTeste: {
     component: lazy(() => import('./temporada/SeasonTest')),
     chrome: { tabs: true, nav: 'trilha' },
@@ -59,5 +60,6 @@ export const SECTION: Readonly<Partial<Record<RouteName, string>>> = {
   revisao: 'revisao',
   perfil: 'perfil',
   conquistas: 'conquistas',
+  ebookx: 'trilha',
   temporadaTeste: 'trilha',
 };

@@ -1641,6 +1641,49 @@ describe('POST /api/tts', () => {
     }
   });
 
+  it('reads lesson audio without a voice of its own with the default lesson voice (spec 05)', async () => {
+    const real = globalThis.fetch;
+    const asked: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      const voice = url.split('/text-to-speech/')[1]?.split('/')[0] ?? '';
+      asked.push(voice);
+      if (voice === 'GoneRobertVoice1') return Response.json({ detail: 'voice_not_found' }, { status: 404 });
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        AI: mockAi() as unknown as Ai,
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({
+          margaret: 'MargaretVoice001',
+          robert: 'GoneRobertVoice1',
+          default: 'DefaultVoice0001',
+        }),
+      });
+      const say = (text: string, voice: string, role?: string) =>
+        tts(env, u1, { text, voice, ...(role ? { ep: 1, role } : {}) });
+      // Narration with no narration voice: the default voice, not the learner's assistant.
+      expect((await say('Kitchen.', 'margaret', 'narrator@3')).status).toBe(200);
+      // A character with no course voice of its own: the default voice.
+      expect((await say('Mom! Say hello!', 'zach', 'Zach')).status).toBe(200);
+      // A character whose voice ElevenLabs refuses: the default voice stands in.
+      expect((await say('Good morning.', 'robert', 'Robert')).status).toBe(200);
+      // Outside a lesson nothing changes: the assistant's own voice.
+      expect((await say('Hello there, friend.', 'margaret')).status).toBe(200);
+      expect(asked).toEqual([
+        'DefaultVoice0001',
+        'DefaultVoice0001',
+        'GoneRobertVoice1',
+        'DefaultVoice0001',
+        'MargaretVoice001',
+      ]);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('enforces the 400-char limit and the quota', async () => {
     const long = await tts(testEnv(), u1, { text: 'a'.repeat(401), voice: 'margaret' });
     expect(long.status).toBe(400);

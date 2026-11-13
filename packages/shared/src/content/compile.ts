@@ -8,6 +8,7 @@
 
 import type { z } from 'zod';
 import { mediaUrl } from '../contracts/content';
+import { EBOOK_EXTRAS } from '../constants';
 import { episodeTestPassScore, pickEpisodeTest } from '../domain/episodeTest';
 import { micSpeaker, type SpeakerLine } from '../domain/micSpeaker';
 
@@ -153,6 +154,8 @@ export interface EbookRowDb {
   lead: string;
   chat: string;
   extras_cards: string;
+  /** 0018: JSON array of EBOOK_EXTRAS. */
+  extras_on?: string;
   pdf_media: Text;
   pass_score: number;
   test_enabled?: number;
@@ -865,6 +868,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       lead: J(eb.lead, [], `ebooks.${eb.num}.lead`),
       chat: J(eb.chat, [], `ebooks.${eb.num}.chat`),
       extrasCards: J(eb.extras_cards, [], `ebooks.${eb.num}.extras_cards`),
+      extrasOn: J<string[]>(eb.extras_on ?? JSON.stringify(EBOOK_EXTRAS), [...EBOOK_EXTRAS], `ebooks.${eb.num}.extras_on`),
       pdf: url(eb.pdf_media, `ebooks.${eb.num}.pdf_media`),
       passScore: episodeTestPassScore(eb.pass_score, fullTestSize.get(eb.num) ?? 0, qs.length),
       testEnabled: eb.test_enabled !== 0,

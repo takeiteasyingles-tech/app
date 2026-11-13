@@ -667,7 +667,18 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
     try {
       if (eleven) {
         try {
-          const timed = await synthesizeEleven(eleven, text);
+          let timed: Awaited<ReturnType<typeof synthesizeEleven>>;
+          try {
+            timed = await synthesizeEleven(eleven, text);
+          } catch (err) {
+            // The default lesson voice stands in for a chosen voice that fails (spec 05 "Default lesson voice").
+            if (!eleven.fallbackId) throw err;
+            logWarn('eleven voice failed, using the default lesson voice', err);
+            const stand = { ...eleven, voiceId: eleven.fallbackId };
+            timed = await synthesizeEleven(stand, text);
+            cacheTag = `eleven:${stand.voiceId}`;
+            cacheHash = await ttsKey(eleven.model, cacheTag, text);
+          }
           audio = { bytes: timed.audio, words: timed.words ? encodeWordSpans(timed.words) : null };
         } catch (err) {
           // PROD (spec 05 "Lesson voices"): a voice ElevenLabs refuses (gone from the account after a key

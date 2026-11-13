@@ -133,22 +133,28 @@ export function PartFrame({
   kick,
   title,
   intro,
+  back: backTo,
+  kicker: kickerText,
   children,
 }: {
   kick: string;
   title: string;
   intro?: string;
+  /** Route of the back button (PROD: the episode's Concluído screen the extras open from). */
+  back?: string;
+  kicker?: string;
   children?: ComponentChildren;
 }) {
   const desk = isDesk();
   const EB = ebookNumber();
-  const kicker = `E-book ${pad2(EB)} · ${kick}`;
+  const kicker = kickerText ?? `E-book ${pad2(EB)} · ${kick}`;
+  const back = backTo ?? `ebook/${EB}`;
   return (
     <>
-      {desk ? null : <Topbar back={`ebook/${EB}`} kicker={kicker} title={title} />}
+      {desk ? null : <Topbar back={back} kicker={kicker} title={title} />}
       <div class="scroll">
         <div class="wrap stack" style={{ '--wrap': desk ? DESK_WRAP : '760px', '--gap': '14px' }}>
-          {desk ? <DeskHead back={`ebook/${EB}`} kicker={kicker} title={title} intro={intro} /> : null}
+          {desk ? <DeskHead back={back} kicker={kicker} title={title} intro={intro} /> : null}
           {intro && !desk ? <p class="p-read">{intro}</p> : null}
           {children}
         </div>

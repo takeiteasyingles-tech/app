@@ -4,7 +4,7 @@
 // voice for the whole lesson, shown on each of those tabs. Personagens: one voice per character of the
 // episode, for their Take It In lines. Geral shows both. Empty = the course voice (Configurações → Vozes).
 // Reaches students at the next publish.
-import { ELEVEN_NARRATOR_KEY } from '@tie/shared/constants';
+import { ELEVEN_DEFAULT_KEY, ELEVEN_NARRATOR_KEY } from '@tie/shared/constants';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
 import { adminVoicesApi } from '@tie/shared/contracts/voices';
 import type { VNode } from 'preact';
@@ -102,12 +102,17 @@ function courseLabel(c: Course | null, who: string | null, base: string): string
   const key = w
     ? c.assistants.find((a) => a.key.toLowerCase() === w || a.name.toLowerCase() === w)?.key
     : ELEVEN_NARRATOR_KEY;
-  const id = key ? c.voices[key] : undefined;
-  if (!id) return `${base}: voz da IA (sem ElevenLabs)`;
+  const own = key ? c.voices[key] : undefined;
+  // Nothing set for it: the default lesson voice (spec 05 "Default lesson voice"), else the AI's.
+  const id = own ?? c.voices[ELEVEN_DEFAULT_KEY];
+  const tag = own ? '' : ' (voz padrão das aulas)';
+  if (!id) return `${base}: voz genérica da IA (defina a voz padrão em Configurações → Vozes)`;
   const list = accountVoices.value;
-  if (!list) return `${base}: ID ${id.slice(0, 6)}…`;
+  if (!list) return `${base}: ID ${id.slice(0, 6)}…${tag}`;
   const v = list.find((x) => x.id === id);
-  return v ? `${base}: ${v.name}` : `${base}: ID ${id.slice(0, 6)}… fora da conta da ElevenLabs (toca a voz da IA)`;
+  return v
+    ? `${base}: ${v.name}${tag}`
+    : `${base}: ID ${id.slice(0, 6)}… fora da conta da ElevenLabs (toca a voz da IA)`;
 }
 
 const NARRATION_USE =

@@ -288,6 +288,14 @@ export const ELEVEN_VOICE_ID_RE = /^[A-Za-z0-9]{8,40}$/;
  * assistants' keys. The narration reads what no character says: vocabulary, Mic phrases, Take Away…
  */
 export const ELEVEN_NARRATOR_KEY = 'narrator';
+/** PROD (0018): the e-book extras an episode can offer at its end (Take Five, Lead, for Real, It Out). */
+export const EBOOK_EXTRAS = ['five', 'lead', 'real', 'out'] as const;
+export type EbookExtra = (typeof EBOOK_EXTRAS)[number];
+/**
+ * PROD (spec 05 "Default lesson voice"): key of the voice every lesson audio without a voice of its own
+ * uses (Configurações → Vozes → "Voz padrão das aulas"), and the one tried when a chosen voice fails.
+ */
+export const ELEVEN_DEFAULT_KEY = 'default';
 /** The /api/tts role of the narration (any other role is a character's name). */
 export const TTS_NARRATOR_ROLE = 'narrator';
 /** The narration of one step ("narrator@5"), so each step of a lesson can read with its own voice. */

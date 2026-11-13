@@ -22,6 +22,7 @@ export type RouteName =
   | 'perfil'
   | 'conquistas'
   // v1 (spec 07, feature B; PROD routes, no prototype counterpart).
+  | 'ebookx'
   | 'temporadaTeste'
   | 'certificado';
 
@@ -43,6 +44,8 @@ export const ROUTES: readonly (readonly [RegExp, RouteName, (readonly string[])?
   [/^revisao$/, 'revisao'],
   [/^perfil$/, 'perfil'],
   [/^conquistas$/, 'conquistas'],
+  // PROD (spec 05 "Take Some Extras at the end of every episode"): opened from the episode's end.
+  [/^ebook\/(\d{1,9})\/(five|real|lead)$/, 'ebookx', ['num', 'part']],
   [/^temporada\/(\d+)\/teste$/, 'temporadaTeste', ['n']],
   [/^certificado\/([\w-]+)$/, 'certificado', ['code']],
 ];

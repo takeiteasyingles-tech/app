@@ -285,6 +285,7 @@ const ebooks: Entity = {
     f('lead', 'lead', 'json'),
     f('chat', 'chat', 'json'),
     f('extrasCards', 'extras_cards', 'json'),
+    f('extrasOn', 'extras_on', 'json'),
     f('pdfMedia', 'pdf_media', 'media', ['pdf']),
     f('passScore', 'pass_score', 'int'),
     f('testEnabled', 'test_enabled', 'bool'),

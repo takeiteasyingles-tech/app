@@ -59,8 +59,12 @@ const HASHES = [
 
 describe('router', () => {
   const proto = prototypeRouter();
-  it('PROD: the e-book screens are gone; old #/ebook links fall back to the start', () => {
-    for (const h of ['#/ebook/1', '#/ebook/2/teste', '#/ebook/1/five']) expect(parseHash(h).name).toBe('raiz');
+  it('PROD: the e-book hub and test are gone; its extras open from the episode end', () => {
+    for (const h of ['#/ebook/1', '#/ebook/2/teste']) expect(parseHash(h).name).toBe('raiz');
+    // spec 05 "Take Some Extras at the end of every episode".
+    for (const part of ['five', 'lead', 'real']) {
+      expect(parseHash(`#/ebook/11/${part}`)).toMatchObject({ name: 'ebookx', params: { num: '11', part } });
+    }
   });
 
   it.each(HASHES.map((h) => [h]))('parses %j like the prototype', (hash) => {

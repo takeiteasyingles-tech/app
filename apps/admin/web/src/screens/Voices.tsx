@@ -1,7 +1,7 @@
 // Configurações → Vozes: the ElevenLabs API key (write-only: only its last 4 characters come back), the
 // model and the cloned voice of each assistant, used by the student app's HD voice (/api/tts). A voice
 // can be cloned here from an audio sample (Instant Voice Clone) and tested before learners hear it.
-import { ELEVEN_MODELS, ELEVEN_NARRATOR_KEY, type ElevenModel } from '@tie/shared/constants';
+import { ELEVEN_DEFAULT_KEY, ELEVEN_MODELS, ELEVEN_NARRATOR_KEY, type ElevenModel } from '@tie/shared/constants';
 import { adminVoicesApi, type VoiceSettings, type VoiceSettingsBody } from '@tie/shared/contracts/voices';
 import { ApiError, isErrorEnvelope } from '@tie/shared/errors';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -124,10 +124,13 @@ function KeyCard({ s, onSaved }: { s: VoiceSettings; onSaved: (s: VoiceSettings)
 
 function AssistantRow({
   a,
+  note,
   s,
   onSaved,
 }: {
   a: { key: string; name: string };
+  /** A line under the name (what this voice is used for). */
+  note?: string;
   s: VoiceSettings;
   onSaved: (s: VoiceSettings) => void;
 }) {
@@ -191,6 +194,11 @@ function AssistantRow({
     <li class="stack" style={{ '--gap': '8px', padding: '12px 0', borderTop: '1.5px solid var(--line)' }}>
       <div class="row wrapx between" style={{ '--gap': '8px' }}>
         <b>{a.name}</b>
+        {note ? (
+          <span class="xs" style={{ flexBasis: '100%' }}>
+            {note}
+          </span>
+        ) : null}
         {current ? <Pill label="Voz clonada" tone="gr" icon="check" /> : <Pill label="Voz padrão" />}
       </div>
       <div class="row wrapx" style={{ '--gap': '8px', alignItems: 'flex-end' }}>
@@ -261,7 +269,7 @@ function AssistantRow({
           {/* biome-ignore lint/a11y/useMediaCaption: voice test; its text is shown right below. */}
           <audio ref={audioRef} src={audioUrl} controls preload="auto" style={{ width: '100%' }} />
           <span class="xs">
-            {a.key === ELEVEN_NARRATOR_KEY
+            {a.key === ELEVEN_NARRATOR_KEY || a.key === ELEVEN_DEFAULT_KEY
               ? '"Good morning! Kitchen, window, table, coffee. Nice to meet you."'
               : `"Hi! I'm ${a.name}. Let's practice a little English together today."`}
           </span>
@@ -289,6 +297,13 @@ export function VoicesSettings() {
             >
               <ul class="stack" style={{ '--gap': '0', listStyle: 'none', margin: 0, padding: 0 }}>
                 {/* PROD (spec 05 "Lesson voices"): the course narration, then each assistant. */}
+                {/* PROD (spec 05 "Default lesson voice"): every lesson audio without a voice of its own. */}
+                <AssistantRow
+                  a={{ key: ELEVEN_DEFAULT_KEY, name: 'Voz padrão das aulas' }}
+                  note="Toca em tudo da aula que não tem voz definida (personagem sem voz, narração sem voz, etapa sem voz) e entra no lugar de uma voz que falhar. Sem ela, toca a voz genérica da IA."
+                  s={s}
+                  onSaved={setS}
+                />
                 <AssistantRow a={{ key: ELEVEN_NARRATOR_KEY, name: 'Narração do curso' }} s={s} onSaved={setS} />
                 {s.assistants.map((a) => (
                   <AssistantRow key={a.key} a={a} s={s} onSaved={setS} />

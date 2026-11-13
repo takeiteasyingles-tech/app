@@ -143,6 +143,9 @@ describe('voices', () => {
     });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     expect(r.body.settings.voices).toMatchObject({ narrator: 'NarrVoice0000001' });
+    // The default lesson voice (spec 05 "Default lesson voice") is saved the same way.
+    const d = await admin.client.json(V.put.path, { method: 'PUT', json: { voices: { default: 'DefaultVoice0001' } } });
+    expect(d.body.settings.voices).toMatchObject({ narrator: 'NarrVoice0000001', default: 'DefaultVoice0001' });
     const calls = stubEleven(() => new Response(new Uint8Array([0x49, 0x44, 0x33]), { status: 200 }));
     const t = await admin.client.send(V.test.path, { method: 'POST', json: { assistantKey: 'narrator' } });
     expect(t.status).toBe(200);

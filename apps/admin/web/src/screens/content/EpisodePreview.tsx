@@ -1,7 +1,7 @@
 // Live preview of the episode being edited, drawn with the student app's own tie.css classes inside a
 // phone frame: the part shown follows the editor tab (lyrics, dialogue, lesson blocks, exercises…).
 
-import { DEFAULT_ASSISTANT, ELEVEN_NARRATOR_KEY, STEP } from '@tie/shared/constants';
+import { DEFAULT_ASSISTANT, ELEVEN_DEFAULT_KEY, ELEVEN_NARRATOR_KEY, STEP } from '@tie/shared/constants';
 import type { Block, BlockRow, EpisodeVoices } from '@tie/shared/content/schema';
 import { adminVoicesApi } from '@tie/shared/contracts/voices';
 import { micSpeaker, type SpeakerLine } from '@tie/shared/domain/micSpeaker';
@@ -39,7 +39,11 @@ async function speak(d: Any, text: string, who?: string, step?: number): Promise
     const c = await courseVoices();
     if (c) {
       const a = w ? c.assistants.find((x) => x.key.toLowerCase() === w || x.name.toLowerCase() === w) : null;
-      id = w ? (a ? c.voices[a.key] : undefined) : (c.voices[ELEVEN_NARRATOR_KEY] ?? c.voices[DEFAULT_ASSISTANT]);
+      // Then the default lesson voice, as the app does (spec 05 "Default lesson voice").
+      id =
+        (w ? (a ? c.voices[a.key] : undefined) : c.voices[ELEVEN_NARRATOR_KEY]) ??
+        c.voices[ELEVEN_DEFAULT_KEY] ??
+        (w ? undefined : c.voices[DEFAULT_ASSISTANT]);
     }
   }
   if (!id) {

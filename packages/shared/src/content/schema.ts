@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ELEVEN_VOICE_ID_RE, STEP_COUNT } from '../constants';
+import { EBOOK_EXTRAS, ELEVEN_VOICE_ID_RE, STEP_COUNT } from '../constants';
 
 // Published content snapshots (R2 content/{ver}/*). Field names follow the prototype's js/data/* so the
 // screen port stays mechanical; tuples ([en, pt], [name, ini, color]) became objects.
@@ -567,6 +567,11 @@ export const Ebook = z.object({
   lead: z.array(LeadTurn),
   chat: z.array(ChatTurn),
   extrasCards: z.array(EbookExtraCard),
+  /**
+   * PROD (0018, spec 05 "Take Some Extras at the end of every episode"): the extras the episode's
+   * Concluído screen offers, in this order. Absent = all of them.
+   */
+  extrasOn: z.array(z.enum(EBOOK_EXTRAS)).optional(),
   pdf: OptMedia,
   passScore: z.int().min(0),
   testEnabled: z.boolean().default(true),

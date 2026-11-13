@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Permission, Role } from '../authz';
-import { LIMITS, MEDIA_MIME } from '../constants';
+import { EBOOK_EXTRAS, LIMITS, MEDIA_MIME } from '../constants';
 import {
   AssistantVoice,
   AwayExp,
@@ -339,6 +339,8 @@ export const EbookRow = z.object({
   lead: z.array(LeadTurn),
   chat: z.array(ChatTurn),
   extrasCards: z.array(EbookExtraCard),
+  /** PROD (0018): which extras the episode end offers. */
+  extrasOn: z.array(z.enum(EBOOK_EXTRAS)).default([...EBOOK_EXTRAS]),
   pdfMedia: MediaId,
   passScore: z.int().min(0),
   testEnabled: z.boolean().default(true),

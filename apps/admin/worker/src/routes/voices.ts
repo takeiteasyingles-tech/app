@@ -6,6 +6,7 @@
 import {
   ApiError,
   adminApi,
+  ELEVEN_DEFAULT_KEY,
   ELEVEN_NARRATOR_KEY,
   ELEVEN_SAMPLE_MIME,
   type ElevenVoice,
@@ -128,8 +129,8 @@ route(routes, api.put, async (c) => {
     diff.model = { from: before.model, to: body.model };
   }
   if (body.voices !== undefined) {
-    // The course narration (ELEVEN_NARRATOR_KEY) sits next to the assistants (spec 05 "Lesson voices").
-    const known = new Set([ELEVEN_NARRATOR_KEY, ...(await assistants(db)).map((a) => a.key)]);
+    // The course narration and the default lesson voice sit next to the assistants (spec 05).
+    const known = new Set([ELEVEN_NARRATOR_KEY, ELEVEN_DEFAULT_KEY, ...(await assistants(db)).map((a) => a.key)]);
     const unknown = Object.keys(body.voices).filter((k) => !known.has(k));
     if (unknown.length) throw new ApiError('validation_failed', `Assistente desconhecida: ${unknown.join(', ')}.`);
     const next = { ...before.voices };
@@ -173,8 +174,8 @@ route(routes, api.clone, async (c) => {
   if (typeof key !== 'string') throw new ApiError('bad_request', 'Diga de qual assistente é a voz.');
   const db = c.env.DB;
   const who =
-    key === ELEVEN_NARRATOR_KEY
-      ? { key: ELEVEN_NARRATOR_KEY, name: 'Narração' }
+    key === ELEVEN_NARRATOR_KEY || key === ELEVEN_DEFAULT_KEY
+      ? { key, name: key === ELEVEN_DEFAULT_KEY ? 'Voz padrão' : 'Narração' }
       : await one<{ key: string; name: string }>(db, 'SELECT key, name FROM assistants WHERE key = ?', key);
   if (!who) throw new ApiError('not_found', 'Assistente não encontrada.');
   const cfg = await readElevenConfig(db, c.env);
@@ -214,8 +215,11 @@ route(routes, api.test, async (c) => {
   const body = await bodyOf(c, api.test.body);
   const db = c.env.DB;
   const who =
-    body.assistantKey === ELEVEN_NARRATOR_KEY
-      ? { key: ELEVEN_NARRATOR_KEY, name: 'a narração do curso' }
+    body.assistantKey === ELEVEN_NARRATOR_KEY || body.assistantKey === ELEVEN_DEFAULT_KEY
+      ? {
+          key: body.assistantKey,
+          name: body.assistantKey === ELEVEN_DEFAULT_KEY ? 'a voz padrão das aulas' : 'a narração do curso',
+        }
       : await one<{ key: string; name: string }>(
           db,
           'SELECT key, name FROM assistants WHERE key = ?',
@@ -228,7 +232,7 @@ route(routes, api.test, async (c) => {
   if (!voiceId) throw new ApiError('conflict', `${who.name} ainda não tem uma voz da ElevenLabs.`);
   const text =
     body.text ??
-    (who.key === ELEVEN_NARRATOR_KEY
+    (who.key === ELEVEN_NARRATOR_KEY || who.key === ELEVEN_DEFAULT_KEY
       ? PREVIEW_LINE
       : `Hi! I'm ${who.name}. Let's practice a little English together today.`);
   let audio: Uint8Array<ArrayBuffer>;

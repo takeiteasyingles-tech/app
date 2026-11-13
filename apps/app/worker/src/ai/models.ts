@@ -2,7 +2,15 @@
 // Model ids live in app_settings (SETTINGS.model*) so an admin can swap them without a deploy;
 // DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
 // them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
-import { DEFAULT_MODELS, ELEVEN_NARRATOR_KEY, ELEVEN_VOICE_ID_RE, FLAGS, parseRole, SETTINGS } from '@tie/shared';
+import {
+  DEFAULT_MODELS,
+  ELEVEN_DEFAULT_KEY,
+  ELEVEN_NARRATOR_KEY,
+  ELEVEN_VOICE_ID_RE,
+  FLAGS,
+  parseRole,
+  SETTINGS,
+} from '@tie/shared';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
 import {
   all,
@@ -199,6 +207,8 @@ export interface ElevenVoice {
   apiKey: string;
   model: string;
   voiceId: string;
+  /** The default lesson voice, tried when `voiceId` fails (lesson audio only; absent when it is the same). */
+  fallbackId?: string;
 }
 
 /** Configurações → Vozes (admin, app_settings) with the ELEVENLABS_* env vars as a fallback. */
@@ -224,9 +234,23 @@ export async function elevenForRole(env: Env, db: D1Database, pick: VoicePick): 
   if (!pick.assistantKey && !pick.role && !pick.lessonVoice) return null;
   const cfg = await readElevenConfig(db, env);
   if (!cfg.apiKey) return null;
-  const narration = pick.role && parseRole(pick.role).narrator ? cfg.voices[ELEVEN_NARRATOR_KEY] : undefined;
-  const voiceId = pick.lessonVoice || narration || (pick.assistantKey ? cfg.voices[pick.assistantKey] : undefined);
-  return voiceId ? { apiKey: cfg.apiKey, model: cfg.model, voiceId } : null;
+  const isNarration = !!pick.role && parseRole(pick.role).narrator;
+  const narration = isNarration ? cfg.voices[ELEVEN_NARRATOR_KEY] : undefined;
+  // PROD (spec 05 "Default lesson voice"): inside a lesson (a role), anything without a voice of its own
+  // reads with the default lesson voice, which also stands in when the chosen voice fails. A narration
+  // goes to it before the learner's assistant; a character keeps its own course voice first.
+  const fallback = pick.role ? cfg.voices[ELEVEN_DEFAULT_KEY] : undefined;
+  const assistant = pick.assistantKey ? cfg.voices[pick.assistantKey] : undefined;
+  const voiceId = isNarration
+    ? pick.lessonVoice || narration || fallback || assistant
+    : pick.lessonVoice || assistant || fallback;
+  if (!voiceId) return null;
+  return {
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+    voiceId,
+    ...(fallback && fallback !== voiceId ? { fallbackId: fallback } : {}),
+  };
 }
 
 /**

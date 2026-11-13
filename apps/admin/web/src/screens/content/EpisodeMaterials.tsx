@@ -28,6 +28,10 @@ export function EpisodeMaterials({
         {ebookNum ? (
           <LinkButton href={`conteudo/episodios/${num}/teste`} label="Take the Test" icon="list" kind="light" />
         ) : null}
+        {ebookNum ? (
+          // PROD (spec 05 "Take Some Extras at the end of every episode").
+          <LinkButton href={`conteudo/episodios/${num}/extras`} label="Take Some Extras" icon="layers" kind="light" />
+        ) : null}
         {extraId ? (
           <LinkButton href={`conteudo/episodios/${num}/extra`} label="Extra" icon="tv" kind="light" />
         ) : (
@@ -46,7 +50,7 @@ export function EpisodeMaterials({
   );
 }
 
-function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'test' | 'seasonTest' }) {
+function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'extras' | 'test' | 'seasonTest' }) {
   const ep = Number(params.ep);
   const load = useLoad((signal) => call(adminContentApi.episodes.get, { params: { id: String(ep) }, signal }), [ep]);
   return (
@@ -54,6 +58,8 @@ function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'te
       {({ item }) =>
         kind === 'extra' && item.extraId ? (
           <ExtraEdit params={{ id: item.extraId, ep: String(ep) }} q={q} />
+        ) : kind === 'extras' && item.ebookNum ? (
+          <EbookEdit params={{ num: String(item.ebookNum), ep: String(ep) }} q={q} extrasOnly />
         ) : kind === 'test' && item.ebookNum ? (
           <EbookEdit params={{ num: String(item.ebookNum), ep: String(ep) }} q={q} testOnly />
         ) : kind === 'seasonTest' && item.seasonN ? (
@@ -70,4 +76,5 @@ function MaterialEditor({ params, q, kind }: ScreenProps & { kind: 'extra' | 'te
 
 export const EpisodeExtra = (props: ScreenProps) => <MaterialEditor {...props} kind="extra" />;
 export const EpisodeTest = (props: ScreenProps) => <MaterialEditor {...props} kind="test" />;
+export const EpisodeBookExtras = (props: ScreenProps) => <MaterialEditor {...props} kind="extras" />;
 export const EpisodeSeasonTest = (props: ScreenProps) => <MaterialEditor {...props} kind="seasonTest" />;

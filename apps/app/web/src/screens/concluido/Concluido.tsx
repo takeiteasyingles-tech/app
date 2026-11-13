@@ -18,6 +18,7 @@ import './concluido.css';
 import type { ScreenProps } from '../../frame';
 import { replace } from '../../router';
 import { catalog, loadCatalog, loadEpisode, state, useContent } from '../../store';
+import { EpisodeExtras } from './Extras';
 import { Rating } from './Rating';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -100,6 +101,8 @@ export default function Concluido({ params }: ScreenProps) {
         </div>
         {/* PROD (spec 07, NPS per episode): the learner rates the episode they just finished. */}
         <Rating ep={E.num} />
+        {/* PROD (spec 05 "Take Some Extras at the end of every episode"). */}
+        <EpisodeExtras ebook={E.ebook} />
         <div class="card stack" style={{ '--gap': '12px' }}>
           <div class="lbl">A seguir</div>
           <div class="row" style={{ '--gap': '14px' }}>

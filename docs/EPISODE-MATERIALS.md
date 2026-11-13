@@ -23,6 +23,14 @@ primeiro as do próprio episódio (campo "Episódio" da questão), uma de cada p
 B, C, D, A…), e completa com as de outros episódios se faltar. A nota de corte é ajustada na mesma
 proporção (14 de 20 vira 5 de 6). Para escolher exatamente quais aparecem, deixe só seis no editor.
 
+## Take Some Extras (fim de cada episódio)
+
+Na tela de conclusão de **todo episódio** o aluno vê "Take some extras · opcionais": **Take Five** (páginas
+culturais), **Take the Lead** (conversa com a Margaret), **Take it for Real** (o livro × a rua) e **Take It
+Out** (quadrinhos, em produção). Todos começam iguais (cópia do e-book 1). No admin, o botão **Take Some
+Extras** do card de materiais abre a aba **Quais aparecem** (liga e desliga cada um) e as abas com o conteúdo
+de cada extra. Salvar já vale para os alunos.
+
 ## Vozes da lição
 
 Em **Geral → Vozes desta lição** cada episódio escolhe a voz da ElevenLabs dos seus áudios: a
