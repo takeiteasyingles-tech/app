@@ -53,6 +53,8 @@ export const EbookIndexEntry = z.object({
   testEnabled: z.boolean().default(true),
   testRequiredEpisodes: z.array(z.int().positive()).default([]),
   testMinCompleted: z.int().positive().nullable().default(null),
+  /** PROD (0018): the extras the episode end offers (switched on and with content), for the Trilha. */
+  extras: z.array(z.enum(EBOOK_EXTRAS)).default([]),
 });
 export type EbookIndexEntry = z.infer<typeof EbookIndexEntry>;
 

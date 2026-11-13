@@ -7,8 +7,8 @@
 // and then written into the catalog, so republishing identical content yields the same version.
 
 import type { z } from 'zod';
-import { mediaUrl } from '../contracts/content';
 import { EBOOK_EXTRAS } from '../constants';
+import { mediaUrl } from '../contracts/content';
 import { episodeTestPassScore, pickEpisodeTest } from '../domain/episodeTest';
 import { micSpeaker, type SpeakerLine } from '../domain/micSpeaker';
 
@@ -513,6 +513,17 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     ebook: e.ebook_num,
     extra: e.extra_id ?? null,
   }));
+  /** The extras an e-book row offers at its episode's end: switched on and with something to open. */
+  const offeredExtras = (e: EbookRowDb): (typeof EBOOK_EXTRAS)[number][] => {
+    const on = quiet<string[]>(e.extras_on ?? JSON.stringify(EBOOK_EXTRAS), [...EBOOK_EXTRAS]);
+    const cards = quiet<{ go?: string }[]>(e.extras_cards, []);
+    const has = (k: string): boolean =>
+      k === 'out'
+        ? cards.some((x) => !x.go)
+        : quiet<unknown[]>((e as unknown as Record<string, string>)[k], []).length > 0 &&
+          cards.some((x) => x.go?.endsWith(`/${k}`));
+    return EBOOK_EXTRAS.filter((k) => on.includes(k) && has(k));
+  };
   const ebookIndex: EbookIndexEntry[] = ebooksSorted.map((e) => ({
     num: e.num,
     title: e.title,
@@ -524,6 +535,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     testEnabled: e.test_enabled !== 0,
     testRequiredEpisodes: J<number[]>(e.test_required_episodes ?? '[]', [], `ebooks.${e.num}.test_required_episodes`),
     testMinCompleted: e.test_min_completed ?? null,
+    extras: offeredExtras(e),
   }));
 
   // ----- Onboarding option lists -----
@@ -868,7 +880,11 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       lead: J(eb.lead, [], `ebooks.${eb.num}.lead`),
       chat: J(eb.chat, [], `ebooks.${eb.num}.chat`),
       extrasCards: J(eb.extras_cards, [], `ebooks.${eb.num}.extras_cards`),
-      extrasOn: J<string[]>(eb.extras_on ?? JSON.stringify(EBOOK_EXTRAS), [...EBOOK_EXTRAS], `ebooks.${eb.num}.extras_on`),
+      extrasOn: J<string[]>(
+        eb.extras_on ?? JSON.stringify(EBOOK_EXTRAS),
+        [...EBOOK_EXTRAS],
+        `ebooks.${eb.num}.extras_on`,
+      ),
       pdf: url(eb.pdf_media, `ebooks.${eb.num}.pdf_media`),
       passScore: episodeTestPassScore(eb.pass_score, fullTestSize.get(eb.num) ?? 0, qs.length),
       testEnabled: eb.test_enabled !== 0,

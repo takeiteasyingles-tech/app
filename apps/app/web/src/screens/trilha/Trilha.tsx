@@ -122,22 +122,44 @@ function EpisodeNode({
   );
 }
 
-function Materials({ ep, c, open }: { ep: EpisodeIndexEntry; c: Catalog; open: boolean }) {
+function Materials({ ep, c, open, done }: { ep: EpisodeIndexEntry; c: Catalog; open: boolean; done: boolean }) {
   const extra = c.extras.find((x) => x.id === ep.extra);
+  // PROD (spec 05 "Take Some Extras at the end of every episode"): the episode's extras, opened from
+  // its end screen once it is done; before that, what finishing it unlocks.
+  const offered = c.ebooks.find((b) => b.num === ep.ebook)?.extras ?? [];
   return (
     <div class="stack" style={{ '--gap': '8px', padding: '0 12px 16px 44px' }}>
       <span class="xs">Jornada de {c.steps.length || STEP_COUNT} etapas · materiais do episódio</span>
       <div class="row wrapx" style={{ '--gap': '8px' }}>
+        {offered.length ? (
+          done ? (
+            <a class="pill bl" href={`#/concluido/${ep.num}`}>
+              <Icon name="sparkle" size={15} />
+              Take Some Extras
+              <Icon name="next" size={13} />
+            </a>
+          ) : (
+            <span class="pill" title="Os extras abrem quando você concluir o episódio">
+              <Icon name="lock" size={14} />
+              Take Some Extras · no fim do episódio
+            </span>
+          )
+        ) : null}
         {extra && open ? (
           <a class="pill bl" href={`#/extra/${extra.id}`}>
             <Icon name="tv" size={15} />
             {`Extra · ${extra.title}`}
             <Icon name="next" size={13} />
           </a>
-        ) : (
+        ) : extra ? (
           <span class="pill">
             <Icon name="lock" size={14} />
-            {extra ? `Extra · ${extra.title}` : 'Extra em preparação'}
+            {`Extra · ${extra.title}`}
+          </span>
+        ) : offered.length ? null : (
+          <span class="pill">
+            <Icon name="lock" size={14} />
+            Extra em preparação
           </span>
         )}
       </div>
@@ -224,6 +246,7 @@ export default function Trilha(_props: ScreenProps) {
                   ep={ep}
                   c={c}
                   open={ep.status === 'published' && (!!s.epsDone[String(ep.num)] || ep.num === cur.num)}
+                  done={ep.status === 'published' && !!s.epsDone[String(ep.num)]}
                 />
                 {i === episodes.length - 1 ? (
                   <a
