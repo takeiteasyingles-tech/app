@@ -9,6 +9,18 @@
 import type { z } from 'zod';
 import { mediaUrl } from '../contracts/content';
 import { episodeTestPassScore, pickEpisodeTest } from '../domain/episodeTest';
+import { micSpeaker, type SpeakerLine } from '../domain/micSpeaker';
+
+/** JSON of a row column, or the fallback (J() reports bad JSON once; this second read stays quiet). */
+function quiet<T>(raw: string | null | undefined, fallback: T): T {
+  try {
+    const v = JSON.parse(raw ?? '');
+    return Array.isArray(fallback) && !Array.isArray(v) ? fallback : (v as T);
+  } catch {
+    return fallback;
+  }
+}
+
 import {
   type Album,
   type AssistantPublic,
@@ -108,6 +120,8 @@ export interface MicPhraseRowDb {
   demo_result: Num;
   blue: number;
   fb: Text;
+  /** 0017: "Quem fala"; null = micSpeaker() decides. */
+  who?: Text;
 }
 export interface ExerciseRowDb {
   id: string;
@@ -770,14 +784,18 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       dialogTitle: str(e.dialog_title),
       dialogSub: str(e.dialog_sub),
       dialog: J<{ id?: string }[]>(e.dialog, [], w('dialog')).map((d, i) => ({ ...d, id: d.id ?? `e${e.num}-dl${i}` })),
-      mic: phrasesOf(e.num).map((p) => ({
-        id: p.id,
-        en: p.en,
-        tip: str(p.tip),
-        result: p.demo_result ?? 7,
-        ...(p.blue ? { blue: true } : {}),
-        fb: str(p.fb),
-      })),
+      mic: phrasesOf(e.num).map((p) => {
+        const who = micSpeaker(p.en, quiet<SpeakerLine[]>(e.dialog, []), quiet<string[]>(e.cast_names, []), p.who);
+        return {
+          id: p.id,
+          en: p.en,
+          tip: str(p.tip),
+          result: p.demo_result ?? 7,
+          ...(p.blue ? { blue: true } : {}),
+          fb: str(p.fb),
+          ...(who ? { who } : {}),
+        };
+      }),
       lesson: J<Block[]>(e.lesson, [], w('lesson')),
       pron: J(e.pron, null, w('pron')),
       awayExp: J(e.away_exp, [], w('away_exp')),

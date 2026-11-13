@@ -403,6 +403,8 @@ export const MicPhrase = z.object({
   result: z.int().min(0).max(10),
   blue: z.boolean().optional(),
   fb: z.string(),
+  /** PROD (0017): the character who says it (its voice reads it); absent = the narration. */
+  who: z.string().optional(),
 });
 export type MicPhrase = z.infer<typeof MicPhrase>;
 

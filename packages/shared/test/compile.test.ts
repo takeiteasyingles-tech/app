@@ -466,7 +466,8 @@ describe('compileContent', () => {
     expect(e1.lyrics[0]?.gap).toBe('morning');
     expect(e1.visual[0]).toEqual({ id: 'e1-vi0', en: 'door', pt: 'porta' });
     expect(e1.dialog[0]?.id).toBe('e1-dl0');
-    expect(e1.mic[0]).toEqual({ id: 'e1-mic-0', en: 'Hi!', tip: 'tip', result: 7, blue: true, fb: 'fb' });
+    // Said by Zach in Take It In, so Zach's voice reads it (micSpeaker).
+    expect(e1.mic[0]).toEqual({ id: 'e1-mic-0', en: 'Hi!', tip: 'tip', result: 7, blue: true, fb: 'fb', who: 'Zach' });
     expect(e1.ex[0]?.items.map((i) => i.id)).toEqual(['e1-ex0-i0', 'e1-ex0-i1']);
     expect(e1.ex[0]).toMatchObject({ audio: 'tts', audioLabel: 'Ouvir' });
     expect(e1.ex[0]?.items[0]).toMatchObject({ a: 0, fix: 'f', say: 'Hi' });

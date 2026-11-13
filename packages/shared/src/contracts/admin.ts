@@ -300,6 +300,8 @@ export const MicPhraseRow = z.object({
   demoResult: z.int().min(0).max(10).nullable(),
   blue: z.boolean(),
   fb: z.string().nullable(),
+  /** PROD (0017): "Quem fala"; null = automatic (micSpeaker). */
+  who: z.string().trim().max(40).nullable().default(null),
 });
 export type MicPhraseRow = z.infer<typeof MicPhraseRow>;
 
@@ -490,7 +492,17 @@ export type OptionListRow = z.infer<typeof OptionListRow>;
 /** Create body = the row's editable columns (strict); update body = the same, all optional. */
 function editable<T extends z.ZodRawShape>(row: z.ZodObject<T>) {
   const create = z.strictObject(row.shape);
-  return { create, update: create.partial() };
+  // An update changes only what it sends: a field left out never takes its create default (a partial
+  // of a defaulted field still applies the default in zod 4, which wiped Take a Look's context audio
+  // whenever another field of the episode was saved).
+  const shape = Object.fromEntries(
+    Object.entries(row.shape).map(([k, s]) => [
+      k,
+      (s instanceof z.ZodDefault ? (s.removeDefault() as z.ZodType) : (s as z.ZodType)).optional(),
+    ]),
+  );
+  const update = z.strictObject(shape) as unknown as ReturnType<typeof create.partial>;
+  return { create, update };
 }
 
 function crud<Item extends z.ZodType, Create extends z.ZodType, Update extends z.ZodType>(

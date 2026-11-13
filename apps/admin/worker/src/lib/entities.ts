@@ -211,6 +211,7 @@ const micPhrases: Entity = {
     f('tip', 'tip'),
     f('demoResult', 'demo_result', 'int'),
     f('blue', 'blue', 'bool'),
+    f('who', 'who'),
     f('fb', 'fb'),
   ],
   orderBy: 'episode_num, sort, id',

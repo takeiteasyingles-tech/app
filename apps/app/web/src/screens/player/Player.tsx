@@ -639,7 +639,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     P.micHear = true;
     re();
     const tk = P.micTk;
-    void speech.say(m.en).then(() => {
+    // PROD (spec 05 "Take the Mic in the characters' voices"): the character who says it reads it.
+    void speech.say(m.en, m.who ? { who: m.who } : {}).then(() => {
       if (P.dead || !P.micOpen || P.micTk !== tk || P.micIdx !== i) return;
       P.micHear = false;
       void record();

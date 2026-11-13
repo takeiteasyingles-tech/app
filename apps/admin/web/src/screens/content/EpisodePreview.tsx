@@ -4,6 +4,7 @@
 import { DEFAULT_ASSISTANT, ELEVEN_NARRATOR_KEY, STEP } from '@tie/shared/constants';
 import type { Block, BlockRow, EpisodeVoices } from '@tie/shared/content/schema';
 import { adminVoicesApi } from '@tie/shared/contracts/voices';
+import { micSpeaker, type SpeakerLine } from '@tie/shared/domain/micSpeaker';
 import { lyricLineAt } from '@tie/shared/domain/songSync';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -482,7 +483,15 @@ function Body({ d, tab }: { d: Any; tab: TabId }) {
       return ph.length ? (
         <div class="stack" style={{ '--gap': '10px' }}>
           {ph.map((p, i) => (
-            <Say key={i} d={d} text={str(p.en)} step={STEP.MIC} cls="card stack" style={{ '--gap': '8px' }}>
+            <Say
+              key={i}
+              d={d}
+              text={str(p.en)}
+              who={micSpeaker(str(p.en), arr<SpeakerLine>(d.dialog), arr<string>(d.castNames), str(p.who)) ?? undefined}
+              step={STEP.MIC}
+              cls="card stack"
+              style={{ '--gap': '8px' }}
+            >
               <div class="row between">
                 <span class="lbl or">Frase {i + 1}</span>
                 <Icon name="mic" size={18} />

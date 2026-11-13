@@ -105,8 +105,9 @@
 
 /* ---------- Orb ---------- */
 .pr-orb {
-  /* Sized by the screen height too, so title, player, orb, text and chevron fit above the foot. */
-  --s: min(64vw, 260px, 27vh);
+  /* Sized by the screen height too, so title, player, orb, text and chevron fit above the foot; kept
+     small (2026-11-13) so the synopsis reads first. */
+  --s: min(44vw, 170px, 19vh);
   position: relative;
   width: calc(var(--s) * 1.45);
   max-width: 100%;

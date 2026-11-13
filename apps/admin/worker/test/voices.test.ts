@@ -231,5 +231,10 @@ describe('voices', () => {
     expect((await auditRows('content.episodes.update', since))[0]?.diff).toContain('ZachVoice0000001');
     const bad = await editor.client.json(path, { method: 'PUT', json: { voices: { narrator: 'not a voice!' } } });
     expect(bad.status).toBe(400);
+
+    // Saving another field keeps what it does not send: the context audio and the voices stay.
+    expect((await editor.client.json(path, { method: 'PUT', json: { lookMedia: 'm-intro' } })).status).toBe(200);
+    expect((await editor.client.json(path, { method: 'PUT', json: { title: 'Meet the Woods' } })).status).toBe(200);
+    expect((await editor.client.json(getPath)).body.item).toMatchObject({ lookMedia: 'm-intro', voices });
   });
 });

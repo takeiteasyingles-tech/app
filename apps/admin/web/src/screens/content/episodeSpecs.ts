@@ -182,6 +182,15 @@ const MIC: Spec[] = [
     open: false,
     of: [
       { t: 'text', k: 'en', label: 'Frase em inglês', wide: true },
+      {
+        t: 'text',
+        k: 'who',
+        label: 'Quem fala',
+        opt: 'null',
+        max: 40,
+        ph: 'Automático',
+        hint: 'O aluno ouve a frase com a voz deste personagem (Zach, Margaret, Robert, Becky, Barbara…). Vazio: automático, pelo personagem que diz a frase no Take It In ou que se apresenta nela; sem ninguém, a narração.',
+      },
       { t: 'text', k: 'tip', label: 'Dica de pronúncia', opt: 'null', rows: 2 },
       { t: 'text', k: 'fb', label: 'Retorno no modo demo', opt: 'null', rows: 2 },
       { t: 'int', k: 'demoResult', label: 'Nota no modo demo (0 a 10)', opt: 'null', min: 0, max: 10 },

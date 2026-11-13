@@ -5,6 +5,7 @@ export * from './feedback';
 export * from './game';
 export * from './gating';
 export * from './guide';
+export * from './micSpeaker';
 export * from './norm';
 export * from './personalize';
 export * from './season';

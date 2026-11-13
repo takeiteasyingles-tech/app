@@ -35,7 +35,8 @@ export function need(ep: GateEpisode, s: GateState, step: number): string {
     return !left ? '' : left === 1 ? 'Falta 1 resposta' : `Faltam ${left} respostas`;
   }
   if (step === STEP.SING) return 'Cante a música até o fim';
-  if (step === STEP.TEST) return !ep.testCount || (ep.ebook != null && s.testDone?.[ep.ebook]) ? '' : 'Faça o teste até o fim';
+  if (step === STEP.TEST)
+    return !ep.testCount || (ep.ebook != null && s.testDone?.[ep.ebook]) ? '' : 'Faça o teste até o fim';
   return '';
 }
 
