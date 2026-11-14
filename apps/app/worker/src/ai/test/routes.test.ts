@@ -1684,6 +1684,36 @@ describe('POST /api/tts', () => {
     }
   });
 
+  it('with Voz = ElevenLabs, reads everything without a voice with the default voice', async () => {
+    await baseEnv.DB.prepare(
+      "INSERT INTO app_settings(key, value, updated_at) VALUES('ai.model.tts', 'elevenlabs', 1)",
+    ).run();
+    const real = globalThis.fetch;
+    const asked: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      asked.push(url.split('/text-to-speech/')[1]?.split('/')[0] ?? '');
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const ai = mockAi();
+      const env = testEnv({
+        AI: ai as unknown as Ai,
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'MargaretVoice001', default: 'DefaultVoice0001' }),
+      });
+      // Outside a lesson, an assistant without a voice of its own: the default voice, not Workers AI.
+      expect((await tts(env, u1, { text: 'Hi from Zach.', voice: 'zach' })).status).toBe(200);
+      // An assistant with its own voice keeps it.
+      expect((await tts(env, u1, { text: 'Hi from Maggie.', voice: 'margaret' })).status).toBe(200);
+      expect(asked).toEqual(['DefaultVoice0001', 'MargaretVoice001']);
+      expect(ai.run).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('enforces the 400-char limit and the quota', async () => {
     const long = await tts(testEnv(), u1, { text: 'a'.repeat(401), voice: 'margaret' });
     expect(long.status).toBe(400);

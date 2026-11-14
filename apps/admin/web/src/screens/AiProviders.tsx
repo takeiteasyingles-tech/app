@@ -1,8 +1,16 @@
 // Configurações → App → Provedores de IA. PROD (spec 05 "Paid AI providers"): the Claude (Anthropic)
 // and OpenAI API keys (sealed on the server, write-only) and the models the app runs: the conversation,
-// its fallback and the transcription may run on Workers AI, Claude or OpenAI. The voice (TTS) and the
-// safety check (Llama Guard) stay on Workers AI.
-import { aiProviderOf, CLAUDE_MODELS, DEFAULT_MODELS, SETTINGS } from '@tie/shared/constants';
+// its fallback and the transcription may run on Workers AI, Claude or OpenAI; the voice on ElevenLabs
+// (TTS_ELEVEN) or Workers AI. The safety check (Llama Guard) stays on Workers AI.
+import {
+  aiProviderOf,
+  type CLAUDE_MODELS,
+  DEFAULT_MODELS,
+  type OPENAI_ASR_MODELS,
+  type OPENAI_MODELS,
+  SETTINGS,
+  TTS_ELEVEN,
+} from '@tie/shared/constants';
 import { type AppSetting, adminOpsApi } from '@tie/shared/contracts/admin';
 import { type AiProviderKey, type AiProviderName, adminAiProvidersApi } from '@tie/shared/contracts/aiProviders';
 import { useEffect, useState } from 'preact/hooks';
@@ -18,15 +26,61 @@ const KEY_HINT: Record<AiProviderName, string> = {
   anthropic: 'console.anthropic.com → API Keys. A chave fica cifrada e nunca é mostrada de novo.',
   openai: 'platform.openai.com → API keys. A chave fica cifrada e nunca é mostrada de novo.',
 };
-const CLAUDE_LABEL: Record<(typeof CLAUDE_MODELS)[number], string> = {
-  'claude-opus-5-5': 'Claude Opus 5.5 · recomendado, o mais capaz',
-  'claude-sonnet-5-5': 'Claude Sonnet 5.5 · mais rápido e mais barato',
-  'claude-haiku-5-5': 'Claude Haiku 5.5 · o mais rápido e o mais barato',
+type Tag = 'quality' | 'value';
+const TAG_TEXT: Record<Tag, string> = {
+  quality: '⭐ Melhor qualidade · ',
+  value: '💰 Melhor custo-benefício · ',
 };
-/** OpenAI chat models in a key's list (not audio, images, embeddings…). */
-const isOpenAiChat = (id: string) =>
-  /^(gpt-|o\d|chatgpt)/.test(id) && !/(audio|realtime|transcribe|tts|image|search|embedding|instruct)/.test(id);
-const isOpenAiAsr = (id: string) => /(transcribe|whisper)/.test(id);
+interface Choice {
+  id: string;
+  label: string;
+  tag?: Tag;
+}
+const claude = (m: (typeof CLAUDE_MODELS)[number]) => `anthropic:${m}`;
+const gpt = (m: (typeof OPENAI_MODELS)[number] | (typeof OPENAI_ASR_MODELS)[number]) => `openai:${m}`;
+/** The conversation models: chat models good enough to tutor, correct and write the report. */
+const CHAT: readonly Choice[] = [
+  { id: claude('claude-opus-5-5'), label: 'Claude Opus 5.5 · Anthropic (o mais capaz)' },
+  { id: claude('claude-sonnet-5-5'), label: 'Claude Sonnet 5.5 · Anthropic (rápido, ótimo em conversa)' },
+  { id: claude('claude-haiku-5-5'), label: 'Claude Haiku 5.5 · Anthropic (o mais rápido e barato)' },
+  { id: gpt('gpt-6-astra'), label: 'GPT-6 Astra · OpenAI (o mais capaz da OpenAI)' },
+  { id: gpt('gpt-6.1-sol'), label: 'GPT-6.1 Sol · OpenAI (quase o Astra, mais barato)' },
+  { id: gpt('gpt-6-luna'), label: 'GPT-6 Luna · OpenAI (o mais barato da OpenAI)' },
+  { id: DEFAULT_MODELS.tutor, label: 'Llama 3.3 70B · Workers AI (grátis)' },
+];
+/**
+ * Per role, only the models that do that job, with the best for quality and the best for quality per
+ * price marked first. The fallback prefers another provider than the main one (free, no key needed).
+ */
+const CATALOG: Record<Role, readonly Choice[]> = {
+  tutor: CHAT.map((c) =>
+    c.id === claude('claude-opus-5-5')
+      ? { ...c, tag: 'quality' }
+      : c.id === claude('claude-sonnet-5-5')
+        ? { ...c, tag: 'value' }
+        : c,
+  ),
+  tutorFallback: [
+    ...CHAT.map(
+      (c): Choice =>
+        c.id === claude('claude-sonnet-5-5')
+          ? { ...c, tag: 'quality' }
+          : c.id === DEFAULT_MODELS.tutor
+            ? { ...c, label: 'Llama 3.3 70B · Workers AI (grátis, não depende de chave)', tag: 'value' }
+            : c,
+    ),
+    { id: DEFAULT_MODELS.tutorFallback, label: 'Llama 3.1 8B · Workers AI (grátis, mais simples)' },
+  ],
+  asr: [
+    { id: gpt('gpt-transcribe'), label: 'gpt-transcribe · OpenAI (a mais precisa)', tag: 'quality' },
+    { id: DEFAULT_MODELS.asr, label: 'Whisper large v3 turbo · Workers AI (grátis)', tag: 'value' },
+  ],
+  tts: [
+    { id: TTS_ELEVEN, label: 'ElevenLabs · vozes dos personagens em todo o app', tag: 'quality' },
+    { id: DEFAULT_MODELS.tts, label: 'Deepgram Aura · Workers AI (grátis)', tag: 'value' },
+  ],
+};
+const TAG_ORDER: Record<Tag | 'none', number> = { quality: 0, value: 1, none: 2 };
 
 function ProviderRow({
   p,
@@ -136,7 +190,7 @@ function ProviderRow({
   );
 }
 
-type Role = 'tutor' | 'tutorFallback' | 'asr';
+type Role = 'tutor' | 'tutorFallback' | 'asr' | 'tts';
 const ROLES: readonly (readonly [Role, string, string, string])[] = [
   [
     'tutor',
@@ -146,6 +200,12 @@ const ROLES: readonly (readonly [Role, string, string, string])[] = [
   ],
   ['tutorFallback', SETTINGS.modelTutorFallback, 'Modelo reserva da conversa', 'Usado quando o principal falha.'],
   ['asr', SETTINGS.modelAsr, 'Modelo de transcrição', 'Ouve o aluno no Mic. O Claude não transcreve áudio.'],
+  [
+    'tts',
+    SETTINGS.modelTts,
+    'Modelo de voz',
+    'ElevenLabs: todo áudio do app com as vozes de Configurações → Vozes (sem voz própria, a voz padrão das aulas). Workers AI: ElevenLabs só onde houver voz definida.',
+  ],
 ];
 
 function ModelRow({
@@ -155,7 +215,7 @@ function ModelRow({
   hint,
   s,
   keys,
-  openai,
+  available,
   onSaved,
 }: {
   role: Role;
@@ -164,29 +224,26 @@ function ModelRow({
   hint: string;
   s?: AppSetting;
   keys: Record<AiProviderName, boolean>;
-  openai: string[] | null;
+  /** The models each tested key can use: a listed model the key cannot use is left out. */
+  available: Partial<Record<AiProviderName, string[]>>;
   onSaved: (s: AppSetting) => void;
 }) {
   const saved = s?.value?.trim() || DEFAULT_MODELS[role];
   const [v, setV] = useState(saved);
   const [busy, setBusy] = useState(false);
   useEffect(() => setV(saved), [saved]);
-  const options: [string, string][] = [];
-  const add = (id: string, text: string) => {
-    if (!options.some(([x]) => x === id)) options.push([id, text]);
+  const usable = (id: string) => {
+    const p = id === TTS_ELEVEN ? 'workers' : aiProviderOf(id);
+    if (p === 'workers') return true;
+    const list = available[p];
+    return !list || list.includes(id.slice(p.length + 1));
   };
-  if (role === 'asr') {
-    add(DEFAULT_MODELS.asr, 'Whisper large v3 turbo · Workers AI (grátis, padrão)');
-    for (const m of (openai ?? []).filter(isOpenAiAsr)) add(`openai:${m}`, `${m} · OpenAI`);
-    add('openai:whisper-1', 'whisper-1 · OpenAI');
-  } else {
-    for (const m of CLAUDE_MODELS) add(`anthropic:${m}`, `${CLAUDE_LABEL[m]} · Anthropic`);
-    for (const m of (openai ?? []).filter(isOpenAiChat)) add(`openai:${m}`, `${m} · OpenAI`);
-    add(DEFAULT_MODELS.tutor, 'Llama 3.3 70B · Workers AI (grátis, padrão)');
-    add(DEFAULT_MODELS.tutorFallback, 'Llama 3.1 8B · Workers AI (grátis, reserva padrão)');
-  }
-  add(saved, `${saved} · atual`);
-  const provider = aiProviderOf(v);
+  const options: [string, string][] = [...CATALOG[role]]
+    .filter((c) => c.id === saved || usable(c.id))
+    .sort((a, b) => TAG_ORDER[a.tag ?? 'none'] - TAG_ORDER[b.tag ?? 'none'])
+    .map((c) => [c.id, `${c.tag ? TAG_TEXT[c.tag] : ''}${c.label}`]);
+  if (!options.some(([id]) => id === saved)) options.push([saved, `${saved} · atual`]);
+  const provider = v === TTS_ELEVEN ? 'workers' : aiProviderOf(v);
   const missing = provider !== 'workers' && !keys[provider];
   const id = `aim-${role}`;
   const save = async () => {
@@ -228,17 +285,19 @@ export function AiProviders({
 }) {
   const load = useLoad((signal) => call(adminAiProvidersApi.get, { signal }), []);
   const [models, setModels] = useState<Partial<Record<AiProviderName, string[]>>>({});
-  // The OpenAI list fills its pickers (its model names change often); Claude's are fixed.
+  // With a key saved, its model list hides the listed models that key cannot use.
   useEffect(() => {
-    if (!load.data?.providers.find((p) => p.provider === 'openai')?.keySet || models.openai) return;
-    call(adminAiProvidersApi.test, { body: { provider: 'openai' } })
-      .then((r) => r.ok && setModels((m) => ({ ...m, openai: r.models })))
-      .catch(() => undefined);
+    for (const p of load.data?.providers ?? []) {
+      if (!p.keySet || models[p.provider]) continue;
+      call(adminAiProvidersApi.test, { body: { provider: p.provider } })
+        .then((r) => r.ok && setModels((m) => ({ ...m, [p.provider]: r.models })))
+        .catch(() => undefined);
+    }
   }, [load.data]);
   return (
     <Card
       title="Provedores de IA"
-      sub="O app usa o Workers AI da Cloudflare (grátis) por padrão. Com a chave da Anthropic ou da OpenAI, a conversa e a transcrição podem rodar nos modelos pagos delas. Voz e checagem de segurança continuam no Workers AI."
+      sub="O app usa o Workers AI da Cloudflare (grátis) por padrão. Com a chave da Anthropic ou da OpenAI, a conversa e a transcrição podem rodar nos modelos pagos delas. A voz pode ser a da ElevenLabs (chave em Vozes). A checagem de segurança continua no Workers AI."
     >
       <Async load={load}>
         {(d) => {
@@ -258,9 +317,9 @@ export function AiProviders({
                 />
               ))}
               <div class="ad-note bl">
-                Recomendado: <strong>Claude Opus 5.5</strong> na conversa, com o Llama 3.3 70B (Workers AI) de reserva:
-                se a Anthropic falhar ou ficar sem créditos, o aluno segue conversando. A transcrição do Whisper no
-                Workers AI já é boa; a da OpenAI é opcional.
+                Cada lista só traz modelos que fazem aquela tarefa. ⭐ marca o de melhor qualidade e 💰 o de melhor
+                qualidade pelo preço. Na reserva, prefira outro provedor que o principal (o Llama 3.3 70B é grátis e não
+                depende de chave): se o principal falhar ou ficar sem créditos, o aluno segue conversando.
               </div>
               {ROLES.map(([role, k, label, hint]) => (
                 <ModelRow
@@ -271,7 +330,7 @@ export function AiProviders({
                   hint={hint}
                   s={settings.find((x) => x.key === k)}
                   keys={keys}
-                  openai={models.openai ?? null}
+                  available={models}
                   onSaved={onSetting}
                 />
               ))}

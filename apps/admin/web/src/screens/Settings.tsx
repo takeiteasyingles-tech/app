@@ -40,7 +40,6 @@ const SETTING_INFO: readonly (readonly [string, string, string])[] = [
   [SETTINGS.retentionTranscriptsDays, 'Dias que as conversas do Mic ficam guardadas', 'Entre 1 e 3650. Padrão: 180.'],
   [SETTINGS.termsVersion, 'Versão dos termos de uso', 'Ex.: 2026-10. Quem aceitou outra versão aceita de novo.'],
   ['app.origin', 'Endereço do app dos alunos', 'Usado nos links de nova senha (https://…, sem barra no fim).'],
-  [SETTINGS.modelTts, 'Modelo de voz', 'Deepgram Aura.'],
   [SETTINGS.modelGuard, 'Modelo de segurança', 'Llama Guard.'],
 ];
 

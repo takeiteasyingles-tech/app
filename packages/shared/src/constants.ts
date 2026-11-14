@@ -207,6 +207,15 @@ export const aiProviderOf = (model: string): AiProvider =>
   model.startsWith('anthropic:') ? 'anthropic' : model.startsWith('openai:') ? 'openai' : 'workers';
 /** The Claude models offered in the admin (current generation). Opus 5.5 is the recommended one. */
 export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const;
+/** OpenAI chat models offered without a key test (the test adds every model the key can use). */
+export const OPENAI_MODELS = ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'] as const;
+/** OpenAI speech-to-text offered without a key test. */
+export const OPENAI_ASR_MODELS = ['gpt-transcribe'] as const;
+/**
+ * ai.model.tts value: every app audio speaks through ElevenLabs (a line without a voice of its own uses
+ * the default lesson voice of Configurações → Vozes); Workers AI only when ElevenLabs fails.
+ */
+export const TTS_ELEVEN = 'elevenlabs';
 
 export const DEFAULT_MODELS = {
   tutor: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',

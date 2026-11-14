@@ -9,6 +9,7 @@ import {
   DEFAULT_TZ,
   type FeatureFlag,
   SETTINGS,
+  TTS_ELEVEN,
 } from '@tie/shared';
 import {
   type AppEnv,
@@ -208,7 +209,10 @@ export const SETTING_RULES: Record<string, { check: (v: string) => boolean; hint
     check: (v) => AI_MODEL_ID_RE.test(v) && aiProviderOf(v) !== 'anthropic',
     hint: 'Um id do Workers AI (@cf/…) ou openai:<modelo> (o Claude não transcreve áudio).',
   },
-  [SETTINGS.modelTts]: { check: (v) => MODEL_ID.test(v), hint: 'Um id de modelo do Workers AI (@cf/…).' },
+  [SETTINGS.modelTts]: {
+    check: (v) => v === TTS_ELEVEN || MODEL_ID.test(v),
+    hint: 'elevenlabs ou um id de voz do Workers AI (@cf/…).',
+  },
   [SETTINGS.modelGuard]: { check: (v) => MODEL_ID.test(v), hint: 'Um id de modelo do Workers AI (@cf/…).' },
   [STUDENT_ORIGIN_SETTING]: {
     check: (v) => {

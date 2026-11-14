@@ -71,6 +71,8 @@ describe('ai providers', () => {
     expect((await set(SETTINGS.modelAsr, 'openai:whisper-1')).status).toBe(200);
     expect((await set(SETTINGS.modelAsr, 'anthropic:claude-opus-5-5')).status).toBe(400);
     expect((await set(SETTINGS.modelTts, 'openai:tts-1')).status).toBe(400);
+    expect((await set(SETTINGS.modelTts, 'elevenlabs')).status).toBe(200);
+    expect((await set(SETTINGS.modelTts, '@cf/deepgram/aura-1')).status).toBe(200);
     expect((await set(SETTINGS.modelTutor, 'claude-opus-5-5')).status).toBe(400);
   });
 });

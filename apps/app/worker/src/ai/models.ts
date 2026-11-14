@@ -14,6 +14,7 @@ import {
   FLAGS,
   parseRole,
   SETTINGS,
+  TTS_ELEVEN,
 } from '@tie/shared';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
 import {
@@ -35,11 +36,15 @@ export interface Models {
   tutor: string;
   tutorFallback: string;
   asr: string;
+  /** The Workers AI voice (also what speaks when ElevenLabs fails). */
   tts: string;
   guard: string;
+  /** ai.model.tts = TTS_ELEVEN: every audio through ElevenLabs, with the default lesson voice. */
+  ttsEleven?: boolean;
 }
+type ModelRole = 'tutor' | 'tutorFallback' | 'asr' | 'tts' | 'guard';
 
-const SETTING_KEYS: Record<keyof Models, string> = {
+const SETTING_KEYS: Record<ModelRole, string> = {
   tutor: SETTINGS.modelTutor,
   tutorFallback: SETTINGS.modelTutorFallback,
   asr: SETTINGS.modelAsr,
@@ -49,7 +54,7 @@ const SETTING_KEYS: Record<keyof Models, string> = {
 
 const MODEL_ID_RE = AI_MODEL_ID_RE;
 /** Which providers each role may use: chat on all three, ASR on Workers AI or OpenAI, TTS/guard on Workers AI. */
-const ROLE_OK: Record<keyof Models, (id: string) => boolean> = {
+const ROLE_OK: Record<ModelRole, (id: string) => boolean> = {
   tutor: () => true,
   tutorFallback: () => true,
   asr: (id) => aiProviderOf(id) !== 'anthropic',
@@ -75,10 +80,11 @@ export async function loadModels(db: D1Database, now: number = Date.now()): Prom
   );
   const byKey = new Map(rows.map((r) => [r.key, r.value.trim()]));
   const models = { ...DEFAULT_MODELS } as Models;
-  for (const [name, key] of Object.entries(SETTING_KEYS) as [keyof Models, string][]) {
+  for (const [name, key] of Object.entries(SETTING_KEYS) as [ModelRole, string][]) {
     const v = byKey.get(key);
     if (v && MODEL_ID_RE.test(v) && ROLE_OK[name](v)) models[name] = v;
   }
+  if (byKey.get(SETTINGS.modelTts) === TTS_ELEVEN) models.ttsEleven = true;
   cache = { at: now, db, models };
   return models;
 }
@@ -236,6 +242,8 @@ export interface VoicePick {
   role?: string | null;
   /** The voice the lesson sets for that role (lessonVoiceId). */
   lessonVoice?: string | null;
+  /** Voz = ElevenLabs (TTS_ELEVEN): anything without a voice of its own reads with the default voice. */
+  everywhere?: boolean;
 }
 
 /**
@@ -244,7 +252,7 @@ export interface VoicePick {
  * assistant). null = no key or no voice anywhere: the Workers AI voice reads it.
  */
 export async function elevenForRole(env: Env, db: D1Database, pick: VoicePick): Promise<ElevenVoice | null> {
-  if (!pick.assistantKey && !pick.role && !pick.lessonVoice) return null;
+  if (!pick.assistantKey && !pick.role && !pick.lessonVoice && !pick.everywhere) return null;
   const cfg = await readElevenConfig(db, env);
   if (!cfg.apiKey) return null;
   const isNarration = !!pick.role && parseRole(pick.role).narrator;
@@ -252,7 +260,7 @@ export async function elevenForRole(env: Env, db: D1Database, pick: VoicePick): 
   // PROD (spec 05 "Default lesson voice"): inside a lesson (a role), anything without a voice of its own
   // reads with the default lesson voice, which also stands in when the chosen voice fails. A narration
   // goes to it before the learner's assistant; a character keeps its own course voice first.
-  const fallback = pick.role ? cfg.voices[ELEVEN_DEFAULT_KEY] : undefined;
+  const fallback = pick.role || pick.everywhere ? cfg.voices[ELEVEN_DEFAULT_KEY] : undefined;
   const assistant = pick.assistantKey ? cfg.voices[pick.assistantKey] : undefined;
   const voiceId = isNarration
     ? pick.lessonVoice || narration || fallback || assistant

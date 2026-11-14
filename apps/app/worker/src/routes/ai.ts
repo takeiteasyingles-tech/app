@@ -643,7 +643,12 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
   // published episode (spec 05 "Lesson voices").
   const lessonVoice =
     body.ep != null && body.role ? await lessonVoiceId(db, c.get('services').content, body.ep, body.role) : null;
-  const eleven = await elevenForRole(c.env, db, { assistantKey, role: body.role ?? null, lessonVoice });
+  const eleven = await elevenForRole(c.env, db, {
+    assistantKey,
+    role: body.role ?? null,
+    lessonVoice,
+    everywhere: !!models.ttsEleven,
+  });
   const ttsModel = eleven ? eleven.model : models.tts;
   const voiceTag = eleven ? `eleven:${eleven.voiceId}` : speaker;
   const hash = await ttsKey(ttsModel, voiceTag, text);
