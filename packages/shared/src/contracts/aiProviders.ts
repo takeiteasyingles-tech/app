@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AI_MODEL_ID_RE } from '../constants';
 import { Timestamp } from './common';
 import { endpoint } from './http';
 
@@ -45,6 +46,19 @@ export const AiProviderTestRes = z.object({
 });
 export type AiProviderTestRes = z.infer<typeof AiProviderTestRes>;
 
+export const AiSpeedBody = z.strictObject({
+  model: z.string().regex(AI_MODEL_ID_RE, 'Modelo inválido.'),
+});
+export const AiSpeedRes = z.object({
+  model: z.string(),
+  ok: z.boolean(),
+  /** How long a short Mic-like turn took, in ms (also when it failed). */
+  ms: z.number().int().nonnegative(),
+  /** Why it failed (pt-BR), when it did. */
+  error: z.string().nullable(),
+});
+export type AiSpeedRes = z.infer<typeof AiSpeedRes>;
+
 export const adminAiProvidersApi = {
   get: endpoint({
     method: 'GET',
@@ -69,6 +83,16 @@ export const adminAiProvidersApi = {
     perm: 'settings.manage',
     body: AiProviderTestBody,
     res: AiProviderTestRes,
+    rateLimit: 'RL_AI',
+  }),
+  /** Times one short Mic-like turn on a model (Configurações → App → "Medir velocidade"). */
+  speed: endpoint({
+    method: 'POST',
+    path: '/admin-api/ai-providers/speed',
+    access: 'staff',
+    perm: 'settings.manage',
+    body: AiSpeedBody,
+    res: AiSpeedRes,
     rateLimit: 'RL_AI',
   }),
 } as const;

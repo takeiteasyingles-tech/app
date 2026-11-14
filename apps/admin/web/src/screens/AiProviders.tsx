@@ -12,7 +12,12 @@ import {
   TTS_ELEVEN,
 } from '@tie/shared/constants';
 import { type AppSetting, adminOpsApi } from '@tie/shared/contracts/admin';
-import { type AiProviderKey, type AiProviderName, adminAiProvidersApi } from '@tie/shared/contracts/aiProviders';
+import {
+  type AiProviderKey,
+  type AiProviderName,
+  type AiSpeedRes,
+  adminAiProvidersApi,
+} from '@tie/shared/contracts/aiProviders';
 import { useEffect, useState } from 'preact/hooks';
 import { call, errorMessage } from '../api';
 import { fmtAgo } from '../format';
@@ -278,6 +283,85 @@ function ModelRow({
   );
 }
 
+/**
+ * "Medir velocidade": one short Mic-like turn on every conversation model this account can use (one
+ * after the other), sorted by how long the learner would wait.
+ */
+function SpeedCompare({
+  keys,
+  available,
+}: {
+  keys: Record<AiProviderName, boolean>;
+  available: Partial<Record<AiProviderName, string[]>>;
+}) {
+  const [rows, setRows] = useState<AiSpeedRes[]>([]);
+  const [busy, setBusy] = useState(false);
+  const candidates = CHAT.filter((c) => {
+    const p = aiProviderOf(c.id);
+    if (p === 'workers') return true;
+    if (!keys[p]) return false;
+    const list = available[p];
+    return !list || list.includes(c.id.slice(p.length + 1));
+  });
+  const run = async () => {
+    setBusy(true);
+    setRows([]);
+    try {
+      for (const c of candidates) {
+        let r: AiSpeedRes;
+        try {
+          r = await call(adminAiProvidersApi.speed, { body: { model: c.id } });
+        } catch (e) {
+          r = { model: c.id, ok: false, ms: 0, error: errorMessage(e) };
+        }
+        setRows((x) => [...x, r]);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  const label = (id: string) => CHAT.find((c) => c.id === id)?.label.split(' (')[0] ?? id;
+  const sorted = [...rows].sort((a, b) => (a.ok === b.ok ? a.ms - b.ms : a.ok ? -1 : 1));
+  const fastest = sorted.find((r) => r.ok)?.model;
+  return (
+    <div class="stack" style={{ '--gap': '8px' }}>
+      <div class="row wrapx" style={{ '--gap': '8px' }}>
+        <Button
+          label={busy ? `Medindo… (${rows.length}/${candidates.length})` : 'Medir velocidade dos modelos'}
+          icon="refresh"
+          kind="light"
+          busy={busy}
+          disabled={busy}
+          onClick={() => void run()}
+        />
+        <span class="xs">
+          Manda a mesma fala curta do Mic para cada modelo da conversa com chave e mostra quanto o aluno esperaria.
+        </span>
+      </div>
+      {sorted.length ? (
+        <div class="stack" style={{ '--gap': '4px' }}>
+          {sorted.map((r) => (
+            <div key={r.model} class="row between" style={{ '--gap': '8px' }}>
+              <span>
+                {r.model === fastest ? '⚡ ' : ''}
+                {label(r.model)}
+              </span>
+              {r.ok ? (
+                <Pill
+                  label={`${(r.ms / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s`}
+                  tone={r.ms < 2500 ? 'gr' : r.ms < 6000 ? 'gold' : ''}
+                />
+              ) : (
+                <span class="xs">{r.error}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** The provider keys and the model pickers (Configurações → App). */
 export function AiProviders({
   settings,
@@ -337,6 +421,7 @@ export function AiProviders({
                   onSaved={onSetting}
                 />
               ))}
+              <SpeedCompare keys={keys} available={models} />
             </div>
           );
         }}

@@ -6,6 +6,7 @@
 import { type AiProviderKey, type AiProviderName, adminApi, SETTINGS } from '@tie/shared';
 import {
   type AppEnv,
+  aiRunner,
   all,
   listProviderModels,
   ProviderError,
@@ -109,5 +110,70 @@ route(routes, api.test, async (c) => {
     return c.json({ ok: false, models: [], error });
   }
 });
+
+// A short Mic-like turn (persona, JSON answer), the same shape the app sends: how long the learner
+// would wait for this model. Nothing is stored.
+const SPEED_SYSTEM = `You are Maggie, a warm English tutor for Brazilian learners on a voice call.
+Reply in 1-2 short, natural English sentences, then translate them to Brazilian Portuguese.
+Check the learner's sentence and, if needed, give a short correction explained in Portuguese.`;
+const SPEED_SCHEMA = {
+  type: 'object',
+  properties: {
+    reply_en: { type: 'string' },
+    reply_pt: { type: 'string' },
+    feedback: {
+      type: 'object',
+      properties: { status: { type: 'string' }, corrected: { type: 'string' }, explain_pt: { type: 'string' } },
+      required: ['status', 'corrected', 'explain_pt'],
+    },
+  },
+  required: ['reply_en', 'reply_pt', 'feedback'],
+};
+
+route(routes, api.speed, async (c) => {
+  const { model } = await bodyOf(c, api.speed.body);
+  const t0 = Date.now();
+  try {
+    const out = await aiRunner(c.env).run(model, {
+      messages: [
+        { role: 'system', content: SPEED_SYSTEM },
+        { role: 'assistant', content: 'What song are you listening to these days?' },
+        { role: 'user', content: 'I listening a new song of Coldplay, is very good.' },
+      ],
+      response_format: { type: 'json_schema', json_schema: SPEED_SCHEMA },
+      max_tokens: 700,
+      temperature: 0.6,
+    });
+    const ms = Date.now() - t0;
+    const parsed = extractJsonObject(out);
+    if (!parsed || typeof parsed.reply_en !== 'string') {
+      return c.json({ model, ok: false, ms, error: 'Respondeu, mas fora do formato esperado.' });
+    }
+    return c.json({ model, ok: true, ms, error: null });
+  } catch (err) {
+    const ms = Date.now() - t0;
+    const msg = err instanceof Error ? err.message : String(err);
+    const error =
+      err instanceof ProviderError && /no .* API key/.test(msg)
+        ? 'Sem chave salva para este provedor.'
+        : `Falhou: ${msg.slice(0, 160)}`;
+    return c.json({ model, ok: false, ms, error });
+  }
+});
+
+/** The JSON object in a model answer ({response: text} or an object). */
+function extractJsonObject(out: unknown): Record<string, unknown> | null {
+  const r = out && typeof out === 'object' && 'response' in out ? (out as { response: unknown }).response : out;
+  if (r && typeof r === 'object') return r as Record<string, unknown>;
+  if (typeof r !== 'string') return null;
+  const a = r.indexOf('{');
+  const b = r.lastIndexOf('}');
+  if (a < 0 || b <= a) return null;
+  try {
+    return JSON.parse(r.slice(a, b + 1)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
 
 export default routes;

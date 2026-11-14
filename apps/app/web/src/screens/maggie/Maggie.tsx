@@ -195,45 +195,71 @@ function focusInput(): void {
   (document.getElementById('mg-input') as HTMLInputElement | null)?.focus();
 }
 
-function startListening(): void {
+/**
+ * PROD (spec 05 "Mic hands-free keeps listening"): the browser recognizer gives up after a few seconds
+ * of silence. In mãos livres the microphone starts again by itself (up to QUIET_RETRIES times in a
+ * row) instead of switching off, so the learner can take their time to answer.
+ */
+const QUIET_RETRIES = 6;
+let quietTries = 0;
+let listenId = 0;
+
+function startListening(auto = false): void {
   if (!M) return;
   if (!speech.canListen) {
     toast('Este navegador não reconhece fala. Digite a resposta.');
     focusInput();
     return;
   }
+  if (!auto) quietTries = 0;
   speech.stop();
+  const mine = ++listenId;
   M.speaking = false;
   M.listening = true;
   M.interim = '';
-  sfx.rec();
+  if (!auto) sfx.rec();
   re();
+  /** Silence: in mãos livres listen again; otherwise (or after too many tries) switch off. */
+  const quiet = (): void => {
+    const m = M;
+    if (!m) return;
+    stopListening();
+    if (m.hands && m.stage === 'call' && !m.ended && !m.busy && quietTries < QUIET_RETRIES) {
+      quietTries++;
+      setTimeout(() => {
+        if (M === m && mine === listenId && !m.listening && !m.busy && !m.ended && !m.speaking) startListening(true);
+      }, 120);
+    } else {
+      toast('Não ouvi nada. Toque no microfone e fale perto do aparelho.');
+    }
+    re();
+  };
   listener = speech.listen({
     onInterim: (t) => {
-      if (!M) return;
+      if (!M || mine !== listenId) return;
       M.interim = t;
       re();
     },
     onFinal: (t) => {
-      if (M) {
+      if (M && mine === listenId) {
+        quietTries = 0;
         stopListening();
         void sendLine(t);
       }
     },
     onEnd: (t) => {
-      if (M?.listening) {
-        stopListening();
-        if (!t) toast('Não ouvi nada. Toque no microfone e fale perto do aparelho.');
-        re();
-      }
+      if (mine !== listenId || !M?.listening) return;
+      if (t) stopListening();
+      else quiet();
+      re();
     },
     onError: (e) => {
-      if (!M) return;
+      if (!M || mine !== listenId || !M.listening) return;
+      if (e === 'no-speech') return quiet();
       stopListening();
       if (e === 'not-allowed' || e === 'service-not-allowed')
         toast('O microfone está bloqueado. Libere nas permissões do navegador ou digite.');
-      else if (e !== 'no-speech' && e !== 'aborted')
-        toast(`O reconhecimento de fala falhou (${e}). Digite a resposta.`);
+      else if (e !== 'aborted') toast(`O reconhecimento de fala falhou (${e}). Digite a resposta.`);
       re();
     },
   });
