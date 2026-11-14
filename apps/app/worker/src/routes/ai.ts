@@ -321,6 +321,10 @@ routes.post(aiApi.tutor.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tut
     );
   }
 
+  // Which model answered and how long it took, visible in the browser's network panel.
+  if (outcome?.model) {
+    c.header('Server-Timing', `ai;desc="${outcome.model.replace(/[^\w.:@/-]/g, '')}";dur=${outcome.latencyMs ?? 0}`);
+  }
   return c.json({ ...reply, award } satisfies TutorTurnRes);
 });
 

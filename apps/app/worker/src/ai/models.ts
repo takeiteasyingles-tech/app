@@ -175,6 +175,10 @@ export async function runJson<T>(env: AiEnv, models: Models, call: JsonCall<T>):
   for (const model of [models.tutor, models.tutorFallback]) {
     if (tried.has(model)) continue;
     tried.add(model);
+    const t0 = Date.now();
+    // One line per model call in `wrangler tail` (which model answered and how long it took).
+    const log = (ok: boolean, why?: string) =>
+      console.log(JSON.stringify({ level: 'info', msg: 'ai_call', model, ms: Date.now() - t0, ok, why }));
     try {
       const out = await ai.run(model, {
         messages: call.messages,
@@ -183,10 +187,15 @@ export async function runJson<T>(env: AiEnv, models: Models, call: JsonCall<T>):
         temperature: call.temperature ?? 0.6,
       });
       const value = call.accept(extractJson(out));
-      if (value !== null) return { value, model, latencyMs: Date.now() - started };
+      if (value !== null) {
+        log(true);
+        return { value, model, latencyMs: Date.now() - started };
+      }
       lastError = `${model}: answer did not match the contract`;
+      log(false, 'contract');
     } catch (err) {
       lastError = `${model}: ${err instanceof Error ? err.message : String(err)}`;
+      log(false, lastError.slice(0, 200));
     }
   }
   throw new AiCallError(lastError, models.tutor);

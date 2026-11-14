@@ -78,10 +78,41 @@ describe('aiRunner', () => {
     const body = JSON.parse(String(init.body));
     expect(body.model).toBe('claude-opus-5-5');
     expect(body.temperature).toBeUndefined();
-    expect(body.system).toContain('Be kind.');
-    expect(body.system).toContain('JSON schema');
+    expect(body.system[0].text).toContain('Be kind.');
+    expect(body.system[0].text).toContain('JSON schema');
+    // The repeated system text is cached; Opus always thinks (no thinking field) and keeps the fallback.
+    expect(body.system[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(body.thinking).toBeUndefined();
+    expect(body.fallbacks).toBe('default');
     // The conversation starts with a user turn.
     expect(body.messages[0].role).toBe('user');
+  });
+
+  it('turns thinking off on Sonnet and Haiku 5.5, without the server-side fallback', async () => {
+    const DB = await dbWith({ [SETTINGS.aiKeyAnthropic]: ANTHROPIC_KEY });
+    const fetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      Response.json({
+        id: 'msg_3',
+        type: 'message',
+        role: 'assistant',
+        model: 'x',
+        content: [{ type: 'text', text: '{}' }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const run = aiRunner({ DB, MEDIA_TOKEN_KEY: MK });
+    const msg = { messages: [{ role: 'user', content: 'hi' }], max_tokens: 700 };
+    await run.run('anthropic:claude-sonnet-5-5', msg);
+    await run.run('anthropic:claude-haiku-5-5', msg);
+    const [sonnet, haiku] = fetch.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+    expect(sonnet.thinking).toEqual({ type: 'between_tools' });
+    expect(haiku.thinking).toEqual({ type: 'disabled' });
+    expect(sonnet.fallbacks).toBeUndefined();
+    expect(haiku.fallbacks).toBeUndefined();
+    expect(haiku.output_config).toEqual({ effort: 'low' });
   });
 
   it('turns a Claude refusal into an error (the caller falls back)', async () => {

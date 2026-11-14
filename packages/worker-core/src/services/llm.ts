@@ -95,22 +95,38 @@ function turns(messages: ChatMessage[]): { role: 'user' | 'assistant'; content: 
   return out;
 }
 
+/**
+ * A short answer (a Mic turn, a hint) is latency-bound: a tight timeout and no retry, so a slow
+ * provider hands over to the fallback model quickly. Long drafts (season test, lyrics) get more time.
+ */
+const isShort = (inputs: Record<string, unknown>) => (Number(inputs.max_tokens) || 1024) <= 1200;
+const clientOpts = (inputs: Record<string, unknown>) =>
+  isShort(inputs) ? { maxRetries: 0, timeout: 20_000 } : { maxRetries: 1, timeout: 90_000 };
+
 async function runClaude(key: string, model: string, inputs: Record<string, unknown>): Promise<unknown> {
   const messages = (inputs.messages as ChatMessage[] | undefined) ?? [];
-  const client = new Anthropic({ apiKey: key, maxRetries: 1, timeout: 60_000 });
-  // Thinking is always on with the current Claude models and counts toward max_tokens: leave room for
-  // it above the answer the caller sized, and keep effort low (these are short, latency-bound calls).
+  const client = new Anthropic({ apiKey: key, ...clientOpts(inputs) });
   const answer = Number(inputs.max_tokens) || 1024;
+  // Speed: thinking off where the model allows it (Sonnet 5.5 "between_tools", Haiku 5.5 "disabled");
+  // Opus 5.5 always thinks, so effort low keeps it short. Thinking counts toward max_tokens: leave room.
+  const thinking: Anthropic.Beta.BetaThinkingConfigParam | undefined = model.startsWith('claude-sonnet-5-5')
+    ? { type: 'between_tools' }
+    : model.startsWith('claude-haiku-5-5')
+      ? { type: 'disabled' }
+      : undefined;
+  // Server-side fallback (a safety decline re-run on another model) only where the model supports it.
+  const fallback = model.startsWith('claude-opus-5-5');
   try {
     const res = await client.beta.messages.create({
       model,
-      max_tokens: Math.min(32_000, Math.max(4096, answer * 4)),
-      system: systemText(messages, schemaOf(inputs)),
+      max_tokens: Math.min(32_000, Math.max(thinking ? 1024 : 4096, answer * (thinking ? 2 : 4))),
+      // The system text (persona, script, schema) repeats on every turn of a conversation: cached, so
+      // the next turns start answering sooner.
+      system: [{ type: 'text', text: systemText(messages, schemaOf(inputs)), cache_control: { type: 'ephemeral' } }],
       messages: turns(messages),
       output_config: { effort: 'low' },
-      // A safety decline is re-run on a fallback model inside the same call.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      ...(thinking ? { thinking } : {}),
+      ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
     });
     if (res.stop_reason === 'refusal') throw new ProviderError('Claude declined the request', 'anthropic');
     const text = res.content
@@ -128,7 +144,9 @@ async function runClaude(key: string, model: string, inputs: Record<string, unkn
 }
 
 async function runOpenAI(key: string, model: string, inputs: Record<string, unknown>): Promise<unknown> {
-  const client = new OpenAI({ apiKey: key, maxRetries: 1, timeout: 60_000 });
+  const client = new OpenAI({ apiKey: key, ...clientOpts(inputs) });
+  // Reasoning models (gpt-5/6, o-series) think briefly: these are short, latency-bound calls.
+  const reasoning = /^(gpt-[56]|o\d)/.test(model) ? { reasoning_effort: 'low' as const } : {};
   try {
     if (typeof inputs.audio === 'string') {
       const bin = atob(inputs.audio);
@@ -150,6 +168,7 @@ async function runOpenAI(key: string, model: string, inputs: Record<string, unkn
         ...turns(messages).filter((m, i) => !(i === 0 && m.content === '(início da conversa)')),
       ],
       ...(schema ? { response_format: { type: 'json_object' as const } } : {}),
+      ...reasoning,
       max_completion_tokens: Math.min(32_000, Math.max(2048, (Number(inputs.max_tokens) || 1024) * 4)),
     });
     return { response: res.choices[0]?.message?.content ?? '' };

@@ -40,8 +40,11 @@ const claude = (m: (typeof CLAUDE_MODELS)[number]) => `anthropic:${m}`;
 const gpt = (m: (typeof OPENAI_MODELS)[number] | (typeof OPENAI_ASR_MODELS)[number]) => `openai:${m}`;
 /** The conversation models: chat models good enough to tutor, correct and write the report. */
 const CHAT: readonly Choice[] = [
-  { id: claude('claude-opus-5-5'), label: 'Claude Opus 5.5 · Anthropic (o mais capaz)' },
-  { id: claude('claude-sonnet-5-5'), label: 'Claude Sonnet 5.5 · Anthropic (rápido, ótimo em conversa)' },
+  {
+    id: claude('claude-opus-5-5'),
+    label: 'Claude Opus 5.5 · Anthropic (o mais capaz; pensa antes, responde mais devagar)',
+  },
+  { id: claude('claude-sonnet-5-5'), label: 'Claude Sonnet 5.5 · Anthropic (resposta rápida, ótimo em conversa)' },
   { id: claude('claude-haiku-5-5'), label: 'Claude Haiku 5.5 · Anthropic (o mais rápido e barato)' },
   { id: gpt('gpt-6-astra'), label: 'GPT-6 Astra · OpenAI (o mais capaz da OpenAI)' },
   { id: gpt('gpt-6.1-sol'), label: 'GPT-6.1 Sol · OpenAI (quase o Astra, mais barato)' },
