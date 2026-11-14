@@ -31,6 +31,7 @@ import {
   SeasonTestQuestionStatus,
   SeasonTestReviewBody,
 } from './seasonTest';
+import { ElevenVoice } from './voices';
 
 // MCP server in tie-admin (spec 07, feature D): lets an AI agent (Claude) read and edit content
 // through the Model Context Protocol, Streamable HTTP transport, stateless, JSON responses only.
@@ -261,11 +262,24 @@ export const MCP_TOOLS = {
   update_episode: tool({
     title: 'Update episode',
     description:
-      'Replaces whole sections of an episode (e.g. {"lesson": [...]} or {"synopsis": "..."}); omitted sections stay. Cannot change the number or the status. Content copy is Brazilian Portuguese; English lines stay English. Lesson voices: voices = {narrator?, steps?: {"3": id}, cast?: {"Zach": id}} (ElevenLabs voice ids; steps 3, 5, 6, 7, 8 = Take a Look, Mic, Lesson, Away, Action). Learners see it once it is published: publish_release, or the next save of anyone in the admin.',
+      'Replaces whole sections of an episode (e.g. {"lesson": [...]} or {"synopsis": "..."}); omitted sections stay. Cannot change the number or the status. Content copy is Brazilian Portuguese; English lines stay English. Lesson voices: voices = {narrator?, steps?: {"3": id}, cast?: {"Zach": id}, extras?: {narrator?, cast?: {"Margaret": id}}} (ElevenLabs voice ids from list_voices; steps 3, 5, 6, 7, 8 = Take a Look, Mic, Lesson, Away, Action). extras = this episode\'s Take Some Extras: narrator is the extras\' own voice, cast gives any character speaking there a voice (add a name when a new character joins the extras, e.g. Margaret in Take the Lead). voices is replaced as a whole: read it with get_episode (sections ["voices"]) and send it back with your change. Learners see it once it is published: publish_release, or the next save of anyone in the admin.',
     scope: 'content.edit',
     readOnly: false,
     input: z.strictObject({ num: EpisodeNum, patch: AgentEpisodePatch, expectedUpdatedAt: ExpectedUpdatedAt }),
     output: z.object({ item: EpisodeRow }),
+  }),
+  list_voices: tool({
+    title: 'List voices',
+    description:
+      'The ElevenLabs voices the course can use (id, name, gender, accent, description) and the course voices of Configurações → Vozes: course maps "default" (every lesson audio without a voice), "narrator" (lesson narration), "extras" (Take Some Extras) and each assistant key to a voice id. Use these ids in update_episode voices (narrator, steps, cast, extras).',
+    scope: 'content.read',
+    readOnly: true,
+    input: z.strictObject({}),
+    output: z.object({
+      voices: z.array(ElevenVoice),
+      course: z.record(z.string(), z.string()),
+      assistants: z.array(z.object({ key: z.string(), name: z.string() })),
+    }),
   }),
   list_ebooks: tool({
     title: 'List e-books',

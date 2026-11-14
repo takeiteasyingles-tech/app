@@ -322,17 +322,29 @@ export type EbookExtra = (typeof EBOOK_EXTRAS)[number];
  * uses (Configurações → Vozes → "Voz padrão das aulas"), and the one tried when a chosen voice fails.
  */
 export const ELEVEN_DEFAULT_KEY = 'default';
+/**
+ * PROD (spec 05 "Extras voices"): key of the course's Take Some Extras voice (Configurações → Vozes →
+ * "Voz dos extras"): who speaks in an episode's extras when the episode sets no extras voice.
+ */
+export const ELEVEN_EXTRAS_KEY = 'extras';
 /** The /api/tts role of the narration (any other role is a character's name). */
 export const TTS_NARRATOR_ROLE = 'narrator';
 /** The narration of one step ("narrator@5"), so each step of a lesson can read with its own voice. */
 export const narratorRole = (step?: number | null): string =>
   step ? TTS_NARRATOR_ROLE + '@' + String(step) : TTS_NARRATOR_ROLE;
-/** A /api/tts role: the narration (of a step, when it names one) or a character. */
-export function parseRole(role: string): { narrator: boolean; step: number | null; who: string } {
+/** PROD (spec 05 "Extras voices"): Take Some Extras audio ("extras", or "extras:Margaret" for a character). */
+export const TTS_EXTRAS_ROLE = 'extras';
+export const extrasRole = (who?: string | null): string =>
+  who?.trim() ? `${TTS_EXTRAS_ROLE}:${who.trim()}` : TTS_EXTRAS_ROLE;
+/** A /api/tts role: the narration (of a step, when it names one), the extras, or a character. */
+export function parseRole(role: string): { narrator: boolean; step: number | null; who: string; extras: boolean } {
+  if (role === TTS_EXTRAS_ROLE || role.startsWith(`${TTS_EXTRAS_ROLE}:`)) {
+    return { narrator: false, step: null, who: role.slice(TTS_EXTRAS_ROLE.length + 1), extras: true };
+  }
   const [base = '', s] = role.split('@');
   const narrator = base === TTS_NARRATOR_ROLE;
   const step = narrator && s && /^[0-9]{1,2}$/.test(s) ? Number(s) : null;
-  return { narrator, step, who: narrator ? '' : role };
+  return { narrator, step, who: narrator ? '' : role, extras: false };
 }
 /** Voice sample for Instant Voice Clone: an audio file up to this size. */
 export const ELEVEN_SAMPLE_MAX_BYTES = 10 * 1024 * 1024;

@@ -1612,6 +1612,40 @@ describe('POST /api/tts', () => {
     }
   });
 
+  it('reads Take Some Extras with the extras voices (spec 05 "Extras voices")', async () => {
+    const real = globalThis.fetch;
+    const voices: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      voices.push(url.split('/text-to-speech/')[1]?.split('/')[0] ?? '');
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'MargaretCourse01', extras: 'CourseExtras0001' }),
+      });
+      await baseEnv.DB.prepare(
+        "INSERT OR REPLACE INTO episodes(num, title, status, voices, updated_at) VALUES(1, 'Ep 1', 'published', ?1, 1), (2, 'Ep 2', 'published', ?2, 1), (4, 'Ep 4', 'published', '{}', 1)",
+      )
+        .bind(
+          JSON.stringify({ extras: { narrator: 'EpisodeExtras001', cast: { Margaret: 'ExtrasMargaret01' } } }),
+          JSON.stringify({ extras: { narrator: 'EpisodeExtras002' } }),
+        )
+        .run();
+      const say = (text: string, ep: number) =>
+        tts(env, u1, { text, voice: 'margaret', ep, role: 'extras:Margaret' });
+      // Her own extras voice in episode 1; the episode's extras voice in 2; the course's extras voice in 4.
+      expect((await say('Oh, hello! Good morning!', 1)).status).toBe(200);
+      expect((await say('Oh, hello! Good morning!', 2)).status).toBe(200);
+      expect((await say('Oh, hello! Good morning!', 4)).status).toBe(200);
+      expect(voices).toEqual(['ExtrasMargaret01', 'EpisodeExtras002', 'CourseExtras0001']);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('speaks with the Workers AI voice when ElevenLabs refuses the voice (gone from the account)', async () => {
     const real = globalThis.fetch;
     let elevenCalls = 0;

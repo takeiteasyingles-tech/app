@@ -149,6 +149,7 @@ describe('MCP tools', () => {
       'list_episodes',
       'get_episode',
       'update_episode',
+      'list_voices',
       'list_ebooks',
       'get_ebook',
       'update_ebook',

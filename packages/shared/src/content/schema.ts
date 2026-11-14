@@ -469,6 +469,17 @@ export const EpisodeVoices = z.object({
   /** PROD: one step's own narration (step number → voice id), over `narrator` for that step. */
   steps: z.record(z.string().regex(/^[0-9]{1,2}$/), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
   cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+  /**
+   * PROD (spec 05 "Extras voices"): this episode's Take Some Extras. `narrator` = the extras' own voice
+   * (anyone speaking there without a voice of their own); `cast` = a character's voice in the extras
+   * (e.g. Margaret in Take the Lead). Unset = the course's extras voice (Configurações → Vozes).
+   */
+  extras: z
+    .object({
+      narrator: z.string().regex(ELEVEN_VOICE_ID_RE).nullable().optional(),
+      cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+    })
+    .optional(),
 });
 export type EpisodeVoices = z.infer<typeof EpisodeVoices>;
 

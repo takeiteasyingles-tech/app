@@ -18,6 +18,7 @@ import type { ScreenProps } from '../registry';
 import { applyRows, applyToBase, type CrudApi, diffRows, keysOf, patchOf, pick } from './common';
 import { DocEditor, PartialSave, tabFinder } from './DocEditor';
 import { BlockView } from './EpisodePreview';
+import { ExtrasVoices } from './ExtrasVoices';
 import { BLOCK_SPECS } from './episodeSpecs';
 
 const C = adminContentApi;
@@ -395,7 +396,22 @@ const EXTRAS_TABS = [
   ['lead', 'Take the Lead'],
   ['real', 'Take it for Real'],
   ['extras', 'Cartões'],
+  ['vozes', 'Vozes'],
 ] as const;
+
+/** PROD (spec 05 "Extras voices"): the Vozes tab of an episode's extras (saved on the episode itself). */
+const extrasSpecs = (ep: number): Record<string, readonly Spec[]> => ({
+  ...SPECS,
+  vozes: [
+    {
+      t: 'custom',
+      k: '__extrasVoices',
+      label: 'Vozes dos extras',
+      wide: true,
+      render: () => <ExtrasVoices ep={ep} lead="Margaret" />,
+    },
+  ],
+});
 
 const TEST_TABS = [
   ['teste', 'Questões'],
@@ -436,7 +452,7 @@ export function EbookEdit({
       noun={testOnly ? 'Teste' : extrasOnly ? 'Extras' : 'E-book'}
       tabs={tabs}
       tab={tabs.some(([id]) => id === q.aba) ? q.aba : tabs[0]?.[0]}
-      specs={testOnly ? TEST_SPECS : SPECS}
+      specs={testOnly ? TEST_SPECS : extrasOnly && params.ep ? extrasSpecs(Number(params.ep)) : SPECS}
       allSpecs={ALL}
       validate={validate}
       normalize={normalize}

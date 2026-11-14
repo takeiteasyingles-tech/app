@@ -1,7 +1,13 @@
 // Configurações → Vozes: the ElevenLabs API key (write-only: only its last 4 characters come back), the
 // model and the cloned voice of each assistant, used by the student app's HD voice (/api/tts). A voice
 // can be cloned here from an audio sample (Instant Voice Clone) and tested before learners hear it.
-import { ELEVEN_DEFAULT_KEY, ELEVEN_MODELS, ELEVEN_NARRATOR_KEY, type ElevenModel } from '@tie/shared/constants';
+import {
+  ELEVEN_DEFAULT_KEY,
+  ELEVEN_EXTRAS_KEY,
+  ELEVEN_MODELS,
+  ELEVEN_NARRATOR_KEY,
+  type ElevenModel,
+} from '@tie/shared/constants';
 import { adminVoicesApi, type VoiceSettings, type VoiceSettingsBody } from '@tie/shared/contracts/voices';
 import { ApiError, isErrorEnvelope } from '@tie/shared/errors';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -269,7 +275,7 @@ function AssistantRow({
           {/* biome-ignore lint/a11y/useMediaCaption: voice test; its text is shown right below. */}
           <audio ref={audioRef} src={audioUrl} controls preload="auto" style={{ width: '100%' }} />
           <span class="xs">
-            {a.key === ELEVEN_NARRATOR_KEY || a.key === ELEVEN_DEFAULT_KEY
+            {a.key === ELEVEN_NARRATOR_KEY || a.key === ELEVEN_DEFAULT_KEY || a.key === ELEVEN_EXTRAS_KEY
               ? '"Good morning! Kitchen, window, table, coffee. Nice to meet you."'
               : `"Hi! I'm ${a.name}. Let's practice a little English together today."`}
           </span>
@@ -305,6 +311,13 @@ export function VoicesSettings() {
                   onSaved={setS}
                 />
                 <AssistantRow a={{ key: ELEVEN_NARRATOR_KEY, name: 'Narração do curso' }} s={s} onSaved={setS} />
+                {/* PROD (spec 05 "Extras voices"): who speaks in Take Some Extras of every episode. */}
+                <AssistantRow
+                  a={{ key: ELEVEN_EXTRAS_KEY, name: 'Voz dos extras' }}
+                  note="Fala nos Take Some Extras de todos os episódios (Take the Lead e os outros). Cada episódio pode trocar, e dar uma voz a cada personagem, em Take Some Extras → Vozes dos extras. Sem ela, cada personagem fala com a própria voz do curso."
+                  s={s}
+                  onSaved={setS}
+                />
                 {s.assistants.map((a) => (
                   <AssistantRow key={a.key} a={a} s={s} onSaved={setS} />
                 ))}

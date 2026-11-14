@@ -7,6 +7,7 @@ import {
   ApiError,
   adminApi,
   ELEVEN_DEFAULT_KEY,
+  ELEVEN_EXTRAS_KEY,
   ELEVEN_NARRATOR_KEY,
   ELEVEN_SAMPLE_MIME,
   type ElevenVoice,
@@ -35,6 +36,12 @@ import { Hono } from 'hono';
 import { actor, auditStmt, bodyOf, type Ctx, queryOf, route } from '../lib/http';
 
 const routes = new Hono<AppEnv>();
+/** The course voices that are not an assistant (spec 05): their names when cloning and testing. */
+const SPECIAL_KEYS: Record<string, { clone: string; test: string }> = {
+  [ELEVEN_NARRATOR_KEY]: { clone: 'Narração', test: 'a narração do curso' },
+  [ELEVEN_DEFAULT_KEY]: { clone: 'Voz padrão', test: 'a voz padrão das aulas' },
+  [ELEVEN_EXTRAS_KEY]: { clone: 'Extras', test: 'a voz dos extras' },
+};
 const api = adminApi.voices;
 const MULTIPART_OVERHEAD = 64 * 1024;
 
@@ -130,7 +137,12 @@ route(routes, api.put, async (c) => {
   }
   if (body.voices !== undefined) {
     // The course narration and the default lesson voice sit next to the assistants (spec 05).
-    const known = new Set([ELEVEN_NARRATOR_KEY, ELEVEN_DEFAULT_KEY, ...(await assistants(db)).map((a) => a.key)]);
+    const known = new Set([
+      ELEVEN_NARRATOR_KEY,
+      ELEVEN_DEFAULT_KEY,
+      ELEVEN_EXTRAS_KEY,
+      ...(await assistants(db)).map((a) => a.key),
+    ]);
     const unknown = Object.keys(body.voices).filter((k) => !known.has(k));
     if (unknown.length) throw new ApiError('validation_failed', `Assistente desconhecida: ${unknown.join(', ')}.`);
     const next = { ...before.voices };
@@ -173,10 +185,9 @@ route(routes, api.clone, async (c) => {
   }
   if (typeof key !== 'string') throw new ApiError('bad_request', 'Diga de qual assistente é a voz.');
   const db = c.env.DB;
-  const who =
-    key === ELEVEN_NARRATOR_KEY || key === ELEVEN_DEFAULT_KEY
-      ? { key, name: key === ELEVEN_DEFAULT_KEY ? 'Voz padrão' : 'Narração' }
-      : await one<{ key: string; name: string }>(db, 'SELECT key, name FROM assistants WHERE key = ?', key);
+  const who = SPECIAL_KEYS[key]
+    ? { key, name: SPECIAL_KEYS[key].clone }
+    : await one<{ key: string; name: string }>(db, 'SELECT key, name FROM assistants WHERE key = ?', key);
   if (!who) throw new ApiError('not_found', 'Assistente não encontrada.');
   const cfg = await readElevenConfig(db, c.env);
   if (!cfg.apiKey) throw new ApiError('conflict', 'Salve a chave da ElevenLabs antes de clonar uma voz.');
@@ -214,17 +225,10 @@ route(routes, api.clone, async (c) => {
 route(routes, api.test, async (c) => {
   const body = await bodyOf(c, api.test.body);
   const db = c.env.DB;
-  const who =
-    body.assistantKey === ELEVEN_NARRATOR_KEY || body.assistantKey === ELEVEN_DEFAULT_KEY
-      ? {
-          key: body.assistantKey,
-          name: body.assistantKey === ELEVEN_DEFAULT_KEY ? 'a voz padrão das aulas' : 'a narração do curso',
-        }
-      : await one<{ key: string; name: string }>(
-          db,
-          'SELECT key, name FROM assistants WHERE key = ?',
-          body.assistantKey,
-        );
+  const special = SPECIAL_KEYS[body.assistantKey];
+  const who = special
+    ? { key: body.assistantKey, name: special.test }
+    : await one<{ key: string; name: string }>(db, 'SELECT key, name FROM assistants WHERE key = ?', body.assistantKey);
   if (!who) throw new ApiError('not_found', 'Assistente não encontrada.');
   const cfg = await readElevenConfig(db, c.env);
   if (!cfg.apiKey) throw new ApiError('conflict', 'Salve a chave da ElevenLabs antes de testar.');
@@ -232,9 +236,7 @@ route(routes, api.test, async (c) => {
   if (!voiceId) throw new ApiError('conflict', `${who.name} ainda não tem uma voz da ElevenLabs.`);
   const text =
     body.text ??
-    (who.key === ELEVEN_NARRATOR_KEY || who.key === ELEVEN_DEFAULT_KEY
-      ? PREVIEW_LINE
-      : `Hi! I'm ${who.name}. Let's practice a little English together today.`);
+    (SPECIAL_KEYS[who.key] ? PREVIEW_LINE : `Hi! I'm ${who.name}. Let's practice a little English together today.`);
   let audio: Uint8Array<ArrayBuffer>;
   try {
     audio = await elevenSpeak(cfg.apiKey, cfg.model, voiceId, text);

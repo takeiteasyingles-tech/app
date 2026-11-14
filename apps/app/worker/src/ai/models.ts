@@ -9,6 +9,7 @@ import {
   aiProviderOf,
   DEFAULT_MODELS,
   ELEVEN_DEFAULT_KEY,
+  ELEVEN_EXTRAS_KEY,
   ELEVEN_NARRATOR_KEY,
   ELEVEN_VOICE_ID_RE,
   FLAGS,
@@ -264,16 +265,21 @@ export async function elevenForRole(env: Env, db: D1Database, pick: VoicePick): 
   if (!pick.assistantKey && !pick.role && !pick.lessonVoice && !pick.everywhere) return null;
   const cfg = await readElevenConfig(db, env);
   if (!cfg.apiKey) return null;
-  const isNarration = !!pick.role && parseRole(pick.role).narrator;
+  const parsed = pick.role ? parseRole(pick.role) : null;
+  const isNarration = !!parsed?.narrator;
   const narration = isNarration ? cfg.voices[ELEVEN_NARRATOR_KEY] : undefined;
   // PROD (spec 05 "Default lesson voice"): inside a lesson (a role), anything without a voice of its own
   // reads with the default lesson voice, which also stands in when the chosen voice fails. A narration
   // goes to it before the learner's assistant; a character keeps its own course voice first.
   const fallback = pick.role || pick.everywhere ? cfg.voices[ELEVEN_DEFAULT_KEY] : undefined;
   const assistant = pick.assistantKey ? cfg.voices[pick.assistantKey] : undefined;
-  const voiceId = isNarration
-    ? pick.lessonVoice || narration || fallback || assistant
-    : pick.lessonVoice || assistant || fallback;
+  // PROD (spec 05 "Extras voices"): in Take Some Extras, the episode's extras voice (the character's,
+  // else the extras' own), then the course's extras voice, then the speaker's course voice.
+  const voiceId = parsed?.extras
+    ? pick.lessonVoice || cfg.voices[ELEVEN_EXTRAS_KEY] || assistant || fallback
+    : isNarration
+      ? pick.lessonVoice || narration || fallback || assistant
+      : pick.lessonVoice || assistant || fallback;
   if (!voiceId) return null;
   return {
     apiKey: cfg.apiKey,
@@ -314,6 +320,12 @@ export async function lessonVoiceId(
   if (!voices) return null;
   const ok = (id: unknown): string | null => (typeof id === 'string' && ELEVEN_VOICE_ID_RE.test(id) ? id : null);
   const parsed = parseRole(role);
+  // Take Some Extras: the character's extras voice, else the extras' own voice (spec 05 "Extras voices").
+  if (parsed.extras) {
+    const w = parsed.who.toLowerCase();
+    const hit = w ? Object.entries(voices.extras?.cast ?? {}).find(([name]) => name.toLowerCase() === w) : undefined;
+    return ok(hit?.[1]) ?? ok(voices.extras?.narrator);
+  }
   // A step of the lesson with its own voice, else the lesson narration (spec 05 "Lesson voices").
   if (parsed.narrator)
     return ok(parsed.step != null ? voices.steps?.[String(parsed.step)] : undefined) ?? ok(voices.narrator);

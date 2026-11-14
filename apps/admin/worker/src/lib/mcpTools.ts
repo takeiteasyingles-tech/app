@@ -21,7 +21,19 @@ import {
   type SeasonTestQuestionRow,
   seasonTestQuestionIssues,
 } from '@tie/shared';
-import { all, batch, batchRun, fromJson, one, type Query, q, toJson } from '@tie/worker-core';
+import {
+  all,
+  batch,
+  batchRun,
+  ElevenError,
+  elevenListVoices,
+  fromJson,
+  one,
+  type Query,
+  q,
+  readElevenConfig,
+  toJson,
+} from '@tie/worker-core';
 import { z } from 'zod';
 import { listBlobs, listOptionLists, putBlob, putOptionList } from '../routes/content';
 import { listReleases, previewContent, publishRelease, rollbackRelease } from '../routes/publish';
@@ -281,6 +293,25 @@ export const TOOL_HANDLERS: { [N in McpToolName]: Handler<N> } = {
   async update_episode({ num, patch, expectedUpdatedAt }, { db, writer }) {
     const item = await updateEntity(db, EPISODES, num, nonEmpty(patch), writer, { expectedUpdatedAt });
     return { item: item as McpToolOutput<'update_episode'>['item'] };
+  },
+
+  // PROD (spec 05 "Extras voices"): the voice ids an agent can put in an episode's voices.
+  async list_voices(_args, { c, db }) {
+    const cfg = await readElevenConfig(db, c.env);
+    const assistants = await all<{ key: string; name: string }>(
+      db,
+      'SELECT key, name FROM assistants ORDER BY sort, key',
+    );
+    let voices: McpToolOutput<'list_voices'>['voices'] = [];
+    if (cfg.apiKey) {
+      try {
+        voices = await elevenListVoices(cfg.apiKey);
+      } catch (err) {
+        if (!(err instanceof ElevenError)) throw err;
+        throw new ApiError('conflict', `ElevenLabs refused to list the voices (${err.status}).`);
+      }
+    }
+    return { voices, course: cfg.voices, assistants };
   },
 
   async list_ebooks(_args, { db }) {

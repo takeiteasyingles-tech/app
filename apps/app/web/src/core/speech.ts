@@ -185,6 +185,8 @@ export interface SayOptions {
   who?: string;
   mouth?: (v: Viseme) => void;
   onStart?: () => void;
+  /** The episode and /api/tts role to read with, over the current lesson (e.g. extrasRole() in the extras). */
+  lesson?: { ep: number; role: string };
 }
 
 const assistants = (): readonly AssistantPublic[] => catalog.value?.assistants ?? [];
@@ -209,7 +211,8 @@ export function setLesson(ep: number | null, step: number | null = null): void {
 /** speech.say(text, opt): resolves when the line finishes (or is stopped). */
 export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   stop();
-  const lesson = lessonEp != null ? { ep: lessonEp, role: opt.who?.trim() || narratorRole(lessonStep) } : undefined;
+  const lesson =
+    opt.lesson ?? (lessonEp != null ? { ep: lessonEp, role: opt.who?.trim() || narratorRole(lessonStep) } : undefined);
   const o = { rate: 1, who: currentAssistant()?.name ?? 'Maggie', ...opt };
   const prof = assistantByName(assistants(), o.who);
   const vo = prof ? prof.voice : null;
