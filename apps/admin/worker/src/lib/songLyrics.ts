@@ -6,6 +6,7 @@
 // fails: align spreads the lines evenly, generate returns no lines. A failed translation keeps the
 // lines with empty pt and a fallback gap (translated: false).
 import {
+  AI_MODEL_ID_RE,
   ApiError,
   alignLyricTimes,
   DEFAULT_MODELS,
@@ -20,15 +21,13 @@ import {
   type TimedWord,
   wordsToLines,
 } from '@tie/shared';
-import { all, isEnabled } from '@tie/worker-core';
+import { type AiEnv, type AiRunner, aiRunner, all, isEnabled } from '@tie/worker-core';
 import { z } from 'zod';
 import { extractJson } from './seasonDraft';
 
+// Word timestamps only come from Workers AI Whisper: the ASR here keeps a Workers AI id (else the
+// default), while the translation may run on Claude or OpenAI (spec 05 "Paid AI providers").
 const MODEL_ID_RE = /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i;
-
-interface AiRunner {
-  run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
-}
 
 const hasAi = (env: { AI?: unknown }): boolean => !!env.AI && typeof (env.AI as { run?: unknown }).run === 'function';
 
@@ -202,7 +201,7 @@ async function tutorModels(db: D1Database): Promise<string[]> {
   );
   const get = (k: string, d: string) => {
     const v = rows.find((r) => r.key === k)?.value.trim();
-    return v && MODEL_ID_RE.test(v) ? v : d;
+    return v && AI_MODEL_ID_RE.test(v) ? v : d;
   };
   return [
     ...new Set([
@@ -348,7 +347,7 @@ export async function songLyrics(
 
   if (!hasAi(env)) return demo('no AI binding');
   if (!(await isEnabled(env.DB, FLAGS.aiEnabled))) return demo('ai.enabled is off');
-  const ai = env.AI as AiRunner;
+  const ai = aiRunner(env as AiEnv);
   const asr = await asrModel(env.DB);
   let words: TimedWord[];
   try {

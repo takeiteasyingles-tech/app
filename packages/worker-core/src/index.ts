@@ -23,6 +23,7 @@ export * from './secrets';
 export * from './services/award';
 export * from './services/content';
 export * from './services/eleven';
+export * from './services/llm';
 export * from './services/quota';
 export * from './services/registry';
 export * from './services/srs';

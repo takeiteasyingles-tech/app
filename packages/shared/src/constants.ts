@@ -189,7 +189,24 @@ export const SETTINGS = {
   elevenVoices: 'voice.eleven.voices',
   /** ElevenLabs model id (ELEVEN_MODELS). */
   elevenModel: 'voice.eleven.model',
+  /** PROD (spec 05 "Paid AI providers"): Anthropic API key, sealed like the ElevenLabs one. */
+  aiKeyAnthropic: 'ai.key.anthropic',
+  /** OpenAI API key, sealed. */
+  aiKeyOpenai: 'ai.key.openai',
 } as const;
+
+/**
+ * PROD (spec 05 "Paid AI providers"): a model id names its provider. "@cf/…" runs on Workers AI (as
+ * before); "anthropic:<id>" on the Claude API and "openai:<id>" on the OpenAI API, with the keys
+ * saved in Configurações → IA.
+ */
+export const AI_MODEL_ID_RE =
+  /^(?:@cf\/[A-Za-z0-9._-]+\/[A-Za-z0-9._:-]{1,120}|anthropic:[A-Za-z0-9._-]{1,80}|openai:[A-Za-z0-9._:-]{1,80})$/;
+export type AiProvider = 'workers' | 'anthropic' | 'openai';
+export const aiProviderOf = (model: string): AiProvider =>
+  model.startsWith('anthropic:') ? 'anthropic' : model.startsWith('openai:') ? 'openai' : 'workers';
+/** The Claude models offered in the admin (current generation). Opus 5.5 is the recommended one. */
+export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const;
 
 export const DEFAULT_MODELS = {
   tutor: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',

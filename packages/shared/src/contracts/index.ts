@@ -16,6 +16,7 @@ import { srsApi } from './srs';
 
 export * from './admin';
 export * from './ai';
+export * from './aiProviders';
 export * from './apiTokens';
 export * from './auth';
 export * from './backups';

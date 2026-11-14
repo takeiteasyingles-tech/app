@@ -482,7 +482,7 @@ route(routes, api.draft, async (c) => {
       n,
     ),
   ] as const);
-  const outcome = await draftQuestions(c.env as unknown as { DB: D1Database; AI?: unknown }, {
+  const outcome = await draftQuestions(c.env, {
     season: { n, title: season.title, cefr: String(cefrRow[0]?.cefr ?? '') },
     episodes,
     count,

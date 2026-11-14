@@ -1,8 +1,12 @@
-// Workers AI model ids and the thin wrappers around env.AI.run (spec 04 §3.1).
+// Model ids and the thin wrappers around the AI runner (spec 04 §3.1). PROD (spec 05 "Paid AI
+// providers"): an id names its provider, "@cf/…" (Workers AI), "anthropic:…" or "openai:…"; the
+// runner (worker-core aiRunner) dispatches. Speech and the guard stay on Workers AI ids.
 // Model ids live in app_settings (SETTINGS.model*) so an admin can swap them without a deploy;
 // DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
 // them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
 import {
+  AI_MODEL_ID_RE,
+  aiProviderOf,
   DEFAULT_MODELS,
   ELEVEN_DEFAULT_KEY,
   ELEVEN_NARRATOR_KEY,
@@ -13,6 +17,9 @@ import {
 } from '@tie/shared';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
 import {
+  type AiEnv,
+  type AiRunner,
+  aiRunner,
   all,
   type ContentService,
   type Env,
@@ -40,7 +47,15 @@ const SETTING_KEYS: Record<keyof Models, string> = {
   guard: SETTINGS.modelGuard,
 };
 
-const MODEL_ID_RE = /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i;
+const MODEL_ID_RE = AI_MODEL_ID_RE;
+/** Which providers each role may use: chat on all three, ASR on Workers AI or OpenAI, TTS/guard on Workers AI. */
+const ROLE_OK: Record<keyof Models, (id: string) => boolean> = {
+  tutor: () => true,
+  tutorFallback: () => true,
+  asr: (id) => aiProviderOf(id) !== 'anthropic',
+  tts: (id) => aiProviderOf(id) === 'workers',
+  guard: (id) => aiProviderOf(id) === 'workers',
+};
 const TTL_MS = 30_000;
 let cache: { at: number; db: D1Database; models: Models } | null = null;
 
@@ -62,7 +77,7 @@ export async function loadModels(db: D1Database, now: number = Date.now()): Prom
   const models = { ...DEFAULT_MODELS } as Models;
   for (const [name, key] of Object.entries(SETTING_KEYS) as [keyof Models, string][]) {
     const v = byKey.get(key);
-    if (v && MODEL_ID_RE.test(v)) models[name] = v;
+    if (v && MODEL_ID_RE.test(v) && ROLE_OK[name](v)) models[name] = v;
   }
   cache = { at: now, db, models };
   return models;
@@ -79,13 +94,11 @@ export function hasAiBinding(env: Pick<Env, 'AI'>): boolean {
   return !!ai && typeof (ai as { run?: unknown }).run === 'function';
 }
 
-/** env.AI.run with a model id read at runtime (the generated types only accept literal ids). */
-export interface AiRunner {
-  run(model: string, inputs: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>;
-}
+export type { AiRunner };
 
-export function runner(env: Pick<Env, 'AI'>): AiRunner {
-  return env.AI as unknown as AiRunner;
+/** run(model, inputs) on Workers AI, Claude or OpenAI, by the model id (worker-core aiRunner). */
+export function runner(env: AiEnv): AiRunner {
+  return aiRunner(env);
 }
 
 export class AiCallError extends Error {
@@ -148,7 +161,7 @@ export interface JsonResult<T> {
  * Runs the tutor model in JSON-schema mode and validates the answer; on an error or an answer
  * that fails validation it retries once on the fallback model. Throws AiCallError when both fail.
  */
-export async function runJson<T>(env: Pick<Env, 'AI'>, models: Models, call: JsonCall<T>): Promise<JsonResult<T>> {
+export async function runJson<T>(env: AiEnv, models: Models, call: JsonCall<T>): Promise<JsonResult<T>> {
   const ai = runner(env);
   const started = Date.now();
   let lastError = 'no attempt';
@@ -174,7 +187,7 @@ export async function runJson<T>(env: Pick<Env, 'AI'>, models: Models, call: Jso
 }
 
 /** Whisper transcript of a base64 WAV (language forced to English). */
-export async function transcribe(env: Pick<Env, 'AI'>, model: string, audioB64: string): Promise<string> {
+export async function transcribe(env: AiEnv, model: string, audioB64: string): Promise<string> {
   const out = (await runner(env).run(model, { audio: audioB64, language: 'en' })) as { text?: unknown } | null;
   if (!out || typeof out.text !== 'string') throw new AiCallError('ASR returned no text', model);
   return out.text.trim();

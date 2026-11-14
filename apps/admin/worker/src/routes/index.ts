@@ -3,6 +3,7 @@
 import type { AppEnv } from '@tie/worker-core';
 import { Hono } from 'hono';
 import ai from './ai';
+import aiProviders from './aiProviders';
 import apiTokens from './apiTokens';
 import auth from './auth';
 import backups from './backups';
@@ -41,6 +42,7 @@ for (const r of [
   apiTokens,
   backups,
   voices,
+  aiProviders,
   songLyrics,
 ]) {
   routes.route('/', r);

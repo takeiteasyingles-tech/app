@@ -30,6 +30,9 @@ export interface Env {
   // ElevenLabs TTS for assistants with a cloned voice (tie-app only).
   /** Secret. Unset → every assistant uses the Workers AI voice. */
   ELEVENLABS_API_KEY?: string;
+  /** Optional fallbacks for the keys saved in the admin (Configurações → IA). */
+  ANTHROPIC_API_KEY?: string;
+  OPENAI_API_KEY?: string;
   /** Var. JSON {assistantKey: voiceId}, e.g. '{"margaret":"abc123"}'. */
   ELEVENLABS_VOICES?: string;
   /** Var. ElevenLabs model id; default eleven_turbo_v2_5. */

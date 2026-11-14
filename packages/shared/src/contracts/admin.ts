@@ -27,6 +27,7 @@ import {
 } from '../content/schema';
 import { QuotaInfo } from '../state';
 import { Feedback, PronTip, ReportResult } from './ai';
+import { adminAiProvidersApi } from './aiProviders';
 import { adminApiTokensApi } from './apiTokens';
 import { adminBackupsApi } from './backups';
 import { adminCertificatesApi } from './certificates';
@@ -1288,6 +1289,8 @@ export const adminApi = {
   backups: adminBackupsApi,
   // Configurações → Vozes (contracts/voices.ts).
   voices: adminVoicesApi,
+  // Configurações → App → Provedores de IA (contracts/aiProviders.ts).
+  aiProviders: adminAiProvidersApi,
   // Episode editor → Música: lyrics and line times from the song (contracts/songLyrics.ts).
   songLyrics: adminSongLyricsApi,
 } as const;
