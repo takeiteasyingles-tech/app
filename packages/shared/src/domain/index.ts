@@ -11,3 +11,4 @@ export * from './personalize';
 export * from './season';
 export * from './songSync';
 export * from './srs';
+export * from './voices';

@@ -7,6 +7,7 @@ import { ELEVEN_EXTRAS_KEY } from '@tie/shared/constants';
 import type { EpisodeVoices } from '@tie/shared/content/schema';
 import { adminContentApi } from '@tie/shared/contracts/admin';
 import { adminVoicesApi } from '@tie/shared/contracts/voices';
+import { mergeVoices } from '@tie/shared/domain/voices';
 import type { VNode } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { call, errorMessage } from '../../api';
@@ -58,10 +59,12 @@ export function ExtrasVoices({ ep, lead }: { ep: number; lead?: string }): VNode
   const save = async () => {
     setBusy(true);
     try {
-      const next: EpisodeVoices = { ...saved };
+      // Only the extras changes, over the latest saved voices (never puts back what this screen loaded).
+      const latest = (await call(adminContentApi.episodes.get, { params: { id: String(ep) } })).item as {
+        voices?: EpisodeVoices;
+      };
       const e = clean(x);
-      if (e) next.extras = e;
-      else delete next.extras;
+      const next = mergeVoices(latest.voices, { extras: saved.extras }, e ? { extras: e } : {});
       const res = await call(adminContentApi.episodes.update, {
         params: { id: String(ep) },
         body: { voices: next } as never,

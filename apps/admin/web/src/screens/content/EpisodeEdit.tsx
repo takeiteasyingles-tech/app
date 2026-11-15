@@ -4,6 +4,8 @@
 // row and its child rows (mic_phrases, exercises, exercise_items) save together; each request that
 // lands moves into the saved baseline, so a refusal (e.g. a phrase with learner scores) leaves only
 // the rest marked unsaved.
+
+import type { EpisodeVoices } from '@tie/shared/content/schema';
 import {
   adminContentApi,
   EpisodeEdit as EpisodeEditSchema,
@@ -16,6 +18,7 @@ import {
   type MicPhraseRow,
 } from '@tie/shared/contracts/admin';
 import { lyricTimesOutOfOrder } from '@tie/shared/domain/songSync';
+import { mergeVoices } from '@tie/shared/domain/voices';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { call, errorMessage, issuesOf, savePublishing } from '../../api';
 import { fmtAgo, fmtDateTime } from '../../format';
@@ -207,6 +210,16 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
       // PROD (spec 05 "Saving publishes"): the rows go out deferred and the episode goes live once, at the end.
       await savePublishing(`Episódio ${num}`, async () => {
         const epPatch = patchOf(pick(b, EP_KEYS), pick(d, EP_KEYS), EP_KEYS);
+        if ('voices' in epPatch) {
+          // Only this screen's voice changes, over the latest saved voices: a save never puts back voices
+          // someone set meanwhile (another tab, Take Some Extras, an MCP agent).
+          const latest = (await call(C.episodes.get, { params: { id: String(num) } })).item as { voices?: unknown };
+          epPatch.voices = mergeVoices(
+            latest.voices as EpisodeVoices,
+            b.voices as EpisodeVoices,
+            d.voices as EpisodeVoices,
+          );
+        }
         if (Object.keys(epPatch).length) {
           const res = await call(C.episodes.update, { params: { id: String(num) }, body: epPatch as never });
           Object.assign(b, pick(res.item as unknown as Obj, EP_KEYS));

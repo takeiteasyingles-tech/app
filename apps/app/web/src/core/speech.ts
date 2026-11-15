@@ -309,6 +309,35 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   });
 }
 
+/** Speech level every voice is brought to: RMS of the voiced parts (≈ -19 dBFS). */
+export const SPEECH_RMS_TARGET = 0.11;
+
+/**
+ * The gain that brings one line to SPEECH_RMS_TARGET: the RMS of its voiced 20 ms frames (silence and
+ * breaths left out, so pauses do not count), between ×0.25 and ×4.
+ */
+export function loudnessGain(audio: { sampleRate: number; getChannelData(ch: number): Float32Array }): number {
+  const ch = audio.getChannelData(0);
+  const win = Math.max(1, Math.floor(audio.sampleRate * 0.02));
+  let energy = 0;
+  let voiced = 0;
+  for (let i = 0; i < ch.length; i += win) {
+    const end = Math.min(ch.length, i + win);
+    let s = 0;
+    for (let j = i; j < end; j++) {
+      const x = ch[j] ?? 0;
+      s += x * x;
+    }
+    if (Math.sqrt(s / (end - i)) > 0.01) {
+      energy += s;
+      voiced += end - i;
+    }
+  }
+  if (!voiced) return 1;
+  const rms = Math.sqrt(energy / voiced);
+  return Math.min(4, Math.max(0.25, SPEECH_RMS_TARGET / rms));
+}
+
 /** HD voice through the shared AudioContext; the mouth follows the RMS level. */
 function playBuffer(
   arrayBuf: ArrayBuffer,
@@ -328,7 +357,21 @@ function playBuffer(
         src.playbackRate.value = o.rate;
         const an = c.createAnalyser();
         an.fftSize = 512;
-        src.connect(an);
+        // PROD (spec 05 "Even voice loudness"): every line plays at the same speech level, whatever voice
+        // (ElevenLabs clone, library voice, Workers AI) recorded it; a limiter keeps the boosted ones clean.
+        if (typeof c.createGain === 'function' && typeof c.createDynamicsCompressor === 'function') {
+          const gain = c.createGain();
+          gain.gain.value = loudnessGain(audio);
+          const limit = c.createDynamicsCompressor();
+          limit.threshold.value = -3;
+          limit.knee.value = 0;
+          limit.ratio.value = 20;
+          limit.attack.value = 0.002;
+          limit.release.value = 0.08;
+          src.connect(gain);
+          gain.connect(limit);
+          limit.connect(an);
+        } else src.connect(an);
         an.connect(c.destination);
         job.src = src;
         job.resolve = resolve;

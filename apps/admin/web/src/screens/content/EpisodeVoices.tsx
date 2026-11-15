@@ -24,6 +24,8 @@ function clean(v: EpisodeVoices): EpisodeVoices {
   if (Object.keys(steps).length) out.steps = steps;
   const cast = Object.fromEntries(Object.entries(v.cast ?? {}).filter(([, id]) => !!id));
   if (Object.keys(cast).length) out.cast = cast;
+  // Take Some Extras voices are edited elsewhere (Take Some Extras → Vozes): kept as they are.
+  if (v.extras) out.extras = v.extras;
   return out;
 }
 
