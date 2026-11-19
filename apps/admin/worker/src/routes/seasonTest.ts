@@ -18,6 +18,8 @@ import {
 import { type AppEnv, all, batch, batchRun, fromJson, one, type Query, q, toJson } from '@tie/worker-core';
 import { certificatePdf, loadCertificate, pdfResponse } from '@tie/worker-core/pdf/certificate';
 import { Hono } from 'hono';
+import type { z } from 'zod';
+import { staffWriter, type Writer } from '../lib/entityCrud';
 import {
   actor,
   auditStmt,
@@ -388,7 +390,18 @@ route(routes, api.remove, async (c) => {
 route(routes, api.review, async (c) => {
   const { n } = paramsOf(c, api.review.params);
   const body = await bodyOf(c, api.review.body);
-  const db = c.env.DB;
+  return c.json({ items: await reviewQuestions(c.env.DB, n, body, staffWriter(c)) });
+});
+
+type ReviewBody = z.infer<typeof api.review.body>;
+
+/** Sets the status of a set of questions in one batch with its audit row (admin route and MCP tool). */
+export async function reviewQuestions(
+  db: D1Database,
+  n: number,
+  body: ReviewBody,
+  writer: Writer,
+): Promise<SeasonTestQuestionRow[]> {
   const ids = [...new Set(body.ids)];
   const marks = ids.map(() => '?').join(', ');
   const rows = await all<QuestionDb>(
@@ -416,12 +429,11 @@ route(routes, api.review, async (c) => {
       `UPDATE season_test_questions SET status = ?, updated_at = ?, updated_by = ? WHERE season_n = ? AND id IN (${marks})`,
       body.status,
       now,
-      actor(c).userId,
+      writer.userId,
       n,
       ...ids,
     ),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'season_test.question.review',
         targetType: 'season',
@@ -441,8 +453,8 @@ route(routes, api.review, async (c) => {
     n,
     ...ids,
   );
-  return c.json({ items: after.map(questionRow) });
-});
+  return after.map(questionRow);
+}
 
 route(routes, api.draft, async (c) => {
   const { n } = paramsOf(c, api.draft.params);
@@ -472,7 +484,7 @@ route(routes, api.draft, async (c) => {
       n,
     ),
   ] as const);
-  const outcome = await draftQuestions(c.env as unknown as { DB: D1Database; AI?: unknown }, {
+  const outcome = await draftQuestions(c.env, {
     season: { n, title: season.title, cefr: String(cefrRow[0]?.cefr ?? '') },
     episodes,
     count,
@@ -530,14 +542,24 @@ route(routes, api.draft, async (c) => {
 route(routes, api.publish, async (c) => {
   const { n } = paramsOf(c, api.publish.params);
   const body = await bodyOf(c, api.publish.body);
-  const db = c.env.DB;
+  return c.json({ season: await publishSeasonTest(c.env.DB, n, body.published, staffWriter(c)) });
+});
+
+/** Publishes or withdraws a season's test (admin route and MCP tool); publishing needs no problems. */
+export async function publishSeasonTest(
+  db: D1Database,
+  n: number,
+  published: boolean,
+  writer: Writer,
+): Promise<SeasonTestConfig> {
+  const body = { published };
   const view = await readAdmin(db, n, 'approved');
   if (body.published && view.publishProblems.length) {
     throw new ApiError('conflict', view.publishProblems.join(' '), { publishProblems: view.publishProblems });
   }
   const before = view.season;
   const now = Date.now();
-  const userId = actor(c).userId;
+  const userId = writer.userId;
   await batchRun(db, [
     body.published
       ? q(
@@ -548,8 +570,7 @@ route(routes, api.publish, async (c) => {
           n,
         )
       : q(db, 'UPDATE seasons SET test_published = 0 WHERE n = ?', n),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'season_test.publish',
         targetType: 'season',
@@ -563,8 +584,8 @@ route(routes, api.publish, async (c) => {
       now,
     ),
   ]);
-  return c.json({ season: seasonConfig(await seasonOr404(db, n)) });
-});
+  return seasonConfig(await seasonOr404(db, n));
+}
 
 // ---------- Certificates ----------
 

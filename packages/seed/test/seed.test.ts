@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { type CompiledContent, compileContent } from '@tie/shared/content/compile';
 import { Catalog, Ebook, Episode } from '@tie/shared/content/schema';
 import { BadgeRule } from '@tie/shared/contracts/game';
+import { EPISODE_TEST_SIZE, episodeTestPassScore } from '@tie/shared/domain/episodeTest';
 import { norm } from '@tie/shared/domain/norm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { bootstrapSql } from '../src/bootstrapAdmin';
@@ -36,6 +37,19 @@ describe('extraction and transform', () => {
     expect(c.media.length).toBeGreaterThanOrEqual(60);
     expect(c.ebooks).toHaveLength(10);
     expect(c.steps).toHaveLength(10);
+    // PROD 10-step track (no e-book step): the same rows 0013_no_ebook_step.sql writes.
+    expect(c.steps.map((x) => [x.n, x.name, x.pt, x.group_label])).toEqual([
+      [1, 'In this episode', 'conheça o episódio', 'ABERTURA'],
+      [2, 'Take the Mic', 'música · 1ª passada', null],
+      [3, 'Take a Look', 'dê uma olhada', 'O EPISÓDIO'],
+      [4, 'Take It In', 'absorva', null],
+      [5, 'Take the Mic', 'pegue o microfone', null],
+      [6, 'Take a Lesson', 'tenha uma aula', null],
+      [7, 'Take Away', 'leve com você', null],
+      [8, 'Take Action', 'mãos à obra', null],
+      [9, 'Take the Mic', 'música · cante junto', 'FECHAMENTO'],
+      [10, 'Take the Test', 'teste do episódio', null],
+    ]);
     expect(c.seasons).toHaveLength(8);
     expect(c.mic_missions).toHaveLength(8);
     expect(c.albums).toHaveLength(3);
@@ -229,7 +243,11 @@ describe('compiled snapshot of the real prototype', () => {
     expect(e2.sceneImage).toMatch(/scene\/cafe-counter\.webp$/);
     expect(e2.introAudio).toBeNull();
     const eb = Ebook.parse(JSON.parse(compiled.files['ebook/1.json'] as string));
-    expect(eb.test.flatMap((p) => p.qs)).toHaveLength(20);
+    // PROD (0014): the e-book publishes only the short episode test (6 of the prototype's 20
+    // questions), with the pass score (14/20) scaled to the questions kept.
+    expect(eb.test.flatMap((p) => p.qs)).toHaveLength(EPISODE_TEST_SIZE);
+    expect(eb.passScore).toBe(episodeTestPassScore(14, 20, EPISODE_TEST_SIZE));
+    expect(eb.passScore).toBe(5);
     expect(eb.teaser?.title).toMatch(/^O almoço/);
     expect(eb.extrasCards).toHaveLength(4);
   });

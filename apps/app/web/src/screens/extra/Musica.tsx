@@ -323,7 +323,7 @@ export default function Musica({ params }: ScreenProps) {
 
   return (
     <OnNavy cls="x-mus" w={1100}>
-      <Topbar back="extra" kicker={`EXTRA · Música · ${k.level}`} title={k.title} />
+      <Topbar back="extra" kicker={`FLIX · Música · ${k.level}`} title={k.title} />
       <div class="scroll">
         <div class="wrap" style={{ '--wrap': '1100px' }}>
           {/* Desktop: album art and the track list | the player and the lyrics. */}

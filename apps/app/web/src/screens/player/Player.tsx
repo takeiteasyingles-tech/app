@@ -4,19 +4,23 @@
 // post step-ok, Next posts advance (the server re-runs need(); a refusal rolls prog back and the
 // route falls back to the last reached step), exercises and Mic scores are graded/recorded by the
 // server, and its award results play the prototype's toasts, sfx and confetti.
+//
+// PROD (0011, flag feedback.steps): before moving forward from a step, the learner rates it in a
+// sheet ("Como foi sua experiência?", StepFeedback.tsx); the move happens once it is sent (or queued).
 
 import { signal } from '@preact/signals';
-import { STEP } from '@tie/shared/constants';
+import { FLAGS, STEP } from '@tie/shared/constants';
 import type { Catalog, Episode } from '@tie/shared/content/schema';
-import { ebookApi } from '@tie/shared/contracts/ebook';
 import type { MicScoreSource } from '@tie/shared/contracts/progress';
 import { gate } from '@tie/shared/domain/gating';
 import { defaults } from '@tie/shared/domain/personalize';
+import { activeLine } from '@tie/shared/domain/songSync';
 import { stepKey, type TieState } from '@tie/shared/state';
 import { confetti, Icon, Segs, toast, uiConfig } from '@tie/ui';
 import { Fragment } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { pronounce } from '../../core/aiClient';
+import { enterFullscreen } from '../../core/screen';
 import { sfx, synth } from '../../core/sound';
 import { speech } from '../../core/speech';
 import { Overlay, type ScreenProps, useChrome } from '../../frame';
@@ -24,6 +28,7 @@ import { go, replace, route } from '../../router';
 import { layoutOf } from '../../shell';
 import {
   advanceStep,
+  aiOnline,
   answerExercise,
   catalog,
   catalogImage,
@@ -32,10 +37,10 @@ import {
   loadEpisode,
   markStep,
   saveMicScore,
-  send,
   state,
   useContent,
 } from '../../store';
+import { sendStepFeedback } from '../../store/feedback';
 import {
   fresh,
   heard,
@@ -50,6 +55,7 @@ import {
   stepAudio,
   type Tap,
 } from './model';
+import { StepFeedback } from './StepFeedback';
 import { renderStep } from './steps';
 import './player.css';
 
@@ -130,17 +136,6 @@ function stopAll(P: PState): void {
   P.tk++;
 }
 
-/** Saves the e-book PDF the server returned (production has the real file; the prototype faked it). */
-function savePdf(url: string, n: number): void {
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `take-it-easy-ebook-${pad2(n)}.pdf`;
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
 export default function Player({ params }: ScreenProps) {
   const num = Number(params.ep);
   const { data, error } = useContent(
@@ -159,7 +154,7 @@ export default function Player({ params }: ScreenProps) {
 
   const s = view(state.value);
   const prog = s.prog[num] || 1;
-  const step = Number(params.step) || (prog >= 10 ? 1 : prog);
+  const step = Number(params.step) || (prog >= STEP.LAST ? 1 : prog);
   // The trilha lock (the server's assertOpen): an unfinished episode opens only once every earlier
   // published one is done. A deep link to a locked episode goes back to the trilha, saying why,
   // instead of showing a player whose every step the server would refuse.
@@ -201,6 +196,20 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
   const STEPS = cat.steps;
   const cur = STEPS[step - 1];
 
+  // The step feedback sheet (flag feedback.steps): open while the move it holds back waits.
+  const [feedback, setFeedback] = useState<{ resume: () => void } | null>(null);
+  /** Runs `move` after the learner rates this step (when the flag is on); otherwise at once. */
+  const askFeedback = (move: () => void) => {
+    if (!state.value.flags[FLAGS.stepFeedback]) {
+      move();
+      return;
+    }
+    if (feedback) return;
+    stopAll(P);
+    P.sheet = false;
+    setFeedback({ resume: move });
+  };
+
   useChrome({ title: `Ep. ${Ep.num} · ${cur?.name ?? ''}` });
 
   // leave(): stop every sound, drop a recording in progress; trans/speed carry over to the next step.
@@ -215,7 +224,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     [],
   );
 
-  // Auto-scroll: the line being spoken (step 5) or sung (2 and 10) stays in the middle of the screen.
+  // Auto-scroll: the line being spoken (Take It In) or sung (2 and 9) stays in the middle of the screen.
   useEffect(() => {
     if (!P.playing || !(isSong(step) || step === STEP.DIALOG)) return;
     const at = step === STEP.DIALOG ? P.line : (lyricRows(Ep.lyrics).of[P.line] ?? P.line);
@@ -291,7 +300,13 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     };
   }, [P.micOpen]);
 
-  // The intro/song duration shows before the first play ("0:00 / 0:58", not the prototype's "0:00 / —"):
+  // Speech in this step uses the lesson's voices (the episode's narrator and cast).
+  useEffect(() => {
+    speech.setLesson(Ep.num, step);
+    return () => speech.setLesson(null);
+  }, [Ep.num, step]);
+
+  // The intro/song/context duration shows before the first play ("0:00 / 0:58", not the prototype's "0:00 / —"):
   // only the file's metadata is fetched.
   useEffect(() => {
     const src = stepAudio(Ep, step);
@@ -312,7 +327,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     };
   }, []);
 
-  /** mark(n): the step's media or dialogue finished (step 10 also earns `song` on the server). */
+  /** mark(n): the step's media or dialogue finished (the sing-along also earns `song` on the server). */
   const mark = (n: number) => {
     const key = stepKey(Ep.num, n);
     if (P.dead || view(state.value).stepOk[key]) return;
@@ -330,15 +345,21 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     go(`episodio/${Ep.num}/${n}`);
   };
 
+  /** A move forward (the map, Next) asks for the step feedback first; a move back never does. */
+  const moveTo = (n: number, award = false) => {
+    if (n > step) askFeedback(() => setStep(n, award));
+    else setStep(n, award);
+  };
+
   const close = () => {
     stopAll(P);
     re();
     go('inicio');
   };
 
-  const next = () => {
+  const advance = () => {
     if (gate(Ep, view(state.value), step) || P.finishing) return;
-    if (step === 10) {
+    if (step === STEP.LAST) {
       // The done screen opens only once the server has recorded the episode (or queued it offline):
       // a refusal keeps the student here, with the server's message toasted by send().
       stopAll(P);
@@ -357,11 +378,16 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     setStep(step + 1, true);
   };
 
+  const next = () => {
+    if (gate(Ep, view(state.value), step) || P.finishing) return;
+    askFeedback(advance);
+  };
+
   function speakFrom(i: number, tk: number): void {
     if (P.dead || tk !== P.tk) return;
     const len = Ep.dialog.length;
     if (!P.playing || i >= len) {
-      if (P.playing && i >= len) mark(5);
+      if (P.playing && i >= len) mark(STEP.DIALOG);
       P.playing = false;
       re();
       return;
@@ -393,16 +419,16 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         if (P.dead || P.audio !== a) return;
         P.aT = a.currentTime;
         P.aD = Number.isFinite(a.duration) ? a.duration : 0;
-        if (isSong(step) && len) {
-          P.line = Math.min(len - 1, Math.floor((P.aT / (P.aD || 1)) * len));
-        }
+        // The lyric under the voice: by the lines' own timestamps when the song has them.
+        if (isSong(step) && len) P.line = activeLine(Ep.lyrics, P.aT, P.aD);
         re();
       });
       a.addEventListener('ended', () => {
         if (P.dead || P.audio !== a) return;
         P.playing = false;
         P.audio = null;
-        mark(step);
+        // Take a Look's context narration does not finish the step (the scene does).
+        if (step !== STEP.LOOK) mark(step);
         re();
       });
       // Resume where the pause left it; from the start once it played to the end.
@@ -453,7 +479,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       re();
       return;
     }
-    if (step === 5) {
+    if (step === STEP.DIALOG) {
       P.playing = true;
       re();
       speakFrom(P.line, P.tk);
@@ -516,6 +542,8 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     P.mic = 'rec';
     P.fb = null;
     re();
+    // Speech recognition unavailable or broken: an empty transcript says nothing about the take.
+    let sttDown = !speech.canListen;
     if (rec && speech.canListen) {
       lis = speech.listen({
         onInterim: (t) => {
@@ -523,6 +551,9 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         },
         onFinal: (t) => {
           said = t;
+        },
+        onError: (err) => {
+          if (err !== 'no-speech' && err !== 'aborted') sttDown = true;
         },
       });
     }
@@ -542,6 +573,24 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       let attempt: string | undefined;
       if (rec) {
         const out = await rec.stop();
+        // Nothing is scored when the take has no voice in it (VAD), or, in demo mode, when nothing was
+        // understood: the learner is asked to try again instead of getting a made-up score.
+        const silent = !!out.b64 && (out.voicedMs ?? 0) < speech.MIN_VOICED_MS;
+        const unheard = !silent && !aiOnline.value && !sttDown && !said.trim();
+        if (silent || unheard) {
+          if (P.dead) return;
+          if (P.micIdx === idx) {
+            P.fb = null;
+            P.mic = 'idle';
+            re();
+          }
+          toast(
+            silent
+              ? 'Não ouvi a sua voz. Toque no microfone e fale a frase.'
+              : 'Não deu para entender. Fale de novo, mais perto do microfone.',
+          );
+          return;
+        }
         const r = await pronounce(out.b64, m.en, { heard: said, phraseId: m.id });
         fb = r;
         source = r.source === 'ia' && r.attempt ? 'ia' : 'demo';
@@ -600,7 +649,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     P.micHear = true;
     re();
     const tk = P.micTk;
-    void speech.say(m.en).then(() => {
+    void speech.say(m.en, m.who ? { who: m.who } : {}).then(() => {
       if (P.dead || !P.micOpen || P.micTk !== tk || P.micIdx !== i) return;
       P.micHear = false;
       void record();
@@ -610,27 +659,6 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
   const micClose = () => {
     micHush();
     P.micOpen = false;
-    re();
-  };
-
-  const download = async () => {
-    if (P.dl !== 'idle') return;
-    P.dl = 'busy';
-    re();
-    const n = Ep.ebook;
-    const again = !!state.value.ebooks[String(n)];
-    const r = await send(
-      ebookApi.download,
-      { params: { n } },
-      { apply: (_res, st) => ({ ebooks: { ...st.ebooks, [String(n)]: true } }) },
-    );
-    if (P.dead) return;
-    P.dl = 'idle';
-    if (r) {
-      if (r.pdf) savePdf(r.pdf, n);
-      else if (again) toast('O PDF deste e-book ainda não está disponível. O conteúdo está no app.');
-      if (!again) sfx.ok();
-    }
     re();
   };
 
@@ -697,13 +725,11 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       P.showScore = true;
       re();
     },
-    download: () => void download(),
-    ebookOpen: () => {
-      stopAll(P);
-      go(`ebook/${Ep.ebook}`);
-    },
     vidStart: (v) => {
+      // The scene and Take a Look's context narration never play together.
+      if (P.playing) stopAll(P);
       P.vid = true;
+      enterFullscreen(v);
       re();
       v?.play().catch(() => {
         toast('O navegador bloqueou o vídeo. Toque de novo.');
@@ -743,7 +769,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
     tap,
   };
   const part = renderStep(ctx, () => {
-    mark(4);
+    mark(STEP.LOOK);
     re();
   });
 
@@ -754,7 +780,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
   };
   const goStep = (n: number) => {
     P.sheet = false;
-    setStep(n);
+    moveTo(n);
   };
 
   /**
@@ -815,7 +841,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         </button>
         <div class="grow tc">
           <div class="lbl" style={{ fontSize: '.72rem' }}>
-            {`Episódio ${Ep.num} · etapa ${step} de 10`}
+            {`Episódio ${Ep.num} · etapa ${step} de ${STEP.LAST}`}
           </div>
           <div class="h3">{Ep.title}</div>
         </div>
@@ -850,7 +876,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       <button
         type="button"
         class="btn prev"
-        onClick={step > 1 ? tap(() => setStep(step - 1)) : undefined}
+        onClick={step > 1 ? tap(() => moveTo(step - 1)) : undefined}
         aria-label="Anterior"
         disabled={step <= 1}
       >
@@ -865,15 +891,17 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
       >
         <span style={{ minWidth: '0' }}>
           <span class="kicker">
+            {/* The free-steps dev mode (settings.free) says so on Next, which it never locks. */}
+            {s.settings.free ? 'Modo Dev · ' : ''}
             {lock ||
-              (step === 10
+              (step === STEP.LAST
                 ? P.finishing
                   ? 'Concluindo…'
                   : 'Última etapa · +40 pontos'
                 : `Próxima · ${pad2(step + 1)} · +10`)}
           </span>
           <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {step === 10 ? 'Concluir episódio' : nx?.name}
+            {step === STEP.LAST ? 'Concluir episódio' : nx?.name}
           </span>
         </span>
         <Icon name={lock ? 'lock' : 'next'} size={22} />
@@ -920,7 +948,7 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
               <span>Voltar para Hoje</span>
             </button>
             <div class="h2 mt8">Episódio {pad2(Ep.num)}</div>
-            <p class="sm mt8">{Ep.scope}</p>
+            <p class="sm mt8">{Ep.title}</p>
             <div class="mt12">{stepList()}</div>
           </aside>
           <div class="view">{main}</div>
@@ -931,7 +959,20 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
           {main}
         </div>
       )}
-      {P.sheet ? (
+      {feedback ? (
+        <StepFeedback
+          episodeNum={Ep.num}
+          step={step}
+          stepName={cur?.name ?? ''}
+          save={(id, body) => serial(() => sendStepFeedback(id, body))}
+          onCancel={() => setFeedback(null)}
+          onContinue={() => {
+            if (P.dead) return;
+            setFeedback(null);
+            feedback.resume();
+          }}
+        />
+      ) : P.sheet ? (
         <Overlay>
           <div class="overlay">
             {/* biome-ignore lint/a11y/noStaticElementInteractions: the scrim mirrors the close button for pointer users */}

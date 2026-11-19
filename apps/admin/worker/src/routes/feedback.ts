@@ -1,4 +1,5 @@
-// Feature C (spec 07): NPS ratings of the episodes (list, per-episode summary) and the learning
+// Feature C (spec 07): NPS ratings of the episodes (list, per-episode summary), the per-step
+// ratings (step_feedback: stars, a difficulty flag and two optional comments) and the learning
 // statistics (one learner, the course funnel). Every endpoint is a read answered by one D1 round trip
 // (a single statement or one batch) over indexed lookups.
 //
@@ -8,6 +9,7 @@
 //   the funnel, the test pass rates and the active learners, as on the dashboard (/admin-api/stats).
 import {
   type AdminFeedbackRow,
+  type AdminStepFeedbackRow,
   ApiError,
   adminFeedbackApi,
   adminStatsApi,
@@ -43,6 +45,64 @@ function addStars(dist: Dist, stars: number, n: number): void {
 export function lastDates(today: string, days: number): string[] {
   return Array.from({ length: days }, (_, i) => addDays(today, i - days + 1));
 }
+
+// ---------- Step ratings ----------
+
+interface StepFeedbackDb {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  episode_num: number;
+  episode_title: string | null;
+  step: number;
+  stars: number;
+  had_difficulty: number;
+  difficulty: string | null;
+  improvement: string | null;
+  created_at: number;
+}
+
+route(routes, adminFeedbackApi.steps, async (c) => {
+  const query = queryOf(c, adminFeedbackApi.steps.query);
+  const binds: Bind[] = [];
+  const p = (v: Bind) => {
+    binds.push(v);
+    return `?${binds.length}`;
+  };
+  const where: string[] = [];
+  if (query.episode !== undefined) where.push(`f.episode_num = ${p(query.episode)}`);
+  if (query.step !== undefined) where.push(`f.step = ${p(query.step)}`);
+  const cur = decodeCursor(query.cursor, ['n', 's']);
+  if (cur) where.push(`(f.created_at < ${p(cur[0])} OR (f.created_at = ${p(cur[0])} AND f.id < ${p(cur[1])}))`);
+  const rows = await all<StepFeedbackDb>(
+    c.env.DB,
+    `SELECT f.*, pr.name AS user_name, e.title AS episode_title FROM step_feedback f
+    LEFT JOIN profiles pr ON pr.user_id = f.user_id LEFT JOIN episodes e ON e.num = f.episode_num
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY f.created_at DESC, f.id DESC LIMIT ${p(query.limit + 1)}`,
+    ...binds,
+  );
+  return c.json(
+    pageOf(
+      rows,
+      query.limit,
+      (r): AdminStepFeedbackRow => ({
+        id: r.id,
+        userId: r.user_id,
+        userName: r.user_name,
+        episodeNum: r.episode_num,
+        episodeTitle: r.episode_title,
+        step: r.step,
+        stars: r.stars,
+        hadDifficulty: r.had_difficulty === 1,
+        difficulty: r.difficulty,
+        improvement: r.improvement,
+        createdAt: r.created_at,
+      }),
+      (r) => [r.created_at, r.id],
+    ),
+  );
+});
 
 // ---------- Ratings ----------
 

@@ -142,8 +142,8 @@ describe('awardFx (game.award effects)', () => {
 
 describe('cardsFx (review.sync toast)', () => {
   it('uses the prototype copy', () => {
-    expect(cardsFx(1)).toEqual([{ at: 0, kind: 'toast', msg: '1 cartão novo nos Flashcards.' }]);
-    expect(cardsFx(7)).toEqual([{ at: 0, kind: 'toast', msg: '7 cartões novos nos Flashcards.' }]);
+    expect(cardsFx(1)).toEqual([{ at: 0, kind: 'toast', msg: '1 cartão novo nos Cards.' }]);
+    expect(cardsFx(7)).toEqual([{ at: 0, kind: 'toast', msg: '7 cartões novos nos Cards.' }]);
     expect(cardsFx(0)).toEqual([]);
   });
 });

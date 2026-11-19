@@ -7,10 +7,14 @@
 // and then written into the catalog, so republishing identical content yields the same version.
 
 import type { z } from 'zod';
+import { EBOOK_EXTRAS, type EbookExtra } from '../constants';
 import { mediaUrl } from '../contracts/content';
+import { episodeTestPassScore, pickEpisodeTest } from '../domain/episodeTest';
+import { type MicSpeakerLine, micSpeaker } from '../domain/micSpeaker';
 import {
   type Album,
   type AssistantPublic,
+  autoTrackId,
   type Block,
   Catalog,
   CONTENT_FILES,
@@ -77,6 +81,8 @@ export interface EpisodeRowDb {
   song_media: Text;
   song_title: Text;
   scene_media: Text;
+  /** PROD (0014): Take a Look's context audio. */
+  look_media?: Text;
   scene_note: Text;
   dialog_title: Text;
   dialog_sub: Text;
@@ -89,6 +95,8 @@ export interface EpisodeRowDb {
   away_exp: string;
   away_words: string;
   done: Text;
+  /** PROD (0016): JSON EpisodeVoices. */
+  voices?: Text;
   updated_at: number;
   updated_by?: Text;
 }
@@ -101,6 +109,8 @@ export interface MicPhraseRowDb {
   demo_result: Num;
   blue: number;
   fb: Text;
+  /** PROD (0017): "Quem fala"; null = automatic (micSpeaker). */
+  who?: Text;
 }
 export interface ExerciseRowDb {
   id: string;
@@ -132,6 +142,8 @@ export interface EbookRowDb {
   lead: string;
   chat: string;
   extras_cards: string;
+  /** PROD (0018): JSON EbookExtra[] the episode end offers; null = all of them. */
+  extras_on?: Text;
   pdf_media: Text;
   pass_score: number;
   test_enabled?: number;
@@ -391,6 +403,16 @@ function parseJson<T>(text: string | null | undefined, fallback: T, where: strin
   }
 }
 
+/** JSON.parse that records no issue: the fallback when the text is not JSON (or not an array, for an array fallback). */
+function quiet<T>(raw: string | null | undefined, fallback: T): T {
+  try {
+    const v = JSON.parse(raw ?? '') as unknown;
+    return (Array.isArray(fallback) && !Array.isArray(v) ? fallback : v) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 const bySort = <T extends { sort: number }>(a: T, b: T) => a.sort - b.sort;
 const str = (v: string | null | undefined): string => v ?? '';
 
@@ -462,6 +484,17 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     questionsByEbook.set(q.ebook_num, list);
   }
   const epsOfEbook = (n: number) => episodesSorted.filter((e) => e.ebook_num === n).map((e) => e.num);
+  // PROD (0014): each e-book publishes the short episode test (pickEpisodeTest), not its whole test;
+  // the pass score is scaled to the questions kept.
+  const fullTestSize = new Map<number, number>();
+  for (const [n, list] of questionsByEbook) {
+    fullTestSize.set(n, list.length);
+    const cands = list.map((row) => ({ part: row.part_idx, n: row.n, ep: row.ep_num ?? null, row }));
+    questionsByEbook.set(
+      n,
+      pickEpisodeTest(cands, epsOfEbook(n)).map((c) => c.row),
+    );
+  }
 
   /** An e-book is available when it has its own pages or a test (the prototype only has e-book 1). */
   const ebookAvailable = (e: EbookRowDb): boolean =>
@@ -478,6 +511,16 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     ebook: e.ebook_num,
     extra: e.extra_id ?? null,
   }));
+  /** PROD (0018): the extras switched on (extras_on) that have content and a card that opens them. */
+  const offeredExtras = (e: EbookRowDb): EbookExtra[] => {
+    const on = quiet<string[]>(e.extras_on ?? JSON.stringify(EBOOK_EXTRAS), [...EBOOK_EXTRAS]);
+    const cards = quiet<{ go?: string }[]>(e.extras_cards, []);
+    const has = (k: EbookExtra) =>
+      k === 'out'
+        ? cards.some((x) => !x.go)
+        : quiet<unknown[]>(e[k], []).length > 0 && cards.some((x) => x.go?.endsWith(`/${k}`));
+    return EBOOK_EXTRAS.filter((k) => on.includes(k) && has(k));
+  };
   const ebookIndex: EbookIndexEntry[] = ebooksSorted.map((e) => ({
     num: e.num,
     title: e.title,
@@ -489,6 +532,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
     testEnabled: e.test_enabled !== 0,
     testRequiredEpisodes: J<number[]>(e.test_required_episodes ?? '[]', [], `ebooks.${e.num}.test_required_episodes`),
     testMinCompleted: e.test_min_completed ?? null,
+    extras: offeredExtras(e),
   }));
 
   // ----- Onboarding option lists -----
@@ -595,35 +639,61 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       }),
     );
   const episodeByNum = new Map(episodesSorted.map((e) => [e.num, e]));
-  const albums: Album[] = [...rows.albums].sort(bySort).map((a) => ({
-    id: a.id,
-    title: a.title,
-    sub: str(a.sub),
-    level: str(a.level),
-    img: url(a.img_media, `albums.${a.id}.img`),
-    genres: J<string[]>(a.genres, [], `albums.${a.id}.genres`),
-    tracks: rows.album_tracks
-      .filter((t) => t.album_id === a.id)
-      .sort(bySort)
-      .map((t) => {
-        const ep = t.ep_num != null ? episodeByNum.get(t.ep_num) : undefined;
-        const own = J<{ en: string; pt: string; gap: string }[] | null>(t.lines, null, `album_tracks.${t.id}.lines`);
-        // Episode tracks sing the episode lyrics; a line without a gap blanks its first word (extra.js tracksOf).
-        const lines =
-          own ??
-          (ep ? lyricsOf(ep).map((l) => ({ en: l.en, pt: l.pt, gap: l.gap || (l.en.split(' ')[0] ?? '') })) : []);
-        return {
-          id: t.id,
-          title: t.title,
-          from: str(t.src_from),
-          audio: url(t.audio_media, `album_tracks.${t.id}.audio`),
-          ...(t.ep_num != null ? { ep: t.ep_num } : {}),
-          ...(t.bpm != null ? { bpm: t.bpm } : {}),
-          ...(t.music_key != null ? { key: t.music_key } : {}),
-          lines,
-        };
-      }),
-  }));
+  // Episode tracks sing the episode lyrics; a line without a gap blanks its first word (extra.js tracksOf).
+  const epLines = (ep: EpisodeRowDb) =>
+    lyricsOf(ep).map((l) => ({ en: l.en, pt: l.pt, gap: l.gap || (l.en.split(' ')[0] ?? '') }));
+  // PROD: every published episode with lyrics has a karaoke track; the ones no album lists are added
+  // to the first album that has tracks. Tracks always point at an episode (its song and its title).
+  const listed = new Set(rows.album_tracks.flatMap((t) => (t.ep_num != null ? [t.ep_num] : [])));
+  const autoTracks = episodesSorted
+    .filter((e) => e.status === 'published' && !listed.has(e.num) && lyricsOf(e).length > 0)
+    .map((e) => ({
+      id: autoTrackId(e.num),
+      title: str(e.song_title) || e.title,
+      from: `Episódio ${e.num}`,
+      audio: url(e.song_media, `episodes.${e.num}.song_media`),
+      ep: e.num,
+      lines: epLines(e),
+    }));
+  let autoPlaced = false;
+  const albums: Album[] = [...rows.albums]
+    .sort(bySort)
+    .map((a) => {
+      const tracks = rows.album_tracks
+        .filter((t) => t.album_id === a.id && t.ep_num != null)
+        .sort(bySort)
+        .map((t) => {
+          const ep = episodeByNum.get(t.ep_num as number);
+          const own = J<{ en: string; pt: string; gap: string }[] | null>(t.lines, null, `album_tracks.${t.id}.lines`);
+          const lines = own ?? (ep ? epLines(ep) : []);
+          return {
+            id: t.id,
+            title: str(ep?.song_title) || t.title,
+            from: str(t.src_from),
+            audio: ep?.song_media
+              ? url(ep.song_media, `episodes.${ep.num}.song_media`)
+              : url(t.audio_media, `album_tracks.${t.id}.audio`),
+            ep: t.ep_num as number,
+            ...(t.bpm != null ? { bpm: t.bpm } : {}),
+            ...(t.music_key != null ? { key: t.music_key } : {}),
+            lines,
+          };
+        });
+      if (tracks.length && !autoPlaced) {
+        autoPlaced = true;
+        tracks.push(...autoTracks);
+      }
+      return {
+        id: a.id,
+        title: a.title,
+        sub: str(a.sub),
+        level: str(a.level),
+        img: url(a.img_media, `albums.${a.id}.img`),
+        genres: J<string[]>(a.genres, [], `albums.${a.id}.genres`),
+        tracks,
+      };
+    })
+    .filter((a) => a.tracks.length > 0);
 
   // ----- Mic -----
   const mic: MicCatalog = {
@@ -710,6 +780,8 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       songAudio: url(e.song_media, w('song_media')),
       songTitle: str(e.song_title),
       sceneVideo: url(e.scene_media, w('scene_media')),
+      lookAudio: url(e.look_media, w('look_media')),
+      testCount: eb && eb.test_enabled !== 0 ? (questionsByEbook.get(eb.num)?.length ?? 0) : 0,
       sceneImage: url(scenes.episodes[String(e.num)] ?? scenes.default, 'content_blobs.scene_images'),
       sceneNote: str(e.scene_note),
       lyrics: lyricsOf(e),
@@ -721,14 +793,18 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       dialogTitle: str(e.dialog_title),
       dialogSub: str(e.dialog_sub),
       dialog: J<{ id?: string }[]>(e.dialog, [], w('dialog')).map((d, i) => ({ ...d, id: d.id ?? `e${e.num}-dl${i}` })),
-      mic: phrasesOf(e.num).map((p) => ({
-        id: p.id,
-        en: p.en,
-        tip: str(p.tip),
-        result: p.demo_result ?? 7,
-        ...(p.blue ? { blue: true } : {}),
-        fb: str(p.fb),
-      })),
+      mic: phrasesOf(e.num).map((p) => {
+        const who = micSpeaker(p.en, quiet<MicSpeakerLine[]>(e.dialog, []), quiet<string[]>(e.cast_names, []), p.who);
+        return {
+          id: p.id,
+          en: p.en,
+          tip: str(p.tip),
+          result: p.demo_result ?? 7,
+          ...(p.blue ? { blue: true } : {}),
+          fb: str(p.fb),
+          ...(who ? { who } : {}),
+        };
+      }),
       lesson: J<Block[]>(e.lesson, [], w('lesson')),
       pron: J(e.pron, null, w('pron')),
       awayExp: J(e.away_exp, [], w('away_exp')),
@@ -750,6 +826,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
         })),
       })),
       done: J(e.done, null, w('done')),
+      voices: J(e.voices ?? '{}', {}, w('voices')),
     };
     files[file] = JSON.stringify(validate(Episode, draft, file, issues));
     episodeNums.push(e.num);
@@ -797,8 +874,13 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
       lead: J(eb.lead, [], `ebooks.${eb.num}.lead`),
       chat: J(eb.chat, [], `ebooks.${eb.num}.chat`),
       extrasCards: J(eb.extras_cards, [], `ebooks.${eb.num}.extras_cards`),
+      extrasOn: J<EbookExtra[]>(
+        eb.extras_on ?? JSON.stringify(EBOOK_EXTRAS),
+        [...EBOOK_EXTRAS],
+        `ebooks.${eb.num}.extras_on`,
+      ),
       pdf: url(eb.pdf_media, `ebooks.${eb.num}.pdf_media`),
-      passScore: eb.pass_score,
+      passScore: episodeTestPassScore(eb.pass_score, fullTestSize.get(eb.num) ?? 0, qs.length),
       testEnabled: eb.test_enabled !== 0,
       testRequiredEpisodes: J<number[]>(
         eb.test_required_episodes ?? '[]',

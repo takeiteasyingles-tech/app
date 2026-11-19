@@ -89,12 +89,15 @@ describe('preview and publish', () => {
     expect(m1.status).toBe(200);
     expect(m1.body.version).toBe(ver);
 
-    // An edit changes nothing for learners until the next publish …
+    // A save sent with X-Publish: defer (one part of a multi-request save) changes nothing for
+    // learners until the next publish …
     const upd = await editor.client.json(buildPath(C.episodes.update.path, { id: 1 }), {
       method: 'PUT',
       json: { title: 'Good Morning, Woods!' },
+      headers: { 'X-Publish': 'defer' },
     });
     expect(upd.status).toBe(200);
+    expect(upd.res.headers.get('X-Content-Publish')).toBeNull();
     expect((await studentManifest(student.appToken)).body.version).toBe(ver);
     const pv = await editor.client.json(C.preview.path, { method: 'POST' });
     expect(pv.body.changed).toEqual(['catalog.json', 'ep/1.json']);
@@ -111,6 +114,26 @@ describe('preview and publish', () => {
     const r3 = await editor.client.json(C.publish.path, { json: {} });
     expect(r3.body.release).toEqual(r2.body.release);
     expect((await editor.client.json(C.preview.path, { method: 'POST' })).body.changed).toEqual([]);
+
+    // PROD (spec 05 "Saving publishes"): a plain save publishes the draft at once and says so.
+    const auto = await editor.client.json(buildPath(C.episodes.update.path, { id: 1 }), {
+      method: 'PUT',
+      json: { title: 'Good Evening, Woods!' },
+    });
+    expect(auto.status).toBe(200);
+    expect(auto.res.headers.get('X-Content-Publish')).toBe('published');
+    const ver3 = (await studentManifest(student.appToken)).body.version;
+    expect(ver3).not.toBe(ver2);
+    expect(JSON.parse((await (await testEnv.MEDIA.get(contentKey(ver3, 'ep/1.json')))?.text()) ?? '{}').title).toBe(
+      'Good Evening, Woods!',
+    );
+    // A save that leaves the compiled content as it is publishes nothing.
+    const same = await editor.client.json(buildPath(C.episodes.update.path, { id: 1 }), {
+      method: 'PUT',
+      json: { title: 'Good Evening, Woods!' },
+    });
+    expect(same.res.headers.get('X-Content-Publish')).toBe('unchanged');
+    expect((await studentManifest(student.appToken)).body.version).toBe(ver3);
   });
 
   it('refuses to publish content that does not compile, and preview lists why', async () => {

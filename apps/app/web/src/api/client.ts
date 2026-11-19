@@ -25,6 +25,8 @@ export interface CallOptions<E extends EndpointDef> {
   idempotencyKey?: string;
   /** With idempotencyKey: the user the write is for (a replay under another session is refused). */
   outboxUser?: string;
+  /** Sees the successful response before its body is read (e.g. /api/tts's X-TTS-Words header). */
+  onResponse?: (res: Response) => void;
 }
 
 /** Network failure (offline, DNS, aborted): no response reached the client. */
@@ -138,6 +140,7 @@ export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = 
     throw err;
   }
   if (res.status === 202 && res.headers.get(OUTBOX_HEADER) === 'queued') throw new QueuedError(urlFor(ep, opts));
+  opts.onResponse?.(res);
   if (ep.res === 'binary') return (await res.arrayBuffer()) as ResOf<E>;
   if (res.status === 204) return undefined as ResOf<E>;
   return (await res.json()) as ResOf<E>;

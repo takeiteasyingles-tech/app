@@ -1,4 +1,5 @@
 import type { AwardResult, Catalog, ContentManifest, DeckCard, Ebook, Episode, PointKind } from '@tie/shared';
+import { EPISODE_TEST_SIZE } from '@tie/shared/domain/episodeTest';
 import type { AwardMeta, AwardService, ContentService, SrsService } from '@tie/worker-core';
 import type { LearningDeps } from '../../deps';
 import { SqliteD1 } from './sqliteD1';
@@ -119,6 +120,15 @@ export function publish(w: World): ContentService {
       status: 'published',
       ebook: e.ebook_num ?? 0,
       sceneVideo: e.scene_media ? `/m/${e.scene_media}` : null,
+      // As compile.ts: the size of the episode test (its e-book's, when enabled) gates Take the Test.
+      testCount: Math.min(
+        EPISODE_TEST_SIZE,
+        w.db.rows<{ c: number }>(
+          `SELECT COUNT(*) AS c FROM ebook_test_questions t JOIN ebooks b ON b.num = t.ebook_num
+           WHERE t.ebook_num = ? AND b.test_enabled != 0`,
+          e.ebook_num ?? 0,
+        )[0]?.c ?? 0,
+      ),
       mic,
       ex,
     } as unknown as Episode);

@@ -2,6 +2,9 @@
 // JSON in/out, same-origin cookies (the __Host-tie_adm session), and every failure surfaces as an
 // ApiError carrying the server's {error:{code,message,details}} envelope. Media uploads go through
 // XMLHttpRequest so the library can show upload progress (fetch has no upload progress events).
+// Content saves publish on their own (PROD auto-publish): the server answers X-Content-Publish: failed
+// when the save landed but the release did not, and withAutoPublish() batches a multi-request save
+// (X-Publish: defer) into one publish at the end.
 import type { MediaRow } from '@tie/shared/contracts/admin';
 import { adminApi } from '@tie/shared/contracts/admin';
 import {
@@ -13,6 +16,7 @@ import {
   type ResOf,
 } from '@tie/shared/contracts/http';
 import { ApiError, type ErrorCode, isErrorEnvelope } from '@tie/shared/errors';
+import { toast } from './ui/toast';
 
 export { ApiError };
 
@@ -23,6 +27,46 @@ export interface CallOptions<E extends EndpointDef> {
   signal?: AbortSignal;
   /** Extra request headers (e.g. the start-up probe of auth/me). */
   headers?: Record<string, string>;
+}
+
+/** Open withAutoPublish() scopes: their writes ask the server to hold the publish (X-Publish: defer). */
+let deferDepth = 0;
+const PUBLISH_FAILED = 'Salvo, mas não foi para os alunos:';
+
+/** A content write that saved but did not publish says so in X-Content-Publish(-Error). */
+function publishNotice(res: Response): void {
+  if (res.headers.get('X-Content-Publish') !== 'failed') return;
+  const raw = res.headers.get('X-Content-Publish-Error');
+  let msg = 'o conteúdo tem um erro.';
+  if (raw) {
+    try {
+      msg = decodeURIComponent(raw);
+    } catch {
+      // keep the generic message
+    }
+  }
+  toast(`${PUBLISH_FAILED} ${msg}`, 'err');
+}
+
+/**
+ * Runs a save made of several requests with the publish deferred, then publishes once (`what` names
+ * the change in the release note). A failed publish is reported as a toast; the save itself stands.
+ */
+export async function withAutoPublish<T>(what: string, fn: () => Promise<T>): Promise<T> {
+  deferDepth++;
+  let out: T;
+  try {
+    out = await fn();
+  } finally {
+    deferDepth--;
+  }
+  try {
+    const res = await call(adminApi.content.autoPublish, { body: { what } });
+    if (res.status === 'failed') toast(`${PUBLISH_FAILED} ${res.message ?? 'o conteúdo tem um erro.'}`, 'err');
+  } catch (e) {
+    toast(`${PUBLISH_FAILED} ${errorMessage(e)}`, 'err');
+  }
+  return out;
 }
 
 /** No response reached the client (offline, DNS, aborted). */
@@ -79,6 +123,7 @@ function notifyAuth(err: ApiError): void {
 
 export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = {}): Promise<ResOf<E>> {
   const headers: Record<string, string> = { ...opts.headers, Accept: 'application/json' };
+  if (deferDepth > 0 && ep.method !== 'GET') headers['X-Publish'] = 'defer';
   let body: string | undefined;
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -108,8 +153,42 @@ export async function call<E extends EndpointDef>(ep: E, opts: CallOptions<E> = 
     notifyAuth(err);
     throw err;
   }
+  publishNotice(res);
   if (res.status === 204) return undefined as ResOf<E>;
   return (await res.json()) as ResOf<E>;
+}
+
+/** POST a multipart body (FormData) to a JSON endpoint (e.g. the song lyrics tool). */
+export async function callForm<E extends EndpointDef>(
+  ep: E,
+  form: FormData,
+  opts: Pick<CallOptions<E>, 'params' | 'query' | 'signal'> = {},
+): Promise<ResOf<E>> {
+  let res: Response;
+  try {
+    res = await fetch(urlFor(ep, opts), {
+      method: ep.method,
+      headers: { Accept: 'application/json' },
+      body: form,
+      credentials: 'same-origin',
+      signal: opts.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new NetworkError(err);
+  }
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Non-JSON answer: the status decides.
+  }
+  if (!res.ok) {
+    const err = errorFrom(res.status, data);
+    notifyAuth(err);
+    throw err;
+  }
+  return data as ResOf<E>;
 }
 
 export interface UploadHandle {

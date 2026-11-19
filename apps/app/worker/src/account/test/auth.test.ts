@@ -51,8 +51,9 @@ describe('signup → state → profile → logout → login', () => {
     expect(state.plan?.slug).toBe('gratis');
     expect(state.maggie).toMatchObject({ limitSec: 3600, secLeft: 3600, sessions: [] });
     expect(state.tz).toBe('Europe/Lisbon');
-    expect(state.flags).toEqual({ 'dev.free_steps': false });
-    expect(state.settings).toMatchObject({ free: false, phone: false, ts: 1, sound: true });
+    // PROD (0011): the client also gets the feedback.steps flag; HD video is on by default.
+    expect(state.flags).toEqual({ 'dev.free_steps': false, 'feedback.steps': false });
+    expect(state.settings).toMatchObject({ free: false, phone: false, ts: 1, sound: true, hd: true });
 
     // Profile: partial wizard update; unknown keys are stripped.
     const pr = await client.json<ProfileRes>(M.profile.path, {

@@ -27,8 +27,33 @@ export const PronTip = z.object({ word: z.string(), tip_pt: z.string() });
 export type PronTip = z.infer<typeof PronTip>;
 
 /** encouraging → talk-happy, thinking/correcting → talk-soft, anything else → talk. */
-export const Mood = z.enum(['happy', 'curious', 'encouraging', 'thinking', 'correcting']);
+export const Mood = z.enum(['happy', 'curious', 'encouraging', 'thinking', 'correcting', 'sad']);
 export type Mood = z.infer<typeof Mood>;
+
+/**
+ * Response header of /api/tts with the spoken words' timing, so the client can follow the audio word
+ * by word: `start,end` in hundredths of a second per word, joined by ';' (encodeWordSpans).
+ */
+export const TTS_WORDS_HEADER = 'X-TTS-Words';
+
+/** A spoken word's start/end in seconds. */
+export interface WordSpan {
+  s: number;
+  e: number;
+}
+
+export function encodeWordSpans(spans: readonly WordSpan[]): string {
+  return spans.map((w) => `${Math.round(w.s * 100)},${Math.round(w.e * 100)}`).join(';');
+}
+
+/** Parses an X-TTS-Words value; null when absent or malformed. */
+export function decodeWordSpans(value: string | null | undefined): WordSpan[] | null {
+  if (!value || !/^\d+,\d+(;\d+,\d+)*$/.test(value)) return null;
+  return value.split(';').map((pair) => {
+    const [s = 0, e = 0] = pair.split(',').map(Number);
+    return { s: s / 100, e: Math.max(s, e) / 100 };
+  });
+}
 
 /** The server clamps model output to these lengths before validating it. */
 export const AI_LIMITS = {
@@ -138,6 +163,12 @@ export const TtsBody = z.object({
   gender: TtsGender,
   /** Speaker name from the allowlist (TTS_SPEAKERS) or an assistant key. */
   voice: z.string().min(1).max(40),
+  /**
+   * PROD (spec 05 "Lesson voices"): the lesson (episode) being studied and who speaks: TTS_NARRATOR_ROLE
+   * or a character's name. The server then reads with that lesson's voice, else the course voice.
+   */
+  ep: z.int().positive().max(10_000).optional(),
+  role: z.string().trim().min(1).max(40).optional(),
 });
 export type TtsBody = z.infer<typeof TtsBody>;
 

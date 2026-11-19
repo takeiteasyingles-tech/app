@@ -33,6 +33,10 @@
     { "name": "RL_API", "namespace_id": "2003", "simple": { "limit": 100, "period": 10 } },
     { "name": "RL_UPLOAD", "namespace_id": "2004", "simple": { "limit": 5, "period": 60 } }
   ],
+  // Hourly: the scheduled handler makes the automatic backup only in the slot of app_settings
+  // backup.config (default daily at 03:00 São Paulo = 06:00 UTC). `triggers` is inheritable, so
+  // env.local gets it too (as in tie-app).
+  "triggers": { "crons": ["5 * * * *"] },
   "placement": { "mode": "smart" },
   "observability": { "enabled": true },
   // Production values only, as in tie-app: fill both before the first deploy (the admin origin, not

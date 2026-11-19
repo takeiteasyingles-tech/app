@@ -382,8 +382,8 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
           V.saved++;
           vre();
         }
-        showToast(`Levei para os Flashcards: “${w.line.en}”`);
-      } else showToast('Essa fala já está nos seus Flashcards.');
+        showToast(`Levei para os Cards: “${w.line.en}”`);
+      } else showToast('Essa fala já está nos seus Cards.');
     });
   };
   const say = (t: string) => void speech.say(t);
@@ -511,7 +511,7 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
       <div class="lbl or">Fim da cena</div>
       <div class="h2">
         {`Você viu ${lines.length} falas${
-          V.saved ? ` e levou ${V.saved}${V.saved > 1 ? ' palavras' : ' palavra'} para os Flashcards` : ''
+          V.saved ? ` e levou ${V.saved}${V.saved > 1 ? ' palavras' : ' palavra'} para os Cards` : ''
         }.`}
       </div>
       {V.dub ? <p class="p">{`Média na dublagem: ${dubAvg || '—'}/10.`}</p> : null}
@@ -685,12 +685,7 @@ export default function ExtraPlay({ params, q }: ScreenProps) {
                 <div class="pt mt4">{ws.line.pt}</div>
               </div>
               <div class="stack mt16" style={{ '--gap': '8px' }}>
-                <Btn
-                  label={`Levar para os Flashcards · +${pts(c, 'word', 3)}`}
-                  onClick={wordSave}
-                  icon="plus"
-                  cls="block"
-                />
+                <Btn label={`Levar para os Cards · +${pts(c, 'word', 3)}`} onClick={wordSave} icon="plus" cls="block" />
                 <Btn label="Fechar" kind="ghost" onClick={wordClose} cls="block" />
               </div>
             </div>

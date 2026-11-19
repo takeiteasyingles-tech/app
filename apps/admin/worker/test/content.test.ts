@@ -63,7 +63,17 @@ describe('content CRUD', () => {
     });
     const phrases = await editor.client.json(`${C.micPhrases.list.path}?parent=1`);
     expect(phrases.body.items).toEqual([
-      { id: 'e1-mic-0', episodeNum: 1, sort: 0, en: 'Hi!', tip: 'tip', demoResult: 7, blue: false, fb: 'fb' },
+      {
+        id: 'e1-mic-0',
+        episodeNum: 1,
+        sort: 0,
+        en: 'Hi!',
+        tip: 'tip',
+        demoResult: 7,
+        blue: false,
+        fb: 'fb',
+        who: null,
+      },
     ]);
     expect((await editor.client.json(`${C.micPhrases.list.path}?parent=2`)).body.items).toEqual([]);
     const item = await editor.client.json(p(C.items.get.path, 'e1-ex0-i0'));
@@ -82,6 +92,7 @@ describe('content CRUD', () => {
       demoResult: 8,
       blue: true,
       fb: null,
+      who: null,
     };
     const created = await editor.client.json(C.micPhrases.create.path, { json: phrase });
     expect(created.status).toBe(201);

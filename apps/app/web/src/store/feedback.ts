@@ -2,8 +2,9 @@
 // comment, from the Concluído screen. Optimistic like every store action: state.feedback[ep] changes
 // at once, the server's answer settles it, a refusal rolls it back (and toasts its message). The path
 // is in OUTBOX_PATHS, so `send` gives it an Idempotency-Key and the service worker queues it offline.
-import { feedbackApi } from '@tie/shared/contracts/feedback';
+import { feedbackApi, type StepFeedbackBody } from '@tie/shared/contracts/feedback';
 import type { EpisodeFeedbackState } from '@tie/shared/state';
+import { call, QueuedError } from '../api';
 import { send } from './actions';
 import { state } from './state';
 
@@ -27,4 +28,20 @@ export async function rateEpisode(ep: number, stars: number, comment: string | n
   // send() resolves null both when the write was queued (the optimistic value stays) and when it
   // failed (the value was rolled back and the error toasted).
   return state.value.feedback[key] === value ? 'queued' : 'failed';
+}
+
+/**
+ * PROD (0011, flag feedback.steps): PUT /api/feedback/steps/:id, the learner's rating of one episode
+ * step. `id` is made by the caller (a fresh key per prompt) and doubles as the Idempotency-Key, so an
+ * offline replay stores it once. Nothing in TieState mirrors it: 'queued' means the service worker
+ * keeps it for later; any other error is thrown to the caller.
+ */
+export async function sendStepFeedback(id: string, body: StepFeedbackBody): Promise<'sent' | 'queued'> {
+  try {
+    await call(feedbackApi.step, { params: { id }, body, idempotencyKey: id, outboxUser: state.value.user?.id });
+    return 'sent';
+  } catch (err) {
+    if (!(err instanceof QueuedError)) throw err;
+    return 'queued';
+  }
 }

@@ -14,9 +14,12 @@ const protoNeed = core.run(declSource('js/screens/player.js', 'need'));
 const protoGate = core.run(`(${declSource('js/screens/player.js', 'gate')})`.replace('need(', 'globalThis.__need('));
 core.ctx.__need = protoNeed;
 
-/** The prototype's step at production positions 1-3 (spec 05 "Step order"); 4-10 are the same. */
-const PROTO_STEP = [2, 3, 1] as const;
-
+/**
+ * The prototype's step at each production position 1-9 (spec 05 "Step order"): the presentation and
+ * the song stay 1-2, the e-book step (prototype 3) is gone, the rest move up one. Step 10, Take the
+ * Test, is new (tested on its own below).
+ */
+const PROTO_STEP = [1, 2, 4, 5, 6, 7, 8, 9, 10] as const;
 /** A v6 state (index keys) and the same state in v7 (stable ids). */
 function pair(rng: () => number, E: Any) {
   const n = E.num;
@@ -71,22 +74,25 @@ describe('need() parity with player.js (index keys → stable ids)', () => {
         for (let step = 1; step <= 10; step++) {
           let expected: string;
           let expectedGate: string;
+          // PROD: step 1 is the presentation ("In this episode").
+          const prod = (m: string) => (m === 'Ouça a abertura até o fim' ? 'Ouça a apresentação até o fim' : m);
           if (step > PROTO_STEP.length) {
-            expected = protoNeed(E, v6, step);
-            expectedGate = protoGate(E, v6, step);
+            // Take the Test: the scripted episodes have no episode test (testCount absent).
+            expected = '';
+            expectedGate = '';
           } else {
-            // Steps 1-3 are the prototype's 2, 3, 1 (production order). The prototype step sees the
-            // same completions under its own number; "prog past this step" is production's position,
-            // so the prototype runs without prog and the shortcut is applied here.
+            // The prototype step sees the same completions under its own number; "prog past this
+            // step" is production's position, so the prototype runs without prog and the shortcut is
+            // applied here.
             const old = PROTO_STEP[step - 1] as number;
-            const stepOk: Any = { ...v6.stepOk };
+            const stepOk: Any = {};
             PROTO_STEP.forEach((o, i) => {
               stepOk[`${n}-${o}`] = v7.stepOk[stepKey(n, i + 1)];
             });
             const v6r = { ...v6, prog: {}, stepOk };
-            const past = step !== STEP.EBOOK && (v7.prog[n] || 1) > step;
-            expected = past ? '' : protoNeed(E, v6r, old);
-            expectedGate = v7.settings.free ? '' : expected;
+            const past = (v7.prog[n] || 1) > step;
+            expected = past ? '' : prod(protoNeed(E, v6r, old));
+            expectedGate = past ? '' : prod(protoGate(E, v6r, old));
           }
           expect(need(ep, v7, step), `step ${step} ${JSON.stringify(v6)}`).toBe(expected);
           expect(gate(ep, v7, step)).toBe(expectedGate);
@@ -95,16 +101,26 @@ describe('need() parity with player.js (index keys → stable ids)', () => {
       }
       // Every branch shows up, including the plural/singular counters.
       expect(messages.has('')).toBe(true);
-      expect(messages.has('Baixe o e-book para seguir')).toBe(true);
+      expect(messages.has('Ouça a apresentação até o fim')).toBe(true);
       expect([...messages].some((m) => m.startsWith('Faltam'))).toBe(true);
       expect(messages.size).toBeGreaterThan(8);
     });
   }
 
-  it('a scene without video never gates step 4', () => {
+  it('a scene without video never gates Take a Look', () => {
     const ep = { ...tsEpisode(T.data, 1), sceneVideo: null };
     const s: Any = { ebooks: {}, epsDone: {}, prog: {}, stepOk: {}, scores: {}, exAns: {} };
-    expect(need(ep, s, 4)).toBe('');
-    expect(need({ ...ep, sceneVideo: '/m/x.mp4' }, s, 4)).toBe('Assista à cena até o fim');
+    expect(need(ep, s, STEP.LOOK)).toBe('');
+    expect(need({ ...ep, sceneVideo: '/m/x.mp4' }, s, STEP.LOOK)).toBe('Assista à cena até o fim');
+  });
+
+  it('Take the Test gates on the episode test (testDone of its e-book)', () => {
+    const ep = { ...tsEpisode(T.data, 1), ebook: 1 };
+    const s: Any = { epsDone: {}, prog: {}, stepOk: {}, scores: {}, exAns: {}, testDone: {} };
+    expect(need({ ...ep, testCount: 0 }, s, STEP.TEST)).toBe('');
+    expect(need({ ...ep, testCount: 6 }, s, STEP.TEST)).toBe('Faça o teste até o fim');
+    expect(need({ ...ep, testCount: 6 }, { ...s, testDone: { 1: true } }, STEP.TEST)).toBe('');
+    expect(need({ ...ep, testCount: 6, ebook: null }, s, STEP.TEST)).toBe('Faça o teste até o fim');
+    expect(need({ ...ep, testCount: 6 }, { ...s, stepOk: { [stepKey(1, STEP.TEST)]: true } }, STEP.TEST)).toBe('');
   });
 });

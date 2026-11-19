@@ -126,13 +126,15 @@ describe('v1 schemas', () => {
     expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.read', 'content.read'] }).success).toBe(
       false,
     );
-    expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.publish'] }).success).toBe(false);
+    // PROD: content.publish is a scope (the publishing MCP tools).
+    expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.publish'] }).success).toBe(true);
+    expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.admin'] }).success).toBe(false);
     expect(CreateApiTokenBody.safeParse({ name: 'Claude', scopes: ['content.edit'], x: 1 }).success).toBe(false);
   });
 });
 
 describe('MCP tools', () => {
-  it('lists the agreed tools, no publish', () => {
+  it('lists the agreed tools; publishing needs the content.publish scope', () => {
     expect(MCP_TOOL_NAMES).toEqual([
       'list_seasons',
       'get_season',
@@ -140,6 +142,7 @@ describe('MCP tools', () => {
       'list_episodes',
       'get_episode',
       'update_episode',
+      'list_voices',
       'list_ebooks',
       'get_ebook',
       'update_ebook',
@@ -147,11 +150,28 @@ describe('MCP tools', () => {
       'draft_season_test_questions',
       'update_season_test_question',
       'preview_release',
+      'describe_content',
+      'list_content',
+      'get_content',
+      'create_content',
+      'update_content',
+      'delete_content',
+      'list_blobs',
+      'put_blob',
+      'list_option_lists',
+      'put_option_list',
+      'create_backup',
+      'set_episode_status',
+      'review_season_test_questions',
+      'publish_season_test',
+      'list_releases',
+      'publish_release',
+      'rollback_release',
     ]);
-    expect(MCP_TOOL_NAMES.some((n) => n.includes('publish') && n !== 'preview_release')).toBe(false);
     for (const n of MCP_TOOL_NAMES) {
       const t = MCP_TOOLS[n];
       expect(t.readOnly, n).toBe(t.scope === 'content.read');
+      if (n.includes('publish') && n !== 'preview_release') expect(t.scope, n).toBe('content.publish');
     }
   });
 

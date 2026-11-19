@@ -1,13 +1,17 @@
 // Voice (port of prototipo/js/core/speech.js): speak (free browser voice with a synced mouth, or the
 // HD voice from /api/tts when settings.hd is on and the AI is online), listen (Web Speech API, en-US
 // with interim results) and record a 16 kHz mono PCM16 WAV for /api/pronounce.
+// PROD: listeners (onSpeech) follow what is spoken (the 3D avatar's lip sync and word timing), a
+// voice host (setVoiceHost) may speak for its assistant itself, HD lines in a lesson use the
+// lesson's voice (setLesson), and HD audio is loudness-normalized.
 
-import { DEFAULT_ASSISTANT } from '@tie/shared/constants';
+import { DEFAULT_ASSISTANT, narratorRole } from '@tie/shared/constants';
 import type { AssistantPublic } from '@tie/shared/content/schema';
+import type { WordSpan } from '@tie/shared/contracts/ai';
 import { assistantByName, getAssistant } from '@tie/shared/domain/assist';
 import { catalog } from '../store/content';
 import { state } from '../store/state';
-import { aiOnline, tts } from './aiClient';
+import { aiOnline, type TtsLesson, tts } from './aiClient';
 import { ac } from './sound';
 import { encodeWav16, toBase64, WAV_RATE } from './wav';
 
@@ -105,8 +109,63 @@ interface Job {
 
 let current: Job | null = null;
 
+/** What is being spoken, for listeners that animate it (the 3D avatar). */
+export type SpeechEvent =
+  /** The line ended or was stopped. */
+  | { type: 'end' }
+  /** Browser voice: the mouth shape, every ~85 ms. */
+  | { type: 'mouth'; v: Viseme }
+  /** HD voice: the decoded audio, scheduled at `startAt` on `ctx`, with its word timings when known. */
+  | {
+      type: 'audio';
+      text: string;
+      buffer: AudioBuffer;
+      ctx: AudioContext;
+      startAt: number;
+      rate: number;
+      words: WordSpan[] | null;
+    };
+
+const listeners = new Set<(e: SpeechEvent) => void>();
+
+/** Subscribes to speech events; returns the unsubscribe function. */
+export function onSpeech(fn: (e: SpeechEvent) => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+function emit(e: SpeechEvent): void {
+  for (const fn of listeners) fn(e);
+}
+
+/**
+ * Something that speaks for one assistant itself (its own voice and lip sync). say() hands it that
+ * assistant's lines first; it resolves true when it spoke the line, false to fall back to the HD or
+ * browser voice.
+ */
+export interface VoiceHost {
+  /** Assistant key it speaks for. */
+  k: string;
+  say(text: string, onStart: () => void): Promise<boolean>;
+  stop(): void;
+}
+
+let host: VoiceHost | null = null;
+
+/** Registers the voice host; returns the function that removes it. */
+export function setVoiceHost(h: VoiceHost): () => void {
+  host = h;
+  return () => {
+    if (host === h) host = null;
+  };
+}
+
 /** Stops whatever is speaking (browser or HD voice) and resolves its say(). */
 export function stop(): void {
+  host?.stop();
+  if (current) emit({ type: 'end' });
   if (current) {
     const job = current;
     job.cancelled = true;
@@ -131,6 +190,10 @@ export interface SayOptions {
   who?: string;
   mouth?: (v: Viseme) => void;
   onStart?: () => void;
+  /** HD voice on/off for this line (default: settings.hd). */
+  hd?: boolean;
+  /** Lesson voice for this line (default: the one set by setLesson, as the speaker or the narrator). */
+  lesson?: TtsLesson;
 }
 
 const assistants = (): readonly AssistantPublic[] => catalog.value?.assistants ?? [];
@@ -141,20 +204,50 @@ function currentAssistant(): AssistantPublic | null {
   return list.length ? getAssistant(list, state.value.profile?.assistant || DEFAULT_ASSISTANT) : null;
 }
 
+let lessonEp: number | null = null;
+let lessonStep: number | null = null;
+
+/**
+ * PROD: the lesson (episode, and step) on screen, so HD lines use that lesson's voices; null when
+ * leaving it.
+ */
+export function setLesson(ep: number | null, step: number | null = null): void {
+  lessonEp = ep;
+  lessonStep = ep == null ? null : step;
+}
+
 /** speech.say(text, opt): resolves when the line finishes (or is stopped). */
 export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   stop();
+  const lesson =
+    opt.lesson ?? (lessonEp == null ? undefined : { ep: lessonEp, role: opt.who?.trim() || narratorRole(lessonStep) });
   const o = { rate: 1, who: currentAssistant()?.name ?? 'Maggie', ...opt };
   const prof = assistantByName(assistants(), o.who);
   const vo = prof ? prof.voice : null;
   const gender: 'male' | 'female' = vo ? vo.gender : MALE.test(o.who) ? 'male' : 'female';
   const job: Job = { mouth: o.mouth, cancelled: false };
   current = job;
-  if (state.value.settings.hd && aiOnline.value) {
+  const h = host;
+  if (h && prof?.k === h.k) {
+    const spoke = await new Promise<boolean>((resolve) => {
+      job.resolve = () => resolve(true);
+      h.say(text, () => {
+        if (!job.cancelled) o.onStart?.();
+      }).then(resolve, () => resolve(false));
+    });
+    if (job.cancelled) return;
+    if (spoke) {
+      if (current === job) current = null;
+      emit({ type: 'end' });
+      return;
+    }
+  }
+  if ((o.hd ?? state.value.settings.hd) && aiOnline.value) {
     try {
-      const buf = await tts(text, gender, vo?.tts || (gender === 'male' ? 'orion' : 'asteria'));
+      const voice = prof?.k || vo?.tts || (gender === 'male' ? 'orion' : 'asteria');
+      const r = await (lesson ? tts(text, gender, voice, lesson) : tts(text, gender, voice));
       if (job.cancelled) return;
-      if (buf) return await playBuffer(buf, job, o);
+      if (r) return await playBuffer(r.audio, job, o, text, r.words);
     } catch {
       // Falls back to the browser voice.
     }
@@ -165,6 +258,7 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
       if (job.cancelled) return;
       clearInterval(job.timer);
       o.mouth?.('rest');
+      emit({ type: 'end' });
       if (current === job) current = null;
       resolve();
     };
@@ -172,10 +266,11 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
     let base = 0;
     let t0 = 0;
     const flap = () => {
-      if (!o.mouth) return;
       const pos = Math.floor(base + ((performance.now() - t0) / 1000) * cps);
       const ch = text[pos];
-      o.mouth(ch == null ? 'rest' : pos % 3 === 2 ? 'm' : VIS(ch));
+      const v: Viseme = ch == null ? 'rest' : pos % 3 === 2 ? 'm' : VIS(ch);
+      o.mouth?.(v);
+      emit({ type: 'mouth', v });
     };
     const startFlap = () => {
       t0 = performance.now();
@@ -218,8 +313,43 @@ export async function say(text: string, opt: SayOptions = {}): Promise<void> {
   });
 }
 
-/** HD voice through the shared AudioContext; the mouth follows the RMS level. */
-function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: number }): Promise<void> {
+/** RMS the HD voice is normalized to (voices come at very different levels). */
+const TARGET_RMS = 0.11;
+
+/** Gain that brings the voiced parts (20 ms frames above the noise) to TARGET_RMS, within 0.25–4. */
+function loudnessGain(audio: AudioBuffer): number {
+  const data = audio.getChannelData(0);
+  const frame = Math.max(1, Math.floor(audio.sampleRate * 0.02));
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < data.length; i += frame) {
+    const end = Math.min(data.length, i + frame);
+    let s = 0;
+    for (let j = i; j < end; j++) {
+      const x = data[j] ?? 0;
+      s += x * x;
+    }
+    if (Math.sqrt(s / (end - i)) > 0.01) {
+      sum += s;
+      count += end - i;
+    }
+  }
+  if (!count) return 1;
+  const rms = Math.sqrt(sum / count);
+  return Math.min(4, Math.max(0.25, TARGET_RMS / rms));
+}
+
+/**
+ * HD voice through the shared AudioContext, loudness-normalized (gain + a limiter); the mouth follows
+ * the RMS level and listeners get the audio to animate it.
+ */
+function playBuffer(
+  arrayBuf: ArrayBuffer,
+  job: Job,
+  o: SayOptions & { rate: number },
+  text: string,
+  words: WordSpan[] | null = null,
+): Promise<void> {
   return new Promise<void>((resolve) => {
     const c = ac();
     if (!c) return resolve();
@@ -231,7 +361,19 @@ function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: num
         src.playbackRate.value = o.rate;
         const an = c.createAnalyser();
         an.fftSize = 512;
-        src.connect(an);
+        if (typeof c.createGain === 'function' && typeof c.createDynamicsCompressor === 'function') {
+          const gain = c.createGain();
+          gain.gain.value = loudnessGain(audio);
+          const limiter = c.createDynamicsCompressor();
+          limiter.threshold.value = -3;
+          limiter.knee.value = 0;
+          limiter.ratio.value = 20;
+          limiter.attack.value = 0.002;
+          limiter.release.value = 0.08;
+          src.connect(gain);
+          gain.connect(limiter);
+          limiter.connect(an);
+        } else src.connect(an);
         an.connect(c.destination);
         job.src = src;
         job.resolve = resolve;
@@ -250,11 +392,16 @@ function playBuffer(arrayBuf: ArrayBuffer, job: Job, o: SayOptions & { rate: num
         src.onended = () => {
           cancelAnimationFrame(job.raf || 0);
           o.mouth?.('rest');
-          if (current === job) current = null;
+          if (current === job) {
+            emit({ type: 'end' });
+            current = null;
+          }
           resolve();
         };
         o.onStart?.();
-        src.start();
+        const startAt = c.currentTime;
+        emit({ type: 'audio', text, buffer: audio, ctx: c, startAt, rate: o.rate, words });
+        src.start(startAt);
         loop();
       },
       () => resolve(),
@@ -317,6 +464,8 @@ export interface RecordResult {
   /** Base64 WAV (16 kHz mono PCM16), '' on failure. */
   b64: string;
   secs: number;
+  /** Milliseconds of voice in the take (50 ms frames above the noise floor); absent on failure. */
+  voicedMs?: number;
   error?: string;
 }
 
@@ -428,8 +577,12 @@ export async function record(h: RecordOptions = {}): Promise<{ stop(): Promise<R
     srcNode.disconnect();
     try {
       const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
-      const audio = await c.decodeAudioData(await blob.arrayBuffer());
-      resolveStop({ b64: toBase64(await toWav16k(audio)), secs: (performance.now() - t0) / 1000 });
+      const pcm = await resample16k(await c.decodeAudioData(await blob.arrayBuffer()));
+      resolveStop({
+        b64: toBase64(encodeWav16(pcm, WAV_RATE)),
+        secs: (performance.now() - t0) / 1000,
+        voicedMs: voicedMs(pcm, WAV_RATE),
+      });
     } catch (e) {
       resolveStop({ b64: '', secs: 0, error: String(e) });
     }
@@ -446,17 +599,52 @@ export async function record(h: RecordOptions = {}): Promise<{ stop(): Promise<R
   };
 }
 
-/** Resamples to 16 kHz mono with an OfflineAudioContext and wraps it in a WAV. */
-async function toWav16k(audio: AudioBuffer): Promise<ArrayBuffer> {
+/** Resamples to 16 kHz mono with an OfflineAudioContext. */
+async function resample16k(audio: AudioBuffer): Promise<Float32Array> {
   const len = Math.max(1, Math.ceil(audio.duration * WAV_RATE));
   const off = new OfflineAudioContext(1, len, WAV_RATE);
   const s = off.createBufferSource();
   s.buffer = audio;
   s.connect(off.destination);
   s.start();
-  const pcm = (await off.startRendering()).getChannelData(0);
-  return encodeWav16(pcm, WAV_RATE);
+  return (await off.startRendering()).getChannelData(0);
 }
 
+/**
+ * Voiced milliseconds of a take: 50 ms frames louder than the noise floor (3× the 10th-percentile
+ * frame, clamped to the VAD's levels). Lets callers treat a take with no speech as silence.
+ */
+function voicedMs(pcm: Float32Array, rate: number): number {
+  const frame = Math.max(1, Math.round(rate * 0.05));
+  const levels: number[] = [];
+  for (let i = 0; i + frame <= pcm.length; i += frame) {
+    let s = 0;
+    for (let j = i; j < i + frame; j++) {
+      const x = pcm[j] ?? 0;
+      s += x * x;
+    }
+    levels.push(Math.sqrt(s / frame));
+  }
+  if (!levels.length) return 0;
+  const sorted = [...levels].sort((a, b) => a - b);
+  const floor = sorted[Math.floor(sorted.length * 0.1)] ?? 0;
+  const threshold = Math.max(VAD.minLevel, Math.min(floor * 3, VAD.maxNoise));
+  return levels.filter((l) => l > threshold).length * 50;
+}
+
+/** A take with less voice than this is treated as silence. */
+export const MIN_VOICED_MS = 250;
+
 /** TIE.speech */
-export const speech = { say, stop, listen, record, canListen, canRecord, hasTTS, VIS } as const;
+export const speech = {
+  say,
+  stop,
+  listen,
+  record,
+  setLesson,
+  canListen,
+  canRecord,
+  hasTTS,
+  VIS,
+  MIN_VOICED_MS,
+} as const;

@@ -2,6 +2,7 @@
 // Mounted at '/' by worker/src/index.ts, so paths are absolute (appApi.*.path).
 import {
   appApi,
+  autoTrackEp,
   ChallengeBody,
   type ChallengeRes,
   DubBody,
@@ -231,11 +232,15 @@ routes.post(api.karaokeGap.path, rateLimit('RL_API'), vJson(KaraokeGapBody), asy
   const { userId } = sessionOf(c);
   const { trackId, line, choice } = c.req.valid('json');
   const db = c.env.DB;
+  // An automatic track (one per published episode) has no album_tracks row: it sings the episode's lyrics.
+  const autoEp = autoTrackEp(trackId);
   const track = await one<{ lines: string | null; ep_num: number | null; lyrics: string | null }>(
     db,
-    `SELECT t.lines, t.ep_num, e.lyrics FROM album_tracks t
+    autoEp !== null
+      ? `SELECT NULL AS lines, num AS ep_num, lyrics FROM episodes WHERE num = ? AND status = 'published'`
+      : `SELECT t.lines, t.ep_num, e.lyrics FROM album_tracks t
      LEFT JOIN episodes e ON e.num = t.ep_num AND e.status = 'published' WHERE t.id = ?`,
-    trackId,
+    autoEp ?? trackId,
   );
   if (!track) throw fail('not_found');
   const own = fromJson<unknown>(track.lines, null);

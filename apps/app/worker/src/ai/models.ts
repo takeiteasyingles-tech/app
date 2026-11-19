@@ -2,8 +2,35 @@
 // Model ids live in app_settings (SETTINGS.model*) so an admin can swap them without a deploy;
 // DEFAULT_MODELS is the fallback. `npm run deploy` first runs scripts/checkModels.ts, which checks
 // them against the account catalog (`wrangler ai models list`) and refuses to deploy a missing id.
-import { DEFAULT_MODELS, FLAGS, SETTINGS } from '@tie/shared';
-import { all, type Env, type FlagSubject, isEnabled } from '@tie/worker-core';
+// PROD (spec 05 "Paid AI providers"): an id may also be `anthropic:<model>` or `openai:<model>`; the
+// worker-core aiRunner routes those to the provider's API. PROD (spec 05 "ElevenLabs voices"): TTS
+// may use the ElevenLabs voices (ai.model.tts = TTS_ELEVEN, or a lesson/assistant voice).
+import {
+  AI_MODEL_ID_RE,
+  aiProviderOf,
+  DEFAULT_MODELS,
+  ELEVEN_DEFAULT_KEY,
+  ELEVEN_EXTRAS_KEY,
+  ELEVEN_NARRATOR_KEY,
+  ELEVEN_VOICE_ID_RE,
+  type EpisodeVoices,
+  FLAGS,
+  parseRole,
+  SETTINGS,
+  TTS_ELEVEN,
+} from '@tie/shared';
+import {
+  aiRunner,
+  all,
+  type ContentService,
+  type Env,
+  elevenSpeakTimed,
+  type FlagSubject,
+  isEnabled,
+  one,
+  readElevenConfig,
+  type WordSpan,
+} from '@tie/worker-core';
 
 export interface Models {
   tutor: string;
@@ -11,9 +38,13 @@ export interface Models {
   asr: string;
   tts: string;
   guard: string;
+  /** ai.model.tts is TTS_ELEVEN: every TTS line uses the ElevenLabs voices (default voice as fallback). */
+  ttsEleven?: boolean;
 }
 
-const SETTING_KEYS: Record<keyof Models, string> = {
+type ModelRole = Exclude<keyof Models, 'ttsEleven'>;
+
+const SETTING_KEYS: Record<ModelRole, string> = {
   tutor: SETTINGS.modelTutor,
   tutorFallback: SETTINGS.modelTutorFallback,
   asr: SETTINGS.modelAsr,
@@ -21,7 +52,15 @@ const SETTING_KEYS: Record<keyof Models, string> = {
   guard: SETTINGS.modelGuard,
 };
 
-const MODEL_ID_RE = /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i;
+const MODEL_ID_RE = AI_MODEL_ID_RE;
+/** Which providers can serve each role: Claude has no ASR; TTS and the guard stay on Workers AI. */
+const ROLE_OK: Record<ModelRole, (id: string) => boolean> = {
+  tutor: () => true,
+  tutorFallback: () => true,
+  asr: (id) => aiProviderOf(id) !== 'anthropic',
+  tts: (id) => aiProviderOf(id) === 'workers',
+  guard: (id) => aiProviderOf(id) === 'workers',
+};
 const TTL_MS = 30_000;
 let cache: { at: number; db: D1Database; models: Models } | null = null;
 
@@ -41,10 +80,11 @@ export async function loadModels(db: D1Database, now: number = Date.now()): Prom
   );
   const byKey = new Map(rows.map((r) => [r.key, r.value.trim()]));
   const models = { ...DEFAULT_MODELS } as Models;
-  for (const [name, key] of Object.entries(SETTING_KEYS) as [keyof Models, string][]) {
+  for (const [name, key] of Object.entries(SETTING_KEYS) as [ModelRole, string][]) {
     const v = byKey.get(key);
-    if (v && MODEL_ID_RE.test(v)) models[name] = v;
+    if (v && MODEL_ID_RE.test(v) && ROLE_OK[name](v)) models[name] = v;
   }
+  if (byKey.get(SETTINGS.modelTts) === TTS_ELEVEN) models.ttsEleven = true;
   cache = { at: now, db, models };
   return models;
 }
@@ -65,8 +105,13 @@ export interface AiRunner {
   run(model: string, inputs: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>;
 }
 
-export function runner(env: Pick<Env, 'AI'>): AiRunner {
-  return env.AI as unknown as AiRunner;
+/** Env the AI calls read: the AI binding, plus DB and the key secrets for the paid providers. */
+export type AiEnv = Pick<Env, 'AI'> &
+  Partial<Pick<Env, 'DB' | 'MEDIA_TOKEN_KEY' | 'ANTHROPIC_API_KEY' | 'OPENAI_API_KEY'>>;
+
+/** Routes `anthropic:` / `openai:` ids to their provider, anything else to env.AI (worker-core llm.ts). */
+export function runner(env: AiEnv): AiRunner {
+  return aiRunner(env);
 }
 
 export class AiCallError extends Error {
@@ -129,7 +174,7 @@ export interface JsonResult<T> {
  * Runs the tutor model in JSON-schema mode and validates the answer; on an error or an answer
  * that fails validation it retries once on the fallback model. Throws AiCallError when both fail.
  */
-export async function runJson<T>(env: Pick<Env, 'AI'>, models: Models, call: JsonCall<T>): Promise<JsonResult<T>> {
+export async function runJson<T>(env: AiEnv, models: Models, call: JsonCall<T>): Promise<JsonResult<T>> {
   const ai = runner(env);
   const started = Date.now();
   let lastError = 'no attempt';
@@ -137,6 +182,9 @@ export async function runJson<T>(env: Pick<Env, 'AI'>, models: Models, call: Jso
   for (const model of [models.tutor, models.tutorFallback]) {
     if (tried.has(model)) continue;
     tried.add(model);
+    const t0 = Date.now();
+    const log = (ok: boolean, why?: string) =>
+      console.log(JSON.stringify({ level: 'info', msg: 'ai_call', model, ms: Date.now() - t0, ok, why }));
     try {
       const out = await ai.run(model, {
         messages: call.messages,
@@ -145,17 +193,22 @@ export async function runJson<T>(env: Pick<Env, 'AI'>, models: Models, call: Jso
         temperature: call.temperature ?? 0.6,
       });
       const value = call.accept(extractJson(out));
-      if (value !== null) return { value, model, latencyMs: Date.now() - started };
+      if (value !== null) {
+        log(true);
+        return { value, model, latencyMs: Date.now() - started };
+      }
       lastError = `${model}: answer did not match the contract`;
+      log(false, 'contract');
     } catch (err) {
       lastError = `${model}: ${err instanceof Error ? err.message : String(err)}`;
+      log(false, lastError.slice(0, 200));
     }
   }
   throw new AiCallError(lastError, models.tutor);
 }
 
 /** Whisper transcript of a base64 WAV (language forced to English). */
-export async function transcribe(env: Pick<Env, 'AI'>, model: string, audioB64: string): Promise<string> {
+export async function transcribe(env: AiEnv, model: string, audioB64: string): Promise<string> {
   const out = (await runner(env).run(model, { audio: audioB64, language: 'en' })) as { text?: unknown } | null;
   if (!out || typeof out.text !== 'string') throw new AiCallError('ASR returned no text', model);
   return out.text.trim();
@@ -163,7 +216,7 @@ export async function transcribe(env: Pick<Env, 'AI'>, model: string, audioB64: 
 
 /** Deepgram Aura speech as mp3 bytes; accepts the stream, buffer or base64 shapes the binding may return. */
 export async function synthesize(
-  env: Pick<Env, 'AI'>,
+  env: AiEnv,
   model: string,
   text: string,
   speaker: string,
@@ -183,6 +236,110 @@ export async function synthesize(
   return bytes;
 }
 
+// ---------- ElevenLabs voices ----------
+
+export interface ElevenVoice {
+  apiKey: string;
+  model: string;
+  voiceId: string;
+  /** The default voice, tried when voiceId fails (only when it differs). */
+  fallbackId?: string;
+}
+
+export interface ElevenPick {
+  /** The assistant whose voice was asked for (resolveSpeaker), if any. */
+  assistantKey: string | null;
+  /** Lesson line role (narrator, a cast name, extras…), see parseRole(). */
+  role: string | null;
+  /** The episode's own voice for this role (lessonVoiceId). */
+  lessonVoice: string | null;
+  /** ai.model.tts = TTS_ELEVEN: use the default voice even for lines without a voice of their own. */
+  everywhere: boolean;
+}
+
+/** The ElevenLabs voice for a TTS line, or null for the Workers AI voice (no key, or no voice fits). */
+export async function elevenForRole(
+  env: Parameters<typeof readElevenConfig>[1],
+  db: D1Database,
+  pick: ElevenPick,
+): Promise<ElevenVoice | null> {
+  if (!pick.assistantKey && !pick.role && !pick.lessonVoice && !pick.everywhere) return null;
+  const cfg = await readElevenConfig(db, env);
+  if (!cfg.apiKey) return null;
+  const parsed = pick.role ? parseRole(pick.role) : null;
+  const isNarration = !!parsed?.narrator;
+  const narration = isNarration ? cfg.voices[ELEVEN_NARRATOR_KEY] : undefined;
+  const fallback = pick.role || pick.everywhere ? cfg.voices[ELEVEN_DEFAULT_KEY] : undefined;
+  const assistant = pick.assistantKey ? cfg.voices[pick.assistantKey] : undefined;
+  const voiceId = parsed?.extras
+    ? pick.lessonVoice || cfg.voices[ELEVEN_EXTRAS_KEY] || assistant || fallback
+    : isNarration
+      ? pick.lessonVoice || narration || fallback || assistant
+      : pick.lessonVoice || assistant || fallback;
+  if (!voiceId) return null;
+  return {
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+    voiceId,
+    ...(fallback && fallback !== voiceId ? { fallbackId: fallback } : {}),
+  };
+}
+
+/**
+ * The episode's own ElevenLabs voice for a lesson line role (episodes.voices, 0016): the published
+ * snapshot's when there is one, else the D1 row. null when the episode sets none for that role.
+ */
+export async function lessonVoiceId(
+  db: D1Database,
+  content: ContentService,
+  ep: number,
+  role: string,
+): Promise<string | null> {
+  let voices: EpisodeVoices | null | undefined;
+  try {
+    voices = (await content.current()) ? ((await content.episode(ep))?.voices ?? null) : undefined;
+  } catch {
+    voices = undefined;
+  }
+  if (voices === undefined) {
+    const row = await one<{ voices: string }>(
+      db,
+      "SELECT voices FROM episodes WHERE num = ? AND status = 'published'",
+      ep,
+    );
+    try {
+      voices = row ? (JSON.parse(row.voices) as EpisodeVoices | null) : null;
+    } catch {
+      voices = null;
+    }
+  }
+  if (!voices) return null;
+  const ok = (id: unknown): string | null => (typeof id === 'string' && ELEVEN_VOICE_ID_RE.test(id) ? id : null);
+  const parsed = parseRole(role);
+  if (parsed.extras) {
+    const w = parsed.who.toLowerCase();
+    const hit = w ? Object.entries(voices.extras?.cast ?? {}).find(([name]) => name.toLowerCase() === w) : undefined;
+    return ok(hit?.[1]) ?? ok(voices.extras?.narrator);
+  }
+  if (parsed.narrator)
+    return ok(parsed.step != null ? voices.steps?.[String(parsed.step)] : undefined) ?? ok(voices.narrator);
+  const r = role.toLowerCase();
+  const hit = Object.entries(voices.cast ?? {}).find(([name]) => name.toLowerCase() === r);
+  return hit ? ok(hit[1]) : null;
+}
+
+/** ElevenLabs speech with word timings; failures surface as AiCallError like the Workers AI calls. */
+export async function synthesizeEleven(
+  v: ElevenVoice,
+  text: string,
+): Promise<{ audio: Uint8Array<ArrayBuffer>; words: WordSpan[] | null }> {
+  try {
+    return await elevenSpeakTimed(v.apiKey, v.model, v.voiceId, text);
+  } catch (err) {
+    throw new AiCallError(err instanceof Error ? err.message : 'ElevenLabs TTS failed', v.model);
+  }
+}
+
 export interface GuardVerdict {
   safe: boolean;
   categories: string[];
@@ -194,7 +351,7 @@ export interface GuardVerdict {
  * this into a check of the model's answer (response classification) and abusive learner text
  * would go unflagged.
  */
-export async function guard(env: Pick<Env, 'AI'>, model: string, userText: string): Promise<GuardVerdict> {
+export async function guard(env: AiEnv, model: string, userText: string): Promise<GuardVerdict> {
   const messages: ChatMessage[] = [{ role: 'user', content: userText }];
   const out = await runner(env).run(model, { messages });
   const r = out && typeof out === 'object' ? (out as { response?: unknown }).response : out;

@@ -392,8 +392,8 @@ export default function Desafio({ q }: ScreenProps) {
           with no big title on the page, it is the game's name. */}
       <Topbar
         back="extra"
-        kicker={G.state === 'play' ? 'EXTRA' : undefined}
-        title={G.state === 'play' ? 'Desafio relâmpago' : 'EXTRA'}
+        kicker={G.state === 'play' ? 'FLIX' : undefined}
+        title={G.state === 'play' ? 'Desafio relâmpago' : 'FLIX'}
       />
       <div class="scroll">{inner}</div>
       {dock}

@@ -2,10 +2,21 @@
 // 1-5 stars from the Concluído screen, with an optional comment. One rating per learner and episode
 // (upsert keeps created_at); an absent `comment` keeps the stored one, null clears it. Queueable
 // offline: OUTBOX_PATHS lists the path, so the idempotency middleware replays a retried write once.
-import { EpisodeFeedbackBody, type EpisodeFeedbackRes, feedbackApi, NumParams, newId } from '@tie/shared';
+//
+// PROD (0011): per-step experience feedback, PUT /api/feedback/steps/:id (behind the feedback.steps
+// flag on the client). The client picks the id, so a replayed write is a no-op; one row per id.
+import {
+  EpisodeFeedbackBody,
+  type EpisodeFeedbackRes,
+  feedbackApi,
+  IdParams,
+  NumParams,
+  newId,
+  StepFeedbackBody,
+} from '@tie/shared';
 import { type AppEnv, batch, fail, one, q, rateLimit, requireUser, vJson, vParam } from '@tie/worker-core';
 import { Hono } from 'hono';
-import { contentSource } from '../learning/content';
+import { contentSource, loadEpisodeContext } from '../learning/content';
 import { depsFrom } from '../learning/deps';
 
 const routes = new Hono<AppEnv>();
@@ -14,6 +25,44 @@ const routes = new Hono<AppEnv>();
 export const FEEDBACK_MIN_STEP = 10;
 
 routes.use('/api/feedback/*', requireUser(), rateLimit('RL_API'));
+
+routes.put(feedbackApi.step.path, vParam(IdParams), vJson(StepFeedbackBody), async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const d = depsFrom(c);
+  // Same id again: a replay of the learner's own write is ok; someone else's id is not theirs to see.
+  const existing = await one<{ user_id: string }>(d.db, 'SELECT user_id FROM step_feedback WHERE id = ?', id);
+  if (existing) {
+    if (existing.user_id !== d.userId) throw fail('not_found');
+    return c.json({ ok: true });
+  }
+  const ctx = await loadEpisodeContext(d, body.episodeNum);
+  if (!ctx) throw fail('content_unavailable');
+  if (ctx.lockedBy != null || body.step > ctx.prog) {
+    throw fail('gated', 'Abra esta etapa antes de avaliar a experiência.');
+  }
+  await d.db
+    .prepare(
+      `INSERT INTO step_feedback(id, user_id, episode_num, step, stars, had_difficulty, difficulty, improvement, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
+    )
+    .bind(
+      id,
+      d.userId,
+      body.episodeNum,
+      body.step,
+      body.stars,
+      body.hadDifficulty ? 1 : 0,
+      body.hadDifficulty ? (body.difficulty ?? null) : null,
+      body.improvement ?? null,
+      d.now,
+    )
+    .run();
+  // A concurrent insert with the same id by another user wins the race: still not theirs.
+  const saved = await one<{ user_id: string }>(d.db, 'SELECT user_id FROM step_feedback WHERE id = ?', id);
+  if (saved?.user_id !== d.userId) throw fail('not_found');
+  return c.json({ ok: true });
+});
 
 routes.put(feedbackApi.episode.path, vParam(NumParams), vJson(EpisodeFeedbackBody), async (c) => {
   const n = c.req.valid('param').n;

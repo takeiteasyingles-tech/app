@@ -133,22 +133,29 @@ export function PartFrame({
   kick,
   title,
   intro,
+  back,
+  kicker,
   children,
 }: {
   kick: string;
   title: string;
   intro?: string;
+  /** Route of the back button (default: the e-book hub). */
+  back?: string;
+  /** Whole kicker line (default: "E-book 01 · {kick}"). */
+  kicker?: string;
   children?: ComponentChildren;
 }) {
   const desk = isDesk();
   const EB = ebookNumber();
-  const kicker = `E-book ${pad2(EB)} · ${kick}`;
+  const kick2 = kicker ?? `E-book ${pad2(EB)} · ${kick}`;
+  const backTo = back ?? `ebook/${EB}`;
   return (
     <>
-      {desk ? null : <Topbar back={`ebook/${EB}`} kicker={kicker} title={title} />}
+      {desk ? null : <Topbar back={backTo} kicker={kick2} title={title} />}
       <div class="scroll">
         <div class="wrap stack" style={{ '--wrap': desk ? DESK_WRAP : '760px', '--gap': '14px' }}>
-          {desk ? <DeskHead back={`ebook/${EB}`} kicker={kicker} title={title} intro={intro} /> : null}
+          {desk ? <DeskHead back={backTo} kicker={kick2} title={title} intro={intro} /> : null}
           {intro && !desk ? <p class="p-read">{intro}</p> : null}
           {children}
         </div>

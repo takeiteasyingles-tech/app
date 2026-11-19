@@ -1,14 +1,15 @@
 // E-book parts (#/ebook/1/:part): port of TIE.screens.ebookx in prototipo/js/screens/curso.js.
 // five = bilingual culture pages (TIE.blocks), real = book vs street, lead = scripted chat with
-// Margaret, teste = the 20-question test graded on the server.
+// Margaret.
+//
+// PROD (0018): the e-book step and its hub left the episode track; these parts are the episode's
+// Take Some Extras, opened from the Concluído screen, so Back returns there. The e-book test is gone
+// (the episode ends with step 10, "Take the Test").
 import type { Ebook } from '@tie/shared/content/schema';
-import { testGate } from '@tie/shared/domain/testGate';
 import { type ScreenProps, useChrome } from '../../frame';
-import { catalog, state } from '../../store';
-import { ebookNumber, isDesk, LoadFailed, PartFrame, pad2, useEbook } from './common';
+import { isDesk, LoadFailed, PartFrame, pad2, useEbook } from './common';
 import { Five } from './Five';
 import { Lead } from './Lead';
-import { Teste } from './Teste';
 
 const HEAD: Record<string, { kick: string; title: string; intro?: string }> = {
   five: {
@@ -22,7 +23,6 @@ const HEAD: Record<string, { kick: string; title: string; intro?: string }> = {
     intro: 'O que os livros ensinam, e o que as pessoas realmente dizem.',
   },
   lead: { kick: 'Extra', title: 'Take the Lead' },
-  teste: { kick: 'Take a test', title: 'Take the episode test' },
 };
 
 /** A tip with no textbook form (the prototype printed "—" there). */
@@ -144,47 +144,20 @@ function Real({ eb, desk }: { eb: Ebook; desk: boolean }) {
 }
 
 export default function EbookPart({ params }: ScreenProps) {
-  const EB = ebookNumber();
   const part = params.part ?? '';
   const head = HEAD[part] ?? { kick: 'Extra', title: '' };
-  // Unlike the prototype (a bare full-screen page), the parts keep the side nav / tab bar of the
-  // e-book hub they belong to.
+  // Unlike the prototype (a bare full-screen page), the parts keep the side nav / tab bar.
   useChrome({ tabs: true, nav: 'trilha', title: head.title || 'E-book' });
   const desk = isDesk();
   const { data: eb, error } = useEbook();
-  if (error) return <LoadFailed back={`ebook/${EB}`} kicker={`E-book ${pad2(EB)} · ${head.kick}`} title={head.title} />;
-  if (!eb) return <PartFrame kick={head.kick} title={head.title} />;
-  if (part === 'teste') {
-    const published = new Set(
-      catalog.value?.episodes.filter((e) => e.status === 'published').map((e) => String(e.num)) ?? [],
-    );
-    const done = Object.fromEntries(Object.entries(state.value.epsDone).filter(([key]) => published.has(key)));
-    const gate = testGate(
-      eb.episodes,
-      done,
-      eb.testRequiredEpisodes,
-      eb.testMinCompleted,
-      eb.testEnabled,
-      [...published].map(Number),
-    );
-    if (!gate.unlocked || !eb.test.length)
-      return (
-        <PartFrame kick={head.kick} title={head.title}>
-          <div class="card stack">
-            <h2 class="h2">Teste bloqueado</h2>
-            <p>
-              {!eb.testEnabled || !eb.test.length
-                ? 'O teste deste episódio está em preparação.'
-                : `Conclua mais ${gate.remaining} episódio(s) com as 10 etapas para liberar este teste.`}
-            </p>
-            <a href="#/trilha">Voltar à trilha</a>
-          </div>
-        </PartFrame>
-      );
-    return <Teste key={eb.num} eb={eb} />;
-  }
+  // Back goes to the end of the e-book's (first) episode, where the extras are offered.
+  const ep = eb?.episodes[0];
+  const back = ep ? `concluido/${ep}` : 'trilha';
+  const kicker = ep ? `Episódio ${pad2(ep)} · ${head.kick}` : head.kick;
+  if (error) return <LoadFailed back="trilha" kicker={head.kick} title={head.title} />;
+  if (!eb) return <PartFrame kick={head.kick} title={head.title} back={back} kicker={kicker} />;
   return (
-    <PartFrame kick={head.kick} title={head.title} intro={head.intro}>
+    <PartFrame kick={head.kick} title={head.title} intro={head.intro} back={back} kicker={kicker}>
       {part === 'five' ? <Five list={eb.five} desk={desk} /> : null}
       {part === 'real' ? <Real eb={eb} desk={desk} /> : null}
       {part === 'lead' ? <Lead eb={eb} desk={desk} /> : null}

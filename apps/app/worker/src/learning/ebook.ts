@@ -1,7 +1,10 @@
 import {
   type DownloadRes,
+  episodeTestPassScore,
   mediaUrl,
   type Ok,
+  pickEpisodeTest,
+  STEP,
   type TestAnswer,
   type TestAnswersBody,
   type TestQuestion,
@@ -27,6 +30,12 @@ interface EbookRow {
   test_enabled?: number;
   test_required_episodes?: string;
   test_min_completed?: number | null;
+}
+
+/** A D1 question with its part and (optional) episode, for pickEpisodeTest(). */
+interface EpisodeTestQuestionRow extends TestQuestionRow {
+  part_idx: number;
+  ep_num: number | null;
 }
 
 interface AnswerRow {
@@ -96,9 +105,9 @@ async function loadTest(d: LearningDeps, n: number) {
         'SELECT num, pass_score, test_enabled, test_required_episodes, test_min_completed, NULL AS pdf_key FROM ebooks WHERE num = ?',
         n,
       ),
-      q<TestQuestionRow>(
+      q<EpisodeTestQuestionRow>(
         d.db,
-        'SELECT id, n, opts, answer_idx, accept, show FROM ebook_test_questions WHERE ebook_num = ? ORDER BY n',
+        'SELECT id, n, opts, answer_idx, accept, show, part_idx, ep_num FROM ebook_test_questions WHERE ebook_num = ? ORDER BY n',
         n,
       ),
       q<AnswerRow>(
@@ -108,10 +117,13 @@ async function loadTest(d: LearningDeps, n: number) {
         d.userId,
         n,
       ),
+      // PROD (0014): the test is the episode's last step, Take the Test, so reaching it counts as done
+      // for the test's rule (otherwise the test would wait for an episode that waits for the test).
       q<{ episode_num: number }>(
         d.db,
-        'SELECT episode_num FROM episode_progress WHERE user_id = ? AND done_at IS NOT NULL',
+        'SELECT episode_num FROM episode_progress WHERE user_id = ? AND (done_at IS NOT NULL OR furthest_step >= ?)',
         d.userId,
+        STEP.TEST,
       ),
       q<{ submitted: number }>(
         d.db,
@@ -155,8 +167,14 @@ async function loadTest(d: LearningDeps, n: number) {
     });
   }
 
-  let passScore = row.pass_score;
-  let rows: TestQuestionRow[] = questions;
+  // D1 mode: the episode's own questions first, capped at the episode test size, with the pass score
+  // scaled to the questions kept.
+  const kept = pickEpisodeTest(
+    questions.map((x) => ({ part: x.part_idx, n: x.n, ep: x.ep_num, row: x })),
+    availability.episodes,
+  );
+  let passScore = episodeTestPassScore(row.pass_score, questions.length, kept.length);
+  let rows: TestQuestionRow[] = kept.map((x) => x.row).sort((a, b) => a.n - b.n);
   if (availability.source === 'snapshot') {
     const file = availability.snapshot;
     if (!file) throw fail('content_unavailable');

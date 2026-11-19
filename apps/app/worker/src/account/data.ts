@@ -76,6 +76,7 @@ const EXPORT_TABLES: ReadonlyArray<readonly [string, string]> = [
   ['karaoke_picks', 'SELECT * FROM karaoke_picks WHERE user_id = ?1 ORDER BY picked_at'],
   // v1 (spec 07)
   ['lesson_feedback', 'SELECT * FROM lesson_feedback WHERE user_id = ?1 ORDER BY episode_num'],
+  ['step_feedback', 'SELECT * FROM step_feedback WHERE user_id = ?1 ORDER BY created_at, id'],
   ['season_test_answers', 'SELECT * FROM season_test_answers WHERE user_id = ?1'],
   ['season_test_results', 'SELECT * FROM season_test_results WHERE user_id = ?1 ORDER BY season_n'],
   [

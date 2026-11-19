@@ -15,8 +15,9 @@ import {
   MicPhraseEdit,
   type MicPhraseRow,
 } from '@tie/shared/contracts/admin';
+import { firstOutOfOrder } from '@tie/shared/domain/songSync';
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { call, errorMessage, issuesOf } from '../../api';
+import { call, errorMessage, issuesOf, withAutoPublish } from '../../api';
 import { fmtAgo, fmtDateTime } from '../../format';
 import { useEmails } from '../../people';
 import { go, setLeaveGuard, setQuery } from '../../router';
@@ -45,9 +46,11 @@ import {
   useLeaveGuard,
   useSaveShortcut,
 } from './common';
+import { mergeEpisodeVoices } from './draftVoices';
 import { EpisodeMaterials } from './EpisodeMaterials';
 import { EpisodePreview } from './EpisodePreview';
 import { ALL_SPECS, TAB_SPECS, TABS, type TabId, tabOf } from './episodeSpecs';
+import { SongLyricsPanel } from './SongLyricsPanel';
 
 type Ex = ExerciseRow & { items: ExerciseItemRow[] };
 type Doc = Obj & { num: number; mic: MicPhraseRow[]; ex: Ex[] };
@@ -111,6 +114,8 @@ function normalize(d: Doc): Doc {
 function validate(d: Doc): Record<string, string> {
   const out: Record<string, string> = { ...zodErrors(EpisodeEditSchema.create, pick(d, EP_KEYS)) };
   if (d.status === 'published' && !d.done) out.done = 'Um episódio publicado precisa da tela de conclusão.';
+  const back = firstOutOfOrder(Array.isArray(d.lyrics) ? (d.lyrics as { t?: unknown }[]) : []);
+  if (back >= 0) out[`lyrics.${back}.t`] = 'O início desta linha vem antes da linha anterior.';
   d.mic.forEach((m, i) => {
     Object.assign(out, prefixErrors(zodErrors(MicPhraseEdit.create, pick(m, MIC_KEYS)), `mic.${i}`));
   });
@@ -200,55 +205,63 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
     let failed = false;
     let stage = 'o episódio';
     try {
-      const epPatch = patchOf(pick(b, EP_KEYS), pick(d, EP_KEYS), EP_KEYS);
-      if (Object.keys(epPatch).length) {
-        const res = await call(C.episodes.update, { params: { id: String(num) }, body: epPatch as never });
-        Object.assign(b, pick(res.item as unknown as Obj, EP_KEYS));
-        setInfo({ updatedAt: res.item.updatedAt, updatedBy: res.item.updatedBy });
-      }
-      // Mic phrases
-      stage = 'as frases do Mic';
-      await applyRows(
-        C.micPhrases as CrudApi,
-        diffRows(b.mic as Obj[], d.mic as Obj[], (r) => String(r.id), MIC_KEYS),
-        MIC_KEYS,
-        (kind, id, row) => {
-          b.mic = applyToBase(b.mic as Obj[], kind, id, row, (r) => String(r.id)) as MicPhraseRow[];
-        },
-        (r) => String(r.id),
-      );
-      // Exercises (rows without their items), then each exercise's items
-      const exBase = b.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
-      const exDraft = d.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
-      stage = 'os exercícios';
-      await applyRows(
-        C.exercises as CrudApi,
-        diffRows(exBase, exDraft, (r) => String(r.id), EX_KEYS),
-        EX_KEYS,
-        (kind, id, row) => {
-          if (kind === 'remove') b.ex = b.ex.filter((x) => x.id !== id);
-          else if (kind === 'create' && row) b.ex.push({ ...(row as unknown as ExerciseRow), items: [] });
-          else if (row)
-            b.ex = b.ex.map((x) => (x.id === id ? { ...(row as unknown as ExerciseRow), items: x.items } : x));
-        },
-        (r) => String(r.id),
-      );
-      for (const x of d.ex) {
-        const bx = b.ex.find((e) => e.id === x.id);
-        if (!bx) continue;
-        stage = `as questões de "${x.title}"`;
+      // Every request below holds the publish; one publish runs when they are done.
+      await withAutoPublish(`Episódio ${num}`, async () => {
+        const epPatch = patchOf(pick(b, EP_KEYS), pick(d, EP_KEYS), EP_KEYS);
+        if ('voices' in epPatch) {
+          // Three-way merge: keep voice changes saved meanwhile (Take Some Extras, the MCP agent).
+          const now = (await call(C.episodes.get, { params: { id: String(num) } })).item;
+          epPatch.voices = mergeEpisodeVoices(now.voices, b.voices, d.voices);
+        }
+        if (Object.keys(epPatch).length) {
+          const res = await call(C.episodes.update, { params: { id: String(num) }, body: epPatch as never });
+          Object.assign(b, pick(res.item as unknown as Obj, EP_KEYS));
+          setInfo({ updatedAt: res.item.updatedAt, updatedBy: res.item.updatedBy });
+        }
+        // Mic phrases
+        stage = 'as frases do Mic';
         await applyRows(
-          C.items as CrudApi,
-          diffRows(bx.items as unknown as Obj[], x.items as unknown as Obj[], (r) => String(r.id), ITEM_KEYS),
-          ITEM_KEYS,
+          C.micPhrases as CrudApi,
+          diffRows(b.mic as Obj[], d.mic as Obj[], (r) => String(r.id), MIC_KEYS),
+          MIC_KEYS,
           (kind, id, row) => {
-            bx.items = applyToBase(bx.items as unknown as Obj[], kind, id, row, (r) =>
-              String(r.id),
-            ) as unknown as ExerciseItemRow[];
+            b.mic = applyToBase(b.mic as Obj[], kind, id, row, (r) => String(r.id)) as MicPhraseRow[];
           },
           (r) => String(r.id),
         );
-      }
+        // Exercises (rows without their items), then each exercise's items
+        const exBase = b.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
+        const exDraft = d.ex.map((x) => pick(x as unknown as Obj, EX_KEYS));
+        stage = 'os exercícios';
+        await applyRows(
+          C.exercises as CrudApi,
+          diffRows(exBase, exDraft, (r) => String(r.id), EX_KEYS),
+          EX_KEYS,
+          (kind, id, row) => {
+            if (kind === 'remove') b.ex = b.ex.filter((x) => x.id !== id);
+            else if (kind === 'create' && row) b.ex.push({ ...(row as unknown as ExerciseRow), items: [] });
+            else if (row)
+              b.ex = b.ex.map((x) => (x.id === id ? { ...(row as unknown as ExerciseRow), items: x.items } : x));
+          },
+          (r) => String(r.id),
+        );
+        for (const x of d.ex) {
+          const bx = b.ex.find((e) => e.id === x.id);
+          if (!bx) continue;
+          stage = `as questões de "${x.title}"`;
+          await applyRows(
+            C.items as CrudApi,
+            diffRows(bx.items as unknown as Obj[], x.items as unknown as Obj[], (r) => String(r.id), ITEM_KEYS),
+            ITEM_KEYS,
+            (kind, id, row) => {
+              bx.items = applyToBase(bx.items as unknown as Obj[], kind, id, row, (r) =>
+                String(r.id),
+              ) as unknown as ExerciseItemRow[];
+            },
+            (r) => String(r.id),
+          );
+        }
+      });
     } catch (e) {
       failed = true;
       const iss = issuesOf(e);
@@ -262,7 +275,7 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
       if (!failed) {
         setDraft(b);
         setSavedAt(Date.now());
-        toast('Episódio salvo no rascunho.');
+        toast('Episódio salvo. Já está no app para os alunos.');
       }
       setBusy(false);
     }
@@ -366,6 +379,9 @@ export function EpisodeEdit({ params, q }: ScreenProps) {
           <div class="ad-split with-preview">
             {showEditor ? (
               <section class="card ad-card" aria-label={TABS.find(([t]) => t === tab)?.[1]}>
+                {tab === 'musica' ? (
+                  <SongLyricsPanel doc={draft} set={(fn) => setDraft((p) => (p ? (fn(p) as Doc) : p))} />
+                ) : null}
                 <Form
                   specs={TAB_SPECS[tab]}
                   value={draft}

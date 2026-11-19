@@ -46,6 +46,8 @@ describe('guide.plan()', () => {
       const s = { ...course, profile, due, game };
       core.setState(clone(s));
       const proto = plain(T.guide.plan());
+      // Brand rename (PROD): the prototype's EXTRA section is FLIX.
+      for (const t of [...proto.tasks, proto.now]) if (t?.k === 'extra') t.t = t.t.replace(/^EXTRA · /, 'FLIX · ');
       const ts = plan({ state: s, content: C, today, epImg: HOME });
       expect(plain(ts)).toEqual(proto);
       for (const t of ts.tasks) seen.add(t.k);

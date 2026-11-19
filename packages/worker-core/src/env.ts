@@ -27,6 +27,18 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** Var. Sender, e.g. 'Take It Easy <no-reply@example.com>' (a domain verified in Resend). */
   MAIL_FROM?: string;
+  // PROD (spec 05 "ElevenLabs voices"): fallbacks when the admin has not saved a key/voices/model.
+  /** Secret. Used when no sealed key is stored in app_settings (voice.eleven.key). */
+  ELEVENLABS_API_KEY?: string;
+  /** Var. ElevenLabs model id (ELEVEN_MODELS). */
+  ELEVENLABS_MODEL?: string;
+  /** Var. JSON {assistantKey: voiceId}. */
+  ELEVENLABS_VOICES?: string;
+  // PROD (spec 05 "Paid AI providers"): fallbacks for the sealed ai.key.* settings.
+  /** Secret. Anthropic API key for `anthropic:<model>` ids. */
+  ANTHROPIC_API_KEY?: string;
+  /** Secret. OpenAI API key for `openai:<model>` ids. */
+  OPENAI_API_KEY?: string;
 }
 
 export type Audience = 'app' | 'admin';

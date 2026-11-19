@@ -711,7 +711,7 @@ function ListView({ spec, value, path }: { spec: Extract<Spec, { t: 'list' }>; v
       </div>
       {ownErr ? <span class="err">{ownErr}</span> : null}
       {spec.inline && arr.length ? (
-        <div class="ad-inline-head" aria-hidden="true">
+        <div class="ad-inline-head" aria-hidden="true" style={{ '--cols': String(spec.of.length) }}>
           <span>#</span>
           {spec.of.map((s) => (
             <span key={s.k}>{s.label}</span>

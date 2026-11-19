@@ -12,6 +12,44 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:admin"],
       "port": 8788
+    },
+    {
+      "name": "tie-app-produi",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "apps/app/wrangler.jsonc",
+        "--env",
+        "local",
+        "--port",
+        "8789",
+        "--assets",
+        "tools/recovery/out/web/app",
+        "--persist-to",
+        "apps/app/.wrangler/state"
+      ],
+      "port": 8789
+    },
+    {
+      "name": "tie-admin-produi",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "apps/admin/wrangler.jsonc",
+        "--env",
+        "local",
+        "--port",
+        "8790",
+        "--assets",
+        "tools/recovery/out/web/admin",
+        "--persist-to",
+        "apps/app/.wrangler/state"
+      ],
+      "port": 8790
     }
   ]
 }

@@ -465,7 +465,8 @@ describe('compileContent', () => {
     expect(e1.lyrics[0]?.gap).toBe('morning');
     expect(e1.visual[0]).toEqual({ id: 'e1-vi0', en: 'door', pt: 'porta' });
     expect(e1.dialog[0]?.id).toBe('e1-dl0');
-    expect(e1.mic[0]).toEqual({ id: 'e1-mic-0', en: 'Hi!', tip: 'tip', result: 7, blue: true, fb: 'fb' });
+    // PROD (0017): the speaker comes from the dialog line that says the phrase (micSpeaker).
+    expect(e1.mic[0]).toEqual({ id: 'e1-mic-0', en: 'Hi!', tip: 'tip', result: 7, blue: true, fb: 'fb', who: 'Zach' });
     expect(e1.ex[0]?.items.map((i) => i.id)).toEqual(['e1-ex0-i0', 'e1-ex0-i1']);
     expect(e1.ex[0]).toMatchObject({ audio: 'tts', audioLabel: 'Ouvir' });
     expect(e1.ex[0]?.items[0]).toMatchObject({ a: 0, fix: 'f', say: 'Hi' });
@@ -498,14 +499,28 @@ describe('compileContent', () => {
 
   it('album tracks inline episode lyrics with gaps (first word when none)', async () => {
     const c = await compileContent(rows(), { publishedAt: NOW });
-    const [t0, t1] = c.catalog.albums[0]?.tracks ?? [];
+    const tracks = c.catalog.albums[0]?.tracks ?? [];
+    const [t0, t1] = tracks;
+    // PROD: tracks follow their episode (song title; song audio when it has one, else the track's).
+    expect(t0).toMatchObject({ id: 'season-one-t0', title: 'Song', ep: 1 });
     expect(t0?.audio).toBe('/m/media/abcd1234/audio/intro.mp3');
     expect(t0?.lines).toEqual([
       { en: 'Hi! Hi! Good morning!', pt: 'Oi!', gap: 'morning' },
       { en: 'Bye bye', pt: 'Tchau', gap: 'Bye' },
     ]);
-    expect(t1).toMatchObject({ bpm: 100, key: 2, lines: [{ en: 'a b', pt: 'c', gap: 'b' }] });
-    expect(t1).not.toHaveProperty('ep');
+    // PROD: a track without an episode is dropped; a published episode no album lists gets its own track.
+    expect(tracks.map((t) => t.id)).toEqual(['season-one-t0', 'e2-song']);
+    expect(t1).toEqual({
+      id: 'e2-song',
+      title: 'Song',
+      from: 'Episódio 2',
+      audio: null,
+      ep: 2,
+      lines: [
+        { en: 'Hi! Hi! Good morning!', pt: 'Oi!', gap: 'morning' },
+        { en: 'Bye bye', pt: 'Tchau', gap: 'Bye' },
+      ],
+    });
   });
 
   it('extra files keep lines and vocab; premium is flagged', async () => {

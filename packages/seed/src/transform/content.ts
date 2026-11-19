@@ -43,17 +43,25 @@ const DONE_GO: Record<string, string> = { ep2: 'episodio/2/1', ebook1: 'ebook/1'
 export const ebookOfEpisode = (num: number): number => Math.ceil(num / EPISODES_PER_EBOOK);
 
 /**
- * Production step order (spec 05 "Step order"): the prototype's step at each position. The song's
- * first pass and the e-book open the episode; the intro moves to 3 and starts "O episódio".
+ * Production step order (STEP in shared/constants.ts; migrations 0012-0014): the prototype's step at
+ * each position, or a production-only step. The presentation opens the episode, then the song's first
+ * pass; the e-book step is gone; Take a Look starts "O episódio", the sung song "Fechamento", and the
+ * episode test is the last step. Matches the rows 0013_no_ebook_step.sql writes.
  */
-export const STEP_ORDER = [2, 3, 1, 4, 5, 6, 7, 8, 9, 10] as const;
+export const STEP_ORDER = ['presentation', 2, 4, 5, 6, 7, 8, 9, 10, 'test'] as const;
+
+/** Production-only steps (not in the prototype's STEPS). */
+const PROD_STEPS: Record<string, { name: string; pt: string }> = {
+  presentation: { name: 'In this episode', pt: 'conheça o episódio' },
+  test: { name: 'Take the Test', pt: 'teste do episódio' },
+};
 
 /** The prototype's STEPS in production order; each group label goes on its group's new first step. */
 export function orderSteps(P: Any[]): { n: number; name: string; pt: string; group_label: string | null }[] {
   const groups = P.map((s) => s.group as string | undefined).filter((g): g is string => !!g);
   const starts = [1, ...STEP_GROUP_STARTS];
   return STEP_ORDER.map((old, i) => {
-    const s = P.find((x) => x.n === old);
+    const s = typeof old === 'string' ? PROD_STEPS[old] : P.find((x) => x.n === old);
     if (!s) throw new Error(`STEPS has no step ${old}`);
     const n = i + 1;
     const g = starts.indexOf(n);

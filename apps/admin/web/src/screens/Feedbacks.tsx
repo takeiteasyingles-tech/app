@@ -2,16 +2,123 @@
 // Overall numbers and an NPS-style score, one summary card per episode (distribution of the notes),
 // then the ratings themselves, newest first, with filters kept in the URL (#/feedbacks?ep=1&nota=5).
 // Learners appear by display name only; the name links to the user page for roles with users.read.
-import { type AdminFeedbackRow, adminFeedbackApi, type FeedbackSummary } from '@tie/shared/contracts/feedback';
+// A second tab (#/feedbacks?tipo=plataforma, PROD flag feedback.steps) lists the per-step platform
+// feedback: stars, "sentiu dificuldade", what was hard and what could improve.
+import {
+  type AdminFeedbackRow,
+  type AdminStepFeedbackRow,
+  adminFeedbackApi,
+  type FeedbackSummary,
+} from '@tie/shared/contracts/feedback';
 import { call } from '../api';
 import { fmtAgo, fmtDateTime, fmtDay, fmtInt, fromDateInputEnd, fromDateInputStart, plural } from '../format';
 import { setQuery } from '../router';
 import { can } from '../session';
 import { useLoad, usePaged } from '../ui/async';
 import { Icon } from '../ui/icons';
-import { Button, Empty, ErrorBox, Kpi, MoreButton, Page, SearchBox, Sel, Skeleton, TextIn } from '../ui/kit';
+import { Button, Empty, ErrorBox, Kpi, MoreButton, Page, SearchBox, Sel, Skeleton, TabsNav, TextIn } from '../ui/kit';
 import { fmtAvg, NpsPill, npsTone, StarDist, Stars } from './learning';
 import type { ScreenProps } from './registry';
+
+/** Platform feedback per episode step, filtered by episode and step in the URL (?ep=&etapa=). */
+function StepFeedbacks({ q }: { q: ScreenProps['q'] }) {
+  const ep = /^\d{1,6}$/.test(q.ep ?? '') && Number(q.ep) > 0 ? Number(q.ep) : undefined;
+  const step = /^(?:[1-9]|10)$/.test(q.etapa ?? '') ? Number(q.etapa) : undefined;
+  const page = usePaged(
+    (cursor, signal) => call(adminFeedbackApi.steps, { query: { episode: ep, step, cursor, limit: 30 }, signal }),
+    [ep, step],
+  );
+  return (
+    <section class="stack" style={{ '--gap': '16px' }} aria-label="Feedbacks da plataforma por etapa">
+      <p class="sm">Experiência dos alunos com as telas e os recursos da plataforma, registrada ao avançar de etapa.</p>
+      <div class="ad-filters">
+        <label class="ad-dl" for="step-fb-ep">
+          <span>Episódio</span>
+          <TextIn
+            id="step-fb-ep"
+            type="number"
+            min={1}
+            value={ep == null ? '' : String(ep)}
+            onValue={(v) => setQuery({ ep: v })}
+            placeholder="Todos"
+          />
+        </label>
+        <Sel
+          ariaLabel="Etapa"
+          value={step == null ? '' : String(step)}
+          onValue={(v) => setQuery({ etapa: v })}
+          options={[
+            ['', 'Todas as etapas'],
+            ...Array.from({ length: 10 }, (_, i) => [String(i + 1), `Etapa ${i + 1}`] as const),
+          ]}
+        />
+        {ep != null || step != null ? (
+          <Button label="Limpar" kind="link" onClick={() => setQuery({ ep: '', etapa: '' })} />
+        ) : null}
+        <Button label="Atualizar" kind="light" icon="refresh" onClick={page.reload} />
+      </div>
+      {page.error && !page.items.length ? (
+        <ErrorBox error={page.error} retry={page.reload} />
+      ) : page.loading ? (
+        <Skeleton rows={4} height={140} />
+      ) : page.items.length ? (
+        <>
+          <ul class="ad-fb-list">
+            {page.items.map((r) => (
+              <StepFeedbackItem key={r.id} r={r} />
+            ))}
+          </ul>
+          {page.hasMore ? <MoreButton loading={page.loadingMore} onClick={page.more} /> : null}
+        </>
+      ) : (
+        <Empty
+          icon="chat"
+          title="Nenhum feedback da plataforma ainda."
+          body="As respostas aparecem aqui quando a flag feedback.steps está ligada e os alunos avançam nas etapas."
+        />
+      )}
+    </section>
+  );
+}
+
+function StepFeedbackItem({ r }: { r: AdminStepFeedbackRow }) {
+  const name = r.userName || 'Aluno sem nome';
+  return (
+    <li class="ad-fb-item">
+      <div class="ad-fb-item-h">
+        <Stars value={r.stars} size={17} label={`${r.stars} de 5 estrelas`} />
+        <span class="ad-fb-item-ep">
+          <b>{`Ep. ${r.episodeNum} · etapa ${r.step}`}</b>
+          {r.episodeTitle ? ` · ${r.episodeTitle}` : ''}
+        </span>
+      </div>
+      <p class="sm mt8">
+        <b>Sentiu dificuldade:</b> {r.hadDifficulty ? 'Sim' : 'Não'}
+      </p>
+      {r.difficulty ? (
+        <p class="ad-fb-item-c">
+          <b>Dificuldade:</b> {r.difficulty}
+        </p>
+      ) : null}
+      {r.improvement ? (
+        <p class="ad-fb-item-c">
+          <b>Sugestão de melhoria:</b> {r.improvement}
+        </p>
+      ) : null}
+      <div class="xs ad-fb-item-f">
+        {can('users.read') ? (
+          <a class="ad-linkbtn" href={`#/alunos/${r.userId}`}>
+            {name}
+          </a>
+        ) : (
+          <span>{name}</span>
+        )}
+        <span aria-hidden="true">·</span>
+        <span>{fmtDateTime(r.createdAt)}</span>
+      </div>
+    </li>
+  );
+}
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -143,7 +250,35 @@ function RatingItem({ r }: { r: AdminFeedbackRow }) {
   );
 }
 
-export function Feedbacks({ q }: ScreenProps) {
+function FeedbackTabs({ platform }: { platform: boolean }) {
+  return (
+    <TabsNav label="Tipos de feedback">
+      <a href="#/feedbacks" class={`ad-tab${platform ? '' : ' on'}`} aria-current={platform ? undefined : 'page'}>
+        Avaliações dos episódios
+      </a>
+      <a
+        href="#/feedbacks?tipo=plataforma"
+        class={`ad-tab${platform ? ' on' : ''}`}
+        aria-current={platform ? 'page' : undefined}
+      >
+        Plataforma por etapa
+      </a>
+    </TabsNav>
+  );
+}
+
+export function Feedbacks(props: ScreenProps) {
+  if (props.q.tipo === 'plataforma') {
+    return (
+      <Page title="Feedbacks" kicker="Pessoas" bar={<FeedbackTabs platform />}>
+        <StepFeedbacks q={props.q} />
+      </Page>
+    );
+  }
+  return <EpisodeFeedbacks {...props} />;
+}
+
+function EpisodeFeedbacks({ q }: ScreenProps) {
   const ep = /^\d{1,6}$/.test(q.ep ?? '') ? Number(q.ep) : null;
   const stars = /^[1-5]$/.test(q.nota ?? '') ? Number(q.nota) : null;
   const com = q.com === '1' || q.com === '0' ? q.com : '';
@@ -232,6 +367,7 @@ export function Feedbacks({ q }: ScreenProps) {
         </div>
       }
     >
+      <FeedbackTabs platform={false} />
       {/* The period filters the summary and the list; folded away so the bar stays short on a phone. */}
       <details class="card ad-card ad-more" open={!!(from || to)}>
         <summary>

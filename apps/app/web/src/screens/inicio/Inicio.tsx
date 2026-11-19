@@ -347,7 +347,7 @@ function Hoje({ c }: { c: Catalog }) {
   const extras = (
     <section class="stack" style={{ '--gap': '10px' }}>
       <div>
-        <div class="lbl or">EXTRA pra você</div>
+        <div class="lbl or">FLIX pra você</div>
         <div
           class="mt4"
           style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px' }}
@@ -515,11 +515,7 @@ function CourseCard({
   // The plan's episode task is one step a day: once today's step is done the kick says so (the
   // prototype's "Episódio de hoje feito" read as the whole episode finished next to "6/10").
   const kick = epDone ? ' Etapa de hoje feita' : cur.started ? ' Continue o curso' : ' Comece o curso';
-  const cta = epDone
-    ? 'Próxima Etapa'
-    : cur.started
-      ? `Continuar em ${stepName}`
-      : `Começar o episódio ${cur.num}`;
+  const cta = epDone ? 'Próxima Etapa' : cur.started ? `Continuar em ${stepName}` : `Começar o episódio ${cur.num}`;
   const total = c.steps.length;
   const segs = [];
   for (let n = 1; n <= total; n++) {
@@ -585,7 +581,7 @@ function CourseCard({
           {pad2(cur.num)}
         </span>
         <div>
-          <div class={grow ? 'sm' : 'xs'}>{`Temporada ${E?.season ?? 1} · E-book ${E?.ebook ?? ''}`}</div>
+          <div class={grow ? 'sm' : 'xs'}>{`Temporada ${pad2(E?.season ?? 1)}`}</div>
           <div class="h1" style={grow ? { fontSize: '2.5rem', lineHeight: '1.1' } : undefined}>
             {E?.title ?? c.titles[cur.num - 1] ?? ''}
           </div>

@@ -25,7 +25,7 @@ import { addCards, endMicSession, send as sendAction } from '../../store/actions
 import { catalog, catalogImage, loadCatalog } from '../../store/content';
 import { set, state } from '../../store/state';
 import { AiBadge } from '../../ui-blocks/chrome';
-import { AvatarVideo } from './Avatar';
+import { Avatar } from './Avatar';
 import {
   assistant,
   fmt,
@@ -182,7 +182,8 @@ function maggieSays(en: string, opt: { rate?: number } = {}): Promise<void> {
   const mine = ++sayTurn;
   M.speaking = true;
   re();
-  return speech.say(en, { who: assistant(c).name, ...opt }).then(() => {
+  // The assistant always speaks with the HD voice when the AI is on (not only with settings.hd).
+  return speech.say(en, { who: assistant(c).name, hd: true, ...opt }).then(() => {
     // Uma fala anterior cortada por esta termina depois que esta começou: não desliga o avatar.
     if (!M || mine !== sayTurn) return;
     M.speaking = false;
@@ -195,45 +196,71 @@ function focusInput(): void {
   (document.getElementById('mg-input') as HTMLInputElement | null)?.focus();
 }
 
-function startListening(): void {
+/** Hands-free: how many times in a row the microphone re-opens after hearing nothing. */
+const SILENT_RETRIES = 6;
+let silentRetries = 0;
+/** Bumped by every startListening(): callbacks of an older recognizer are ignored. */
+let listenGen = 0;
+
+/**
+ * Opens the recognizer. `retry` is a hands-free re-open after silence (no sound cue, the retry count
+ * goes on); a learner's tap starts over.
+ */
+function startListening(retry = false): void {
   if (!M) return;
   if (!speech.canListen) {
     toast('Este navegador não reconhece fala. Digite a resposta.');
     focusInput();
     return;
   }
+  if (!retry) silentRetries = 0;
   speech.stop();
+  const gen = ++listenGen;
   M.speaking = false;
   M.listening = true;
   M.interim = '';
-  sfx.rec();
+  if (!retry) sfx.rec();
   re();
+  // Nothing heard: in hands-free mode the microphone re-opens (a few times), else say so.
+  const heardNothing = () => {
+    const m = M;
+    if (!m) return;
+    stopListening();
+    if (m.hands && m.stage === 'call' && !m.ended && !m.busy && silentRetries < SILENT_RETRIES) {
+      silentRetries++;
+      setTimeout(() => {
+        if (M === m && gen === listenGen && !m.listening && !m.busy && !m.ended && !m.speaking) startListening(true);
+      }, 120);
+    } else toast('Não ouvi nada. Toque no microfone e fale perto do aparelho.');
+    re();
+  };
   listener = speech.listen({
     onInterim: (t) => {
-      if (!M) return;
+      if (!M || gen !== listenGen) return;
       M.interim = t;
       re();
     },
     onFinal: (t) => {
-      if (M) {
+      if (M && gen === listenGen) {
+        silentRetries = 0;
         stopListening();
         void sendLine(t);
       }
     },
     onEnd: (t) => {
-      if (M?.listening) {
-        stopListening();
-        if (!t) toast('Não ouvi nada. Toque no microfone e fale perto do aparelho.');
+      if (gen === listenGen && M?.listening) {
+        if (t) stopListening();
+        else heardNothing();
         re();
       }
     },
     onError: (e) => {
-      if (!M) return;
+      if (!M || gen !== listenGen || !M.listening) return;
+      if (e === 'no-speech') return heardNothing();
       stopListening();
       if (e === 'not-allowed' || e === 'service-not-allowed')
         toast('O microfone está bloqueado. Libere nas permissões do navegador ou digite.');
-      else if (e !== 'no-speech' && e !== 'aborted')
-        toast(`O reconhecimento de fala falhou (${e}). Digite a resposta.`);
+      else if (e !== 'aborted') toast(`O reconhecimento de fala falhou (${e}). Digite a resposta.`);
       re();
     },
   });
@@ -457,12 +484,12 @@ async function mgWord(i: number, en: string): Promise<void> {
   if (!w) return;
   const key = norm(w.en);
   if (S().deck.some((d) => norm(d.en) === key)) {
-    toast('Já está nos seus Flashcards.');
+    toast('Já está nos seus Cards.');
     return;
   }
   const r = await addCards([{ en: w.en, pt: w.pt, scene: `Mic · ${assistant(c).name}` }], 'mic');
   if (!r) return;
-  toast(r.added ? `Levei “${w.en}” para os Flashcards.` : 'Já está nos seus Flashcards.');
+  toast(r.added ? `Levei “${w.en}” para os Cards.` : 'Já está nos seus Cards.');
 }
 
 function mgPronHear(): void {
@@ -689,7 +716,7 @@ function MicStage(c: Catalog, m: Session) {
           ) : null}
         </div>
       ) : null}
-      <AvatarVideo key={A.k} a={A} talking={talking} mood={m.mood} />
+      <Avatar key={A.k} a={A} talking={talking} mood={m.mood} />
     </Stage>
   );
 }
@@ -1775,7 +1802,7 @@ export default function Maggie({ q }: ScreenProps) {
         {MicStage(c, m)}
         {desk ? (
           <div class="xs mg-note">
-            A legenda mostra a última fala {of(A)}. Toque nas palavras azuis para levar para os Flashcards.
+            A legenda mostra a última fala {of(A)}. Toque nas palavras azuis para levar para os Cards.
           </div>
         ) : null}
       </div>

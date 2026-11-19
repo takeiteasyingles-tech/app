@@ -5,6 +5,8 @@
 // tie-app's GET /api/content/manifest follows that pointer, so learners see the release at once.
 // Each release also gets releases/{ver}/media.json (the media files it uses, lib/releaseMedia): media
 // delete refuses those files, and rollback refuses a release whose files are gone.
+// PROD (spec 05 "Saving publishes"): a successful content save also publishes (autoPublish, run by
+// the middleware in index.ts or by POST /admin-api/content/publish/auto after a deferred save).
 import {
   ApiError,
   adminApi,
@@ -27,7 +29,8 @@ import {
 } from '@tie/shared/content/compile';
 import { type AppEnv, all, batch, batchRun, fromJson, one, q } from '@tie/worker-core';
 import { Hono } from 'hono';
-import { actor, auditStmt, bodyOf, type Ctx, paramsOf, route } from '../lib/http';
+import { staffWriter, type Writer } from '../lib/entityCrud';
+import { bodyOf, type Ctx, paramsOf, route } from '../lib/http';
 import { missingReleaseMedia, writeReleaseIndex } from '../lib/releaseMedia';
 
 const routes = new Hono<AppEnv>();
@@ -219,6 +222,14 @@ const releaseId = (version: string) => `rel-${version.slice(0, 16)}`;
 
 route(routes, C.publish, async (c) => {
   const body = await bodyOf(c, C.publish.body);
+  return c.json({ release: await publishRelease(c, body.notes, staffWriter(c)) });
+});
+
+/**
+ * Compiles the draft and makes it the current release (admin publish and the MCP publish_release
+ * tool). A draft with problems is refused with the compile issues (422).
+ */
+export async function publishRelease(c: Ctx, notes: string | null | undefined, writer: Writer): Promise<Release> {
   const db = c.env.DB;
   const now = Date.now();
   let compiled: CompiledContent;
@@ -235,6 +246,24 @@ route(routes, C.publish, async (c) => {
     throw err;
   }
   const previous = await currentVersion(db);
+  return commitRelease(c, compiled, previous, writer, notes, { files: Object.keys(compiled.files).length }, now);
+}
+
+/**
+ * Uploads a compiled snapshot and points content.current at it: R2 files and the release media
+ * index first, then one batch with the release row, the setting and the `content.publish` audit row
+ * (its diff carries `extra`).
+ */
+async function commitRelease(
+  c: Ctx,
+  compiled: CompiledContent,
+  previous: string | null,
+  writer: Writer,
+  notes: string | null | undefined,
+  extra: Record<string, unknown>,
+  now: number,
+): Promise<Release> {
+  const db = c.env.DB;
   await uploadRelease(c.env.MEDIA, compiled);
   // Media the snapshot uses, so a file stays undeletable while this release can be served.
   await writeReleaseIndex(c.env.MEDIA, compiled.version, compiled.files);
@@ -247,8 +276,8 @@ route(routes, C.publish, async (c) => {
       releaseId(ver),
       ver,
       JSON.stringify(compiled.manifest),
-      body.notes ?? null,
-      actor(c).userId,
+      notes ?? null,
+      writer.userId,
       compiled.manifest.publishedAt,
     ),
     q(
@@ -257,39 +286,128 @@ route(routes, C.publish, async (c) => {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
       SETTINGS.contentCurrent,
       ver,
-      actor(c).userId,
+      writer.userId,
       now,
     ),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'content.publish',
         targetType: 'content_release',
         targetId: ver,
         diff: {
           current: { from: previous, to: ver },
-          files: Object.keys(compiled.files).length,
-          notes: body.notes ?? null,
+          ...extra,
+          notes: notes ?? null,
         },
       },
       now,
     ),
   ]);
   const row = await one<ReleaseDb>(db, 'SELECT * FROM content_releases WHERE version = ?', ver);
-  return c.json({ release: releaseOf(row as ReleaseDb) });
+  return releaseOf(row as ReleaseDb);
+}
+
+// ---------- Saving publishes (PROD, spec 05) ----------
+
+/**
+ * The staff writes that change published content: every non-GET under /admin-api/content/ (except
+ * preview/publish themselves), the gamification and assistant settings, and a backup restore. The
+ * admin app's middleware (index.ts) runs autoPublish after each successful one.
+ */
+export function publishesContent(method: string, path: string): boolean {
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
+  if (path === C.publish.path || path === C.preview.path || path === C.autoPublish.path) return false;
+  return (
+    path.startsWith('/admin-api/content/') ||
+    path === '/admin-api/gamification' ||
+    path.startsWith('/admin-api/assistants/') ||
+    /^\/admin-api\/backups\/[^/]+\/restore$/.test(path)
+  );
+}
+
+/** What caused an automatic publish (kept in the audit diff). */
+export interface PublishTrigger {
+  method: string;
+  path: string;
+  what?: string;
+}
+
+export type AutoPublishResult =
+  | { status: 'published'; version: string; changed: string[] }
+  | { status: 'unchanged'; version: string | null }
+  | { status: 'failed'; message: string };
+
+/**
+ * Publishes the draft when it differs from the current release. A draft that does not compile is not
+ * published: the failure is audited (`content.publish_failed`) and reported, and the save stands.
+ */
+export async function autoPublish(c: Ctx, writer: Writer, trigger: PublishTrigger): Promise<AutoPublishResult> {
+  const db = c.env.DB;
+  const now = Date.now();
+  let compiled: CompiledContent;
+  try {
+    compiled = await compileNow(db, now);
+  } catch (err) {
+    if (!(err instanceof ContentCompileError)) throw err;
+    const issues = err.issues.slice(0, 20).map((i) => `${i.file}${i.path ? `#${i.path}` : ''}: ${i.message}`);
+    await batchRun(db, [
+      await writer.audit(
+        {
+          action: 'content.publish_failed',
+          targetType: 'content_release',
+          targetId: 'auto',
+          diff: { auto: true, trigger, issues },
+        },
+        now,
+      ),
+    ]);
+    return { status: 'failed', message: err.issues[0]?.message ?? 'O conteúdo tem erros.' };
+  }
+  const previous = await currentVersion(db);
+  if (previous === compiled.version) return { status: 'unchanged', version: previous };
+  const changed = await changedFiles(c, compiled);
+  await commitRelease(
+    c,
+    compiled,
+    previous,
+    writer,
+    'Publicação automática ao salvar',
+    { auto: true, trigger, changed: changed.slice(0, 100), files: Object.keys(compiled.files).length },
+    now,
+  );
+  return { status: 'published', version: compiled.version, changed };
+}
+
+route(routes, C.autoPublish, async (c) => {
+  const body = await bodyOf(c, C.autoPublish.body);
+  const r = await autoPublish(c, staffWriter(c), { method: 'POST', path: c.req.path, what: body.what });
+  return c.json({
+    status: r.status,
+    version: r.status === 'failed' ? null : r.version,
+    message: r.status === 'failed' ? r.message : null,
+  });
 });
 
-route(routes, R.list, async (c) => {
-  const db = c.env.DB;
+// ---------- Releases ----------
+
+/** Recent releases and the current version (admin list and the MCP list_releases tool). */
+export async function listReleases(db: D1Database): Promise<{ items: Release[]; current: string | null }> {
   const [rows, cur] = await Promise.all([
     all<ReleaseDb>(db, 'SELECT * FROM content_releases ORDER BY published_at DESC, id DESC LIMIT 200'),
     currentVersion(db),
   ]);
-  return c.json({ items: rows.map(releaseOf), current: cur });
-});
+  return { items: rows.map(releaseOf), current: cur };
+}
+
+route(routes, R.list, async (c) => c.json(await listReleases(c.env.DB)));
 
 route(routes, R.rollback, async (c) => {
   const { id } = paramsOf(c, R.rollback.params);
+  return c.json({ current: await rollbackRelease(c, id, staffWriter(c)) });
+});
+
+/** Points content.current back at release `id` once its snapshot and media are still complete. */
+export async function rollbackRelease(c: Ctx, id: string, writer: Writer): Promise<string> {
   const db = c.env.DB;
   const now = Date.now();
   const rel = await one<ReleaseDb>(db, 'SELECT * FROM content_releases WHERE id = ?', id);
@@ -314,11 +432,10 @@ route(routes, R.rollback, async (c) => {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
       SETTINGS.contentCurrent,
       rel.version,
-      actor(c).userId,
+      writer.userId,
       now,
     ),
-    await auditStmt(
-      c,
+    await writer.audit(
       {
         action: 'content.rollback',
         targetType: 'content_release',
@@ -328,7 +445,7 @@ route(routes, R.rollback, async (c) => {
       now,
     ),
   ]);
-  return c.json({ current: rel.version });
-});
+  return rel.version;
+}
 
 export default routes;

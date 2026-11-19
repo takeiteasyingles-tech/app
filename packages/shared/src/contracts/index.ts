@@ -16,8 +16,10 @@ import { srsApi } from './srs';
 
 export * from './admin';
 export * from './ai';
+export * from './aiProviders';
 export * from './apiTokens';
 export * from './auth';
+export * from './backups';
 export * from './certificates';
 export * from './common';
 export * from './content';
@@ -32,8 +34,10 @@ export * from './mic';
 export * from './progress';
 export * from './reports';
 export * from './seasonTest';
+export * from './songLyrics';
 export * from './srs';
 export * from './stats';
+export * from './voices';
 
 /** Student API (tie-app): /api/* and /m/*. */
 export const appApi = {

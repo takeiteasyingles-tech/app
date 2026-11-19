@@ -30,7 +30,8 @@ function pwa() {
       // worker (they are cookie-gated and versioned). The sign-in photos (img/, 500 KB for both sizes)
       // stay out: signing in needs the network anyway, and every install downloaded both.
       globPatterns: ['**/*.{html,js,css,woff2,webmanifest}', 'icons/*.{png,svg}'],
-      globIgnores: ['sw.js', 'workbox-*.js', '**/*.map'],
+      // PROD: the 3D avatar's three.js chunk (~0.6 MB) is fetched only by the Mic, not with the shell.
+      globIgnores: ['sw.js', 'workbox-*.js', '**/*.map', '**/engine-*.js'],
       maximumFileSizeToCacheInBytes: 1024 * 1024,
     },
     devOptions: { enabled: false },

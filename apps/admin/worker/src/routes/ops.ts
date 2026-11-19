@@ -1,12 +1,15 @@
 // Audit log, feature flags, app settings and the dashboard numbers (admin).
 import {
   type AdminStats,
+  AI_MODEL_ID_RE,
   type AppSetting,
   type AuditEntry,
   adminApi,
+  aiProviderOf,
   DEFAULT_TZ,
   type FeatureFlag,
   SETTINGS,
+  TTS_ELEVEN,
 } from '@tie/shared';
 import {
   type AppEnv,
@@ -192,10 +195,24 @@ export const SETTING_RULES: Record<string, { check: (v: string) => boolean; hint
     hint: 'Dias entre 1 e 3650.',
   },
   [SETTINGS.termsVersion]: { check: (v) => /^[\w.-]{1,40}$/.test(v), hint: 'Versão curta, por exemplo 2026-10.' },
-  [SETTINGS.modelTutor]: { check: (v) => MODEL_ID.test(v), hint: 'Um id de modelo do Workers AI (@cf/…).' },
-  [SETTINGS.modelTutorFallback]: { check: (v) => MODEL_ID.test(v), hint: 'Um id de modelo do Workers AI (@cf/…).' },
-  [SETTINGS.modelAsr]: { check: (v) => MODEL_ID.test(v), hint: 'Um id de modelo do Workers AI (@cf/…).' },
-  [SETTINGS.modelTts]: { check: (v) => MODEL_ID.test(v), hint: 'Um id de modelo do Workers AI (@cf/…).' },
+  // PROD (spec 05 "Paid AI providers"): the chat models may run on Claude or OpenAI too; the ASR on
+  // OpenAI; the voice and the guard stay on Workers AI.
+  [SETTINGS.modelTutor]: {
+    check: (v) => AI_MODEL_ID_RE.test(v),
+    hint: 'Um id do Workers AI (@cf/…), anthropic:<modelo> ou openai:<modelo>.',
+  },
+  [SETTINGS.modelTutorFallback]: {
+    check: (v) => AI_MODEL_ID_RE.test(v),
+    hint: 'Um id do Workers AI (@cf/…), anthropic:<modelo> ou openai:<modelo>.',
+  },
+  [SETTINGS.modelAsr]: {
+    check: (v) => AI_MODEL_ID_RE.test(v) && aiProviderOf(v) !== 'anthropic',
+    hint: 'Um id do Workers AI (@cf/…) ou openai:<modelo> (o Claude não transcreve áudio).',
+  },
+  [SETTINGS.modelTts]: {
+    check: (v) => v === TTS_ELEVEN || MODEL_ID.test(v),
+    hint: 'elevenlabs ou um id de voz do Workers AI (@cf/…).',
+  },
   [SETTINGS.modelGuard]: { check: (v) => MODEL_ID.test(v), hint: 'Um id de modelo do Workers AI (@cf/…).' },
   [STUDENT_ORIGIN_SETTING]: {
     check: (v) => {

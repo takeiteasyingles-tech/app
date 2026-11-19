@@ -1,8 +1,9 @@
+import { STEP } from '../constants';
 import type { AwayExp, Bilingual } from '../content/schema';
 import type { TieState } from '../state';
 
 // prototipo/js/core/review.js. The deck grows from what the student already did: a finished
-// step 4 (Take a Look) adds the scene words, step 8 (Take Away) the key expressions. Fixed
+// Take a Look (STEP.LOOK) adds the scene words, Take Away (STEP.AWAY) the key expressions. Fixed
 // intervals: De novo goes to the back of the queue, Difícil 10 min, Bom 2 days, Fácil 5 days.
 
 const MIN = 60_000;
@@ -31,9 +32,9 @@ export interface UnlockedCard {
 
 /** Step whose completion unlocks cards → the cards it unlocks. */
 export const SRS_UNLOCKS: readonly (readonly [number, (e: SrsEpisode) => UnlockedCard[]])[] = [
-  [4, (e) => (e.visual || []).map((x) => ({ en: x.en, pt: x.pt, scene: `Ep. ${e.num} · Take a Look` }))],
+  [STEP.LOOK, (e) => (e.visual || []).map((x) => ({ en: x.en, pt: x.pt, scene: `Ep. ${e.num} · Take a Look` }))],
   [
-    8,
+    STEP.AWAY,
     (e) =>
       (e.awayExp || []).map((x) => ({ en: x.en, pt: x.pt, note: x.note || '', scene: `Ep. ${e.num} · Take Away` })),
   ],

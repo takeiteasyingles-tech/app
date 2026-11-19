@@ -1,4 +1,5 @@
 import { ApiError } from '@tie/shared';
+import { STEP } from '@tie/shared/constants';
 import { signMediaToken } from '@tie/worker-core';
 import { beforeEach, describe, expect, it } from 'vitest';
 // The signer POST /api/pronounce (routes/ai.ts) uses; interop.test.ts runs the real route end to end.
@@ -20,7 +21,7 @@ describe('exercise grading', () => {
   let w: World;
   beforeEach(() => {
     w = world();
-    setProg(w, 1, 9);
+    setProg(w, 1, STEP.ACTION);
   });
 
   it('grades with exercise_items.answer_idx and awards ex:{itemId} when right', async () => {
@@ -58,7 +59,7 @@ describe('exercise grading', () => {
   });
 
   it('answers are per user', async () => {
-    setProg(w, 1, 9, false, OTHER);
+    setProg(w, 1, STEP.ACTION, false, OTHER);
     await exercise(w.deps(), { itemId: 'e1-ex0-i0', choice: 0 });
     expect((await exercise(w.deps(OTHER), { itemId: 'e1-ex0-i0', choice: 1 })).correct).toBe(true);
   });
@@ -66,7 +67,7 @@ describe('exercise grading', () => {
   it('rejects unknown items, out-of-range choices and unreached steps', async () => {
     expect(await code(exercise(w.deps(), { itemId: 'nope', choice: 0 }))).toBe('not_found');
     expect(await code(exercise(w.deps(), { itemId: 'e1-ex0-i0', choice: 3 }))).toBe('validation_failed');
-    setProg(w, 1, 8);
+    setProg(w, 1, STEP.ACTION - 1);
     expect(await code(exercise(w.deps(), { itemId: 'e1-ex0-i0', choice: 1 }))).toBe('gated');
     expect(w.db.rows('SELECT * FROM exercise_answers')).toEqual([]);
   });
@@ -87,7 +88,7 @@ describe('mic attempt token (S7 ai/attempt.ts, as signed by /api/pronounce)', ()
   let w: World;
   beforeEach(() => {
     w = world();
-    setProg(w, 1, 6);
+    setProg(w, 1, STEP.MIC);
   });
 
   const token = (score: number, phraseId = 'e1-mic-0', userId = USER, now = NOW) =>
@@ -144,7 +145,7 @@ describe('POST /api/progress/mic', () => {
   let w: World;
   beforeEach(() => {
     w = world();
-    setProg(w, 1, 6);
+    setProg(w, 1, STEP.MIC);
   });
 
   it('demo scores are recorded (source demo) but only ever award mic_try', async () => {
@@ -185,7 +186,7 @@ describe('POST /api/progress/mic', () => {
   it('rejects unknown or unpublished phrases and unreached steps', async () => {
     expect(await code(micScore(w.deps(), { phraseId: 'nope', score: 5, source: 'demo' }))).toBe('not_found');
     expect(await code(micScore(w.deps(), { phraseId: 'e3-mic-0', score: 5, source: 'demo' }))).toBe('not_found');
-    setProg(w, 1, 5);
+    setProg(w, 1, STEP.MIC - 1);
     expect(await code(micScore(w.deps(), { phraseId: 'e1-mic-0', score: 5, source: 'demo' }))).toBe('gated');
   });
 
@@ -203,7 +204,7 @@ describe('POST /api/progress/mic replays (outbox, reused token)', () => {
   let w: World;
   beforeEach(() => {
     w = world();
-    setProg(w, 1, 6);
+    setProg(w, 1, STEP.MIC);
   });
 
   const stats = () =>

@@ -1,22 +1,23 @@
-// Take the episode test (testHtml / testPick / testSubmit / testRedo in prototipo/js/screens/curso.js).
-// 20 questions in 4 parts (choice, fill-in, translate, pronunciation with an audio button), a sticky
-// progress bar, and the result with the wrong answers linked to the step to review.
+// Step 10, Take the Test (PROD, spec 05 "Step order"): the episode's test, inside the player. It
+// moved here from the e-book screens (testHtml / testPick / testSubmit / testRedo in
+// prototipo/js/screens/curso.js): the questions in parts (choice, fill-in, translate, pronunciation
+// with an audio button), a sticky progress bar, and the result with the wrong answers linked to the
+// step to review. The questions still live in the episode's e-book file (ebook/{n}.json).
 // Choices are saved at once; typed answers are saved shortly after typing stops (and on blur); every
 // save of an e-book goes through one ordered queue (see enqueueSave), and the submit carries the whole
 // sheet on screen (so a save still in flight cannot be graded as blank).
 // The server grades and awards test_pass; the review list follows its grade.
-import { LIMITS } from '@tie/shared/constants';
-import type { Ebook, TestQuestion } from '@tie/shared/content/schema';
+import { LIMITS, STEP } from '@tie/shared/constants';
+import type { Ebook, Episode, TestQuestion } from '@tie/shared/content/schema';
 import type { TestQuestionResult, TestResult } from '@tie/shared/contracts/ebook';
 import type { TestAnswer } from '@tie/shared/state';
 import { activator, Btn, Icon } from '@tie/ui';
+import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { say } from '../../core/speech';
-import { saveTestAnswers, set, state, submitTest } from '../../store';
-import { allQuestions, isAnswered, isDesk, isRight, lessonsLabel, PartFrame, testIntro } from './common';
+import { loadEbook, saveTestAnswers, set, state, submitTest, useContent } from '../../store';
+import { allQuestions, isAnswered, isDesk, isRight } from '../ebook/common';
 
-const KICK = 'Take a test';
-const TITLE = 'Take the episode test';
 /** Typed answers are saved this long after the last keystroke. */
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -38,10 +39,31 @@ const DESK_GRID = 'repeat(2, minmax(0, 1fr))';
 function cell(desk: boolean, j: number, n: number): Record<string, string> {
   return desk && n % 2 === 1 && j === n - 1 ? { gridColumn: '1 / -1' } : {};
 }
+/** Back to the top of the player's scroll (the result replaces the questions). */
 const scrollTop = () => {
-  const sc = document.querySelector('.scroll');
+  const sc = document.getElementById('pl-scroll') ?? document.querySelector('.scroll');
   if (sc) sc.scrollTop = 0;
 };
+
+/**
+ * The step a review link opens. The questions were written for the old 11-step track (the e-book was
+ * step 3), so a step from 4 on moves back one, capped at the sing-along; no step → Take a Lesson.
+ */
+function reviewStep(step: number | undefined): number {
+  if (!step) return STEP.LESSON;
+  return step >= 4 ? Math.min(step - 1, STEP.SING) : step;
+}
+
+/** The step's heading and intro over the questions or the result. */
+function TestFrame({ intro, children }: { intro?: string; children: ComponentChildren }) {
+  return (
+    <div class="stack" style={{ '--gap': '14px' }}>
+      <div class="h2">Teste do episódio</div>
+      {intro ? <p class="p-read">{intro}</p> : null}
+      {children}
+    </div>
+  );
+}
 
 /**
  * Answer saves, per e-book, go out one at a time, in order: what waits is merged (the latest value of
@@ -126,7 +148,7 @@ function Result({
   const right = (q: TestQuestion): string =>
     byId.get(q.id)?.show || (q.opts ? (q.opts[q.a ?? 0] ?? '') : (q.show ?? q.acc?.[0] ?? ''));
   return (
-    <PartFrame kick={KICK} title={TITLE}>
+    <TestFrame>
       <div class="card navy stack" style={{ '--gap': '10px' }}>
         <div class="lbl" style={{ color: 'var(--onNavy)' }}>
           Resultado
@@ -144,8 +166,8 @@ function Result({
         </div>
         <p class="p">
           {passed
-            ? `O e-book ${eb.num} está fechado. Revise os pontos abaixo antes do E-book ${eb.num + 1}.`
-            : `A recomendação é repetir as ${lessonsLabel(eb)} antes de seguir. Recomenda, não bloqueia.`}
+            ? 'Teste do episódio concluído. Revise os pontos abaixo.'
+            : 'A recomendação é rever as etapas deste episódio. Recomenda, não bloqueia.'}
         </p>
       </div>
       {wrong.length ? <div class="lbl">{`O que revisar · ${wrong.length}`}</div> : null}
@@ -171,7 +193,11 @@ function Result({
                 </span>
                 <b>{right(q)}</b>
               </div>
-              <a class="btn link" href={`#/episodio/${q.ep}/${q.step || 7}`} style={{ justifyContent: 'flex-start' }}>
+              <a
+                class="btn link"
+                href={`#/episodio/${q.ep}/${reviewStep(q.step)}`}
+                style={{ justifyContent: 'flex-start' }}
+              >
                 {`Revisar: ${q.rev}`}
               </a>
             </div>
@@ -180,13 +206,12 @@ function Result({
       ) : null}
       <div class="row wrapx" style={{ '--gap': '8px' }}>
         <Btn label="Refazer o teste" kind="ghost" onClick={onRedo} />
-        <Btn label="Voltar à trilha" go="trilha" />
       </div>
-    </PartFrame>
+    </TestFrame>
   );
 }
 
-export function Teste({ eb }: { eb: Ebook }) {
+function TestSheet({ eb }: { eb: Ebook }) {
   const k = String(eb.num);
   const s = state.value;
   const ans: Answers = s.testAns[k] ?? {};
@@ -268,7 +293,7 @@ export function Teste({ eb }: { eb: Ebook }) {
   const answered = all.filter((q) => isAnswered(q, ans[q.id])).length;
   const desk = isDesk();
   return (
-    <PartFrame kick={KICK} title={TITLE} intro={testIntro(eb)}>
+    <TestFrame intro="Responda às questões deste episódio e entregue o teste para concluir.">
       {/* The sticky progress sits on its own white strip (inset from the edges, the count with room
           around it), over the cream band that hides the questions scrolling under it. */}
       <div style={{ position: 'sticky', top: '0', zIndex: '3', background: 'var(--cream)', padding: '6px 0' }}>
@@ -448,6 +473,21 @@ export function Teste({ eb }: { eb: Ebook }) {
         </div>,
       ])}{' '}
       <Btn label="Entregar o teste" cls="block" dis={busy} onClick={() => void submit()} />
-    </PartFrame>
+    </TestFrame>
   );
+}
+
+/** Step 10's body: loads the episode's e-book file (its test) and shows the sheet or the result. */
+export function TestStep({ Ep }: { Ep: Episode }) {
+  const { data: eb, error } = useContent<Ebook>(() => loadEbook(Ep.ebook), [Ep.ebook]);
+  if (error) return <p class="p-read">Não deu para carregar o teste agora. Verifique a conexão e tente de novo.</p>;
+  if (!eb) return <div class="card" style={{ minHeight: '120px' }} />;
+  if (!eb.testEnabled || !allQuestions(eb).length)
+    return (
+      <div class="card stack" style={{ '--gap': '8px' }}>
+        <div class="h3">Este episódio ainda não tem teste.</div>
+        <p class="p">Siga em frente para concluir o episódio.</p>
+      </div>
+    );
+  return <TestSheet key={eb.num} eb={eb} />;
 }

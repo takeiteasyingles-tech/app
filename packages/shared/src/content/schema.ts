@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EBOOK_EXTRAS, ELEVEN_VOICE_ID_RE, STEP_COUNT } from '../constants';
 
 // Published content snapshots (R2 content/{ver}/*). Field names follow the prototype's js/data/* so the
 // screen port stays mechanical; tuples ([en, pt], [name, ini, color]) became objects.
@@ -52,6 +53,8 @@ export const EbookIndexEntry = z.object({
   testEnabled: z.boolean().default(true),
   testRequiredEpisodes: z.array(z.int().positive()).default([]),
   testMinCompleted: z.int().positive().nullable().default(null),
+  /** PROD (0018): the extras the episode end offers (switched on and with content), for the Trilha. */
+  extras: z.array(z.enum(EBOOK_EXTRAS)).default([]),
 });
 export type EbookIndexEntry = z.infer<typeof EbookIndexEntry>;
 
@@ -209,6 +212,14 @@ export const Track = z.object({
 });
 export type Track = z.infer<typeof Track>;
 
+/** Id of the karaoke track compile adds for a published episode's song that no album lists. */
+export const autoTrackId = (ep: number): string => `e${ep}-song`;
+/** The episode of an automatic track id (autoTrackId), or null for any other track. */
+export function autoTrackEp(id: string): number | null {
+  const m = /^e([1-9]\d{0,3})-song$/.exec(id);
+  return m ? Number(m[1]) : null;
+}
+
 export const Album = z.object({
   id: z.string(),
   title: z.string(),
@@ -302,7 +313,7 @@ export type SrsGrade = z.infer<typeof SrsGrade>;
 
 export const Catalog = z.object({
   version: z.string(),
-  steps: z.array(Step).length(10),
+  steps: z.array(Step).length(STEP_COUNT),
   seasons: z.array(Season),
   /** Episode titles by position (index = num - 1), as TIE.data.TITLES. */
   titles: z.array(z.string()),
@@ -358,6 +369,11 @@ export const LyricLine = z.object({
   en: z.string(),
   pt: z.string(),
   gap: z.string().optional(),
+  /**
+   * PROD: start of the line in the episode recording, in seconds. The player follows these times when
+   * set (domain/songSync.ts) and the prototype's proportional highlight when no line has one.
+   */
+  t: z.number().min(0).max(3600).optional(),
 });
 export type LyricLine = z.infer<typeof LyricLine>;
 
@@ -386,6 +402,8 @@ export const MicPhrase = z.object({
   result: z.int().min(0).max(10),
   blue: z.boolean().optional(),
   fb: z.string(),
+  /** PROD (0017): the character who says it (its voice reads it); absent = the narration. */
+  who: z.string().optional(),
 });
 export type MicPhrase = z.infer<typeof MicPhrase>;
 
@@ -438,6 +456,26 @@ export const EpisodeDone = z.object({
 });
 export type EpisodeDone = z.infer<typeof EpisodeDone>;
 
+/** PROD (0016, episodes.voices): ElevenLabs voice ids that override the course voices for one lesson. */
+export const EpisodeVoices = z.object({
+  narrator: z.string().regex(ELEVEN_VOICE_ID_RE).nullable().optional(),
+  /** PROD: one step's own narration (step number → voice id), over `narrator` for that step. */
+  steps: z.record(z.string().regex(/^[0-9]{1,2}$/), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+  cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+  /**
+   * PROD (spec 05 "Extras voices"): this episode's Take Some Extras. `narrator` = the extras' own voice
+   * (anyone speaking there without a voice of their own); `cast` = a character's voice in the extras
+   * (e.g. Margaret in Take the Lead). Unset = the course's extras voice (Configurações → Vozes).
+   */
+  extras: z
+    .object({
+      narrator: z.string().regex(ELEVEN_VOICE_ID_RE).nullable().optional(),
+      cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+    })
+    .optional(),
+});
+export type EpisodeVoices = z.infer<typeof EpisodeVoices>;
+
 export const Episode = z.object({
   num: z.int().positive(),
   title: z.string(),
@@ -452,6 +490,10 @@ export const Episode = z.object({
   songAudio: OptMedia,
   songTitle: z.string(),
   sceneVideo: OptMedia,
+  /** PROD (0014): Take a Look's context audio, "1º Ouça o contexto e prepare a mente". */
+  lookAudio: OptMedia.optional(),
+  /** PROD (0014): questions of the episode test (Take the Test, the last step); 0 = no test. */
+  testCount: z.int().min(0).optional(),
   /** Still shown in Take a Look when there is no video. */
   sceneImage: OptMedia,
   sceneNote: z.string(),
@@ -468,6 +510,8 @@ export const Episode = z.object({
   awayWords: z.array(z.string()),
   ex: z.array(Exercise),
   done: EpisodeDone,
+  /** PROD (0016): the lesson's voices; absent or empty = the course voices. */
+  voices: EpisodeVoices.optional(),
 });
 export type Episode = z.infer<typeof Episode>;
 
@@ -529,6 +573,11 @@ export const Ebook = z.object({
   lead: z.array(LeadTurn),
   chat: z.array(ChatTurn),
   extrasCards: z.array(EbookExtraCard),
+  /**
+   * PROD (0018, spec 05 "Take Some Extras at the end of every episode"): the extras the episode's
+   * Concluído screen offers, in this order. Absent = all of them.
+   */
+  extrasOn: z.array(z.enum(EBOOK_EXTRAS)).optional(),
   pdf: OptMedia,
   passScore: z.int().min(0),
   testEnabled: z.boolean().default(true),

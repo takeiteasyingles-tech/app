@@ -22,7 +22,7 @@ export interface MicFeedback {
 export interface PState {
   ep: number;
   step: number;
-  /** Current lyric (steps 1 and 10) or dialogue line (step 5). */
+  /** Current lyric (steps 2 and 9) or dialogue line (step 4). */
   line: number;
   playing: boolean;
   micIdx: number;
@@ -33,8 +33,7 @@ export interface PState {
   trans: boolean;
   speed: number;
   sheet: boolean;
-  dl: 'idle' | 'busy';
-  /** Audio position / duration (s) of the intro or the song. */
+  /** Audio position / duration (s) of the presentation, the song or Take a Look's context. */
   aT: number;
   aD: number;
   showScore: boolean;
@@ -51,7 +50,7 @@ export interface PState {
   micHear: boolean;
   /** Take the Mic: bumped on every pick/close, so a stale "phrase ended → record" stands down. */
   micTk: number;
-  /** Step 10: episode-done is in flight (the done screen opens once the server confirms it). */
+  /** Last step: episode-done is in flight (the done screen opens once the server confirms it). */
   finishing: boolean;
   // Runtime handles (not rendered).
   audio: HTMLAudioElement | null;
@@ -82,7 +81,6 @@ export function fresh(ep: number, step: number, s: TieState): PState {
     trans: k ? k.trans : true,
     speed: k ? k.speed : s.settings.slow ? 0.75 : 1,
     sheet: false,
-    dl: 'idle',
     aT: 0,
     aD: 0,
     showScore: false,
@@ -139,11 +137,13 @@ export function lyricRows<L extends { en: string; pt: string }>(
 }
 
 /** Song steps (first pass and sing-along): they share the Song renderer and the lyric sync. */
-export const isSong = (step: number): boolean => step === STEP.SONG || step === STEP.LAST;
+export const isSong = (step: number): boolean => step === STEP.SONG || step === STEP.SING;
 
-/** Media of the steps that play a recording: intro (3) and song (1, 10). */
+/** Media of the steps that play a recording: the presentation (1), the song (2, 9) and Take a Look's context (3). */
 export function stepAudio(Ep: Episode, step: number): string {
-  return (step === STEP.INTRO ? Ep.introAudio : isSong(step) ? Ep.songAudio : '') || '';
+  return (
+    (step === STEP.INTRO ? Ep.introAudio : isSong(step) ? Ep.songAudio : step === STEP.LOOK ? Ep.lookAudio : '') || ''
+  );
 }
 
 /** Click handler: preventDefault + tick sfx + action (the prototype's delegated data-act click). */
@@ -160,9 +160,6 @@ export interface StepActions {
   record(): void;
   micClose(): void;
   showScore(): void;
-  download(): void;
-  /** Opens the e-book's own screen (#/ebook/N). */
-  ebookOpen(): void;
   /** Take a Look: starts the scene video (the poster's play button). */
   vidStart(v: HTMLVideoElement | null): void;
   vidMeta(duration: number): void;

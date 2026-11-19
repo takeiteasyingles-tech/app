@@ -1,6 +1,6 @@
 // Award keys for the client-attested events of POST /api/game/event (spec 04 §2 "Award keys").
 // The client sends only a suffix; the server owns the prefix, the date and the normalization.
-import { ApiError, type GameEventBody, norm } from '@tie/shared';
+import { ApiError, autoTrackEp, type GameEventBody, norm } from '@tie/shared';
 import { localDate, one } from '@tie/worker-core';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -33,9 +33,13 @@ export async function softAwardKey(
   switch (body.kind) {
     case 'song': {
       if (!ID_RE.test(raw)) throw invalid('key', 'song key must be an episode number or a track id');
+      // Automatic album tracks (one per published episode) have no album_tracks row.
+      const autoEp = autoTrackEp(raw);
       const known = /^\d+$/.test(raw)
         ? await one(db, "SELECT 1 AS ok FROM episodes WHERE num = ? AND status = 'published'", Number(raw))
-        : await one(db, 'SELECT 1 AS ok FROM album_tracks WHERE id = ?', raw);
+        : autoEp !== null
+          ? await one(db, "SELECT 1 AS ok FROM episodes WHERE num = ? AND status = 'published'", autoEp)
+          : await one(db, 'SELECT 1 AS ok FROM album_tracks WHERE id = ?', raw);
       if (!known) throw new ApiError('not_found');
       return `song:${/^\d+$/.test(raw) ? Number(raw) : raw}`;
     }

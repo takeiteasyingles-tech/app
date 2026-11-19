@@ -197,8 +197,9 @@ describe('components match the prototype markup', () => {
   });
 
   it('tab bar and side nav', () => {
-    // Product rename (spec 05, cross-cutting changes): the prototype's 'Revisão' is labelled 'Flashcards'.
-    const renamed = (html: string) => proto(html.split('Revisão').join('Flashcards'));
+    // Product renames (spec 05, cross-cutting changes): the prototype's 'Revisão' is labelled 'Cards'
+    // (it was 'Flashcards' before) and its 'EXTRA' section 'FLIX'.
+    const renamed = (html: string) => proto(html.split('Revisão').join('Cards').split('>EXTRA<').join('>FLIX<'));
     for (const active of ['inicio', 'revisao', 'conquistas', 'perfil']) {
       expect(mine(h(Tabbar, { active, due: 3 }))).toEqual(renamed(C.tabbar(active)));
       expect(mine(h(Side, { active, due: 3, g: G }))).toEqual(renamed(C.side(active)));

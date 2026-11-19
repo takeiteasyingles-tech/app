@@ -64,23 +64,26 @@ export const DURATIONS = {
 } as const;
 
 /**
- * Episode step numbers. Production order (spec 05 "Step order"): the song's first pass, the e-book,
- * then the intro opens "O episódio". The prototype had intro → song → e-book.
+ * Episode step numbers. Production order (spec 05 "Step order"): 10 steps, "In this episode" (the
+ * presentation) first, no e-book step, and "Take the Test" last.
  */
 export const STEP = {
-  SONG: 1,
-  EBOOK: 2,
-  INTRO: 3,
-  LOOK: 4,
-  DIALOG: 5,
-  MIC: 6,
-  LESSON: 7,
-  AWAY: 8,
-  ACTION: 9,
+  INTRO: 1,
+  SONG: 2,
+  LOOK: 3,
+  DIALOG: 4,
+  MIC: 5,
+  LESSON: 6,
+  AWAY: 7,
+  ACTION: 8,
+  SING: 9,
+  TEST: 10,
   LAST: 10,
 } as const;
-/** First step of each group after the first ("O episódio", "Fechamento"): the 10-step bar's gaps. */
-export const STEP_GROUP_STARTS: readonly number[] = [STEP.INTRO, STEP.LAST];
+/** Number of steps in an episode (content schema: steps.length). */
+export const STEP_COUNT = STEP.LAST;
+/** First step of each group after the first: the 10-step bar's gaps. */
+export const STEP_GROUP_STARTS: readonly number[] = [STEP.LOOK, STEP.SING];
 
 export const LOCKOUT_FAILED_LOGINS = 10;
 export const PBKDF2_ITERATIONS = 100_000;
@@ -121,6 +124,7 @@ export const OUTBOX_PATHS: readonly RegExp[] = [
   // v1 (spec 07): the season test saves and submit (like the e-book test) and the NPS rating.
   /^\/api\/seasons\/\d+\/test\/(answers|submit)$/,
   /^\/api\/feedback\/episodes\/\d+$/,
+  /^\/api\/feedback\/steps\/[\w-]+$/,
 ];
 
 export const isOutboxPath = (pathname: string): boolean => OUTBOX_PATHS.some((re) => re.test(pathname));
@@ -146,6 +150,8 @@ export const DEFAULT_TERMS_VERSION = '2026-10';
 export const FLAGS = {
   aiEnabled: 'ai.enabled',
   freeSteps: 'dev.free_steps',
+  /** Per-step feedback prompt (step_feedback). */
+  stepFeedback: 'feedback.steps',
   storeRecordings: 'mic.store_recordings',
 } as const;
 
@@ -174,7 +180,34 @@ export const SETTINGS = {
   modelAsr: 'ai.model.asr',
   modelTts: 'ai.model.tts',
   modelGuard: 'ai.model.guard',
+  /** JSON BackupConfig (contracts/backups.ts): the automatic backup schedule of tie-admin. */
+  backupConfig: 'backup.config',
+  /** ElevenLabs API key, sealed (worker-core secrets.ts): never returned by any API. */
+  elevenKey: 'voice.eleven.key',
+  /** JSON {assistantKey: voiceId} of the cloned voices. */
+  elevenVoices: 'voice.eleven.voices',
+  /** ElevenLabs model id (ELEVEN_MODELS). */
+  elevenModel: 'voice.eleven.model',
+  /** PROD (spec 05 "Paid AI providers"): Anthropic API key, sealed like the ElevenLabs one. */
+  aiKeyAnthropic: 'ai.key.anthropic',
+  /** OpenAI API key, sealed. */
+  aiKeyOpenai: 'ai.key.openai',
 } as const;
+
+/**
+ * Model ids an admin may set: a Workers AI model (@cf/...), or a paid provider's model prefixed with
+ * its provider ('anthropic:...', 'openai:...').
+ */
+export const AI_MODEL_ID_RE =
+  /^(?:@cf\/[A-Za-z0-9._-]+\/[A-Za-z0-9._:-]{1,120}|anthropic:[A-Za-z0-9._-]{1,80}|openai:[A-Za-z0-9._:-]{1,80})$/;
+
+export type AiProvider = 'workers' | 'anthropic' | 'openai';
+/** Provider that serves a model id (see AI_MODEL_ID_RE). */
+export const aiProviderOf = (model: string): AiProvider =>
+  model.startsWith('anthropic:') ? 'anthropic' : model.startsWith('openai:') ? 'openai' : 'workers';
+
+/** ai.model.tts value that makes TTS use the ElevenLabs voices instead of Workers AI. */
+export const TTS_ELEVEN = 'elevenlabs';
 
 export const DEFAULT_MODELS = {
   tutor: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
@@ -217,6 +250,90 @@ export const API_TOKEN_PREFIX = 'tie_pat_';
 export const API_TOKEN_DISPLAY_LEN = 12;
 /** audit_log.actor_role for writes made through an API token (actor_user_id = the token's creator). */
 export const AUDIT_AGENT_ROLE = 'agent';
+
+/** Database backups (tie-admin, contracts/backups.ts). */
+export const BACKUP = {
+  formatName: 'tie-backup',
+  formatVersion: 1,
+  /** Rows read per query while dumping a table. */
+  pageRows: 2000,
+  /** Max size of one JSON chunk bound to a restore statement (D1 caps a value at 2 MB). */
+  restoreChunkBytes: 800_000,
+  keepMin: 1,
+  keepMax: 365,
+  noteMax: 200,
+} as const;
+/** R2 prefix of the backup files. */
+export const BACKUP_R2_PREFIX = 'backups/';
+/** Tables a backup never dumps: ephemeral auth/idempotency rows, the backups list itself, D1 internals. */
+export const BACKUP_EXCLUDED_TABLES: readonly string[] = [
+  'sessions',
+  'one_time_tokens',
+  'idempotency_keys',
+  'backups',
+  'd1_migrations',
+  '_episode_books',
+];
+
+// ---------- Voices (ElevenLabs) ----------
+
+export const ELEVEN_MODELS = ['eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_multilingual_v2'] as const;
+export type ElevenModel = (typeof ELEVEN_MODELS)[number];
+export const ELEVEN_DEFAULT_MODEL: ElevenModel = 'eleven_turbo_v2_5';
+export const ELEVEN_VOICE_ID_RE = /^[A-Za-z0-9]{8,40}$/;
+/** Voice key (SETTINGS.elevenVoices) of the course narration. */
+export const ELEVEN_NARRATOR_KEY = 'narrator';
+/** The e-book's optional extra sections, in display order (ebooks.extras_on). */
+export const EBOOK_EXTRAS = ['five', 'lead', 'real', 'out'] as const;
+export type EbookExtra = (typeof EBOOK_EXTRAS)[number];
+/** Voice key used when no specific voice is set for a speaker. */
+export const ELEVEN_DEFAULT_KEY = 'default';
+/** Voice key of the e-book extras' reader. */
+export const ELEVEN_EXTRAS_KEY = 'extras';
+/** TTS `role` of the narration (optionally `narrator@<step>`). */
+export const TTS_NARRATOR_ROLE = 'narrator';
+/** TTS `role` of the e-book extras (optionally `extras:<who>`). */
+export const TTS_EXTRAS_ROLE = 'extras';
+
+/** TTS role of the narration, optionally of one step: 'narrator' / 'narrator@<step>'. */
+export const narratorRole = (step?: number | null): string => (step ? 'narrator@' + String(step) : TTS_NARRATOR_ROLE);
+
+/** TTS role of the e-book extras, optionally of one speaker: 'extras' / 'extras:<who>'. */
+export const extrasRole = (who?: string | null): string =>
+  who?.trim() ? `${TTS_EXTRAS_ROLE}:${who.trim()}` : TTS_EXTRAS_ROLE;
+
+export interface ParsedTtsRole {
+  narrator: boolean;
+  /** Step of a `narrator@<step>` role. */
+  step: number | null;
+  /** Character name ('' for the narrator). */
+  who: string;
+  extras: boolean;
+}
+
+/** Splits a TTS role: 'extras' / 'extras:<who>', 'narrator' / 'narrator@<step>', or a character's name. */
+export function parseRole(role: string): ParsedTtsRole {
+  if (role === TTS_EXTRAS_ROLE || role.startsWith(`${TTS_EXTRAS_ROLE}:`)) {
+    return { narrator: false, step: null, who: role.slice(TTS_EXTRAS_ROLE.length + 1), extras: true };
+  }
+  const [base = '', s] = role.split('@');
+  const narrator = base === TTS_NARRATOR_ROLE;
+  const step = narrator && s && /^[0-9]{1,2}$/.test(s) ? Number(s) : null;
+  return { narrator, step, who: narrator ? '' : role, extras: false };
+}
+
+/** Voice clone sample upload limits. */
+export const ELEVEN_SAMPLE_MAX_BYTES = 10 * 1024 * 1024;
+export const ELEVEN_SAMPLE_MIME = [
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/ogg',
+  'audio/webm',
+] as const;
 
 /** Deepgram Aura speakers per assistant; /api/tts only accepts these. */
 export const TTS_SPEAKERS: Readonly<Record<string, string>> = {

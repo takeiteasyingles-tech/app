@@ -177,7 +177,7 @@ function Editor({
       forgetOptionRows();
       onSaved(res.items);
       setSavedAt(Date.now());
-      toast('Lista salva no rascunho.');
+      toast('Lista salva. Já está no app.');
     } catch (e) {
       const iss = issuesOf(e);
       if (iss.length) setErrors(issuesToErrors(iss));

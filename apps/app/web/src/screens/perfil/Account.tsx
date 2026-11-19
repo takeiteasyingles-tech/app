@@ -76,8 +76,8 @@ function ResetSheet({ onClose }: { onClose: () => void }) {
     <Sheet kicker="Seus dados" title="Zerar o seu progresso?" onClose={onClose}>
       <div class="stack mt12" style={{ '--gap': '12px' }}>
         <p class="p">
-          Episódios, Flashcards, pontos, medalhas, Extras e conversas no Mic voltam do zero. A sua conta, o seu perfil e
-          as preferências continuam como estão.
+          Episódios, Cards, pontos, medalhas, Extras e conversas no Mic voltam do zero. A sua conta, o seu perfil e as
+          preferências continuam como estão.
         </p>
         <Btn
           label={busy ? 'Zerando…' : 'Zerar o progresso'}

@@ -1190,3 +1190,52 @@
 .pl-exlist .pill.gr svg {
   color: var(--green);
 }
+
+/* PROD (flag feedback.steps): the step feedback sheet (StepFeedback.tsx). */
+.pl-feedback {
+  max-width: 540px;
+}
+.pl-fb-field {
+  border: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.pl-fb-stars {
+  gap: 8px;
+  margin: 8px 0;
+  display: flex;
+}
+.pl-fb-stars label {
+  border: 1.5px solid var(--line);
+  width: 48px;
+  height: 48px;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 14px;
+  place-items: center;
+  font-size: 1.7rem;
+  display: grid;
+  position: relative;
+}
+.pl-fb-stars label.on {
+  color: var(--orange);
+  border-color: var(--orange);
+  background: var(--cream);
+}
+.pl-fb-stars input {
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+}
+.pl-fb-stars label:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.pl-feedback textarea {
+  resize: vertical;
+  width: 100%;
+  min-height: 70px;
+}

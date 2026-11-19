@@ -97,7 +97,11 @@ describe('API tokens', () => {
       json: { name: 'b', scopes: ['content.read'], expiresInDays: null },
     });
     expect(never.body.item.expiresAt).toBeNull();
-    expect((await admin.client.send(T.create.path, { json: { name: 'c', scopes: ['content.publish'] } })).status).toBe(
+    // PROD: content.publish is a real scope now; an unknown one is still refused.
+    const pub = await admin.client.json(T.create.path, { json: { name: 'p', scopes: ['content.publish'] } });
+    expect(pub.status).toBe(201);
+    expect(pub.body.item.scopes).toEqual(['content.publish']);
+    expect((await admin.client.send(T.create.path, { json: { name: 'c', scopes: ['content.delete'] } })).status).toBe(
       400,
     );
     expect(

@@ -31,3 +31,6 @@ Thumbs.db
 .vscode/
 .idea/
 tools/e2e/**/out/
+
+# Production recovery downloads (worker bundles, D1 dumps, R2 media)
+tools/recovery/out/

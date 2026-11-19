@@ -1,11 +1,15 @@
 // Form specs of the episode editor, one list per tab. The document edited is the episode row plus its
 // child rows: `mic` (Take the Mic phrases) and `ex` (Take Action exercises, each with its `items`).
-import type { Spec } from '../../ui/form';
+// Tabs follow the production step order (spec 05 "Step order"); most tabs end with that step's own
+// voice (PROD lesson voices, episodes.voices).
+import { STEP } from '@tie/shared/constants';
+import type { CustomProps, Spec } from '../../ui/form';
 import { EpisodeExtraPicker } from './EpisodeReferences';
+import { AllVoices, CastVoices, stepVoices } from './episodeVoices';
 
 export type TabId =
   | 'geral'
-  | 'midia'
+  | 'apresentacao'
   | 'musica'
   | 'olhar'
   | 'dialogo'
@@ -17,16 +21,32 @@ export type TabId =
 
 export const TABS: readonly (readonly [TabId, string])[] = [
   ['geral', 'Geral'],
-  ['midia', 'Mídia'],
-  ['musica', '1 · Música'],
-  ['olhar', '4 · Take a Look'],
-  ['dialogo', '5 · Take It In'],
-  ['mic', '6 · Take the Mic'],
-  ['licao', '7 · Take a Lesson'],
-  ['away', '8 · Take Away'],
-  ['exercicios', '9 · Take Action'],
+  ['apresentacao', '1 · In this episode'],
+  ['musica', '2 · Música'],
+  ['olhar', '3 · Take a Look'],
+  ['dialogo', '4 · Take It In'],
+  ['mic', '5 · Take the Mic'],
+  ['licao', '6 · Take a Lesson'],
+  ['away', '7 · Take Away'],
+  ['exercicios', '8 · Take Action'],
   ['fim', 'Conclusão'],
 ];
+
+/** The `voices` field shown at the end of a tab. */
+const voices = (label: string, render: (p: CustomProps) => ReturnType<typeof AllVoices>): Spec => ({
+  t: 'custom',
+  k: 'voices',
+  label,
+  wide: true,
+  render,
+});
+
+const LOOK_VOICE = voices('Voz do vocabulário', stepVoices('Take a Look', STEP.LOOK));
+const CAST_VOICES = voices('Vozes dos personagens', CastVoices);
+const MIC_VOICE = voices('Voz das frases', stepVoices('Take the Mic', STEP.MIC));
+const LESSON_VOICE = voices('Voz das palavras', stepVoices('Take a Lesson', STEP.LESSON));
+const AWAY_VOICE = voices('Voz do Take Away', stepVoices('Take Away', STEP.AWAY));
+const ACTION_VOICE = voices('Voz dos exercícios', stepVoices('Take Action', STEP.ACTION));
 
 const GERAL: Spec[] = [
   { t: 'text', k: 'title', label: 'Título', max: 200 },
@@ -43,69 +63,85 @@ const GERAL: Spec[] = [
   },
   { t: 'int', k: 'seasonN', label: 'Temporada', opt: 'null', min: 1 },
   {
-    t: 'int',
-    k: 'ebookNum',
-    label: 'E-book',
-    ro: true,
-    opt: 'null',
-    min: 1,
-    hint: 'O e-book que cobre este episódio (etapa 2).',
-  },
-  {
     t: 'custom',
     k: 'extraId',
     label: 'Extra do episódio',
     hint: 'Escolha um extra exclusivo. Os materiais já vinculados a outro episódio não aparecem.',
     render: EpisodeExtraPicker,
   },
-  { t: 'text', k: 'synopsis', label: 'Sinopse', opt: 'null', rows: 3, hint: 'Mostrada na Intro (etapa 3).' },
   {
     t: 'strings',
     k: 'castNames',
     label: 'Personagens',
     wide: true,
     ph: 'Nome e Enter',
-    hint: 'Quem aparece no episódio (Intro e Take It In). Cada personagem ganha uma cor própria, na ordem desta lista.',
+    hint: 'Quem aparece no episódio (Take a Look e Take It In). Cada personagem ganha uma cor própria, na ordem desta lista.',
+  },
+  { t: 'custom', k: 'voices', label: 'Vozes desta lição', wide: true, render: AllVoices },
+];
+
+const APRESENTACAO: Spec[] = [
+  {
+    t: 'media',
+    k: 'introMedia',
+    label: 'Áudio da apresentação',
+    kind: 'audio',
+    opt: 'null',
+    hint: 'Sem áudio, o aluno ouve uma vinheta de 15 s.',
+  },
+  {
+    t: 'text',
+    k: 'synopsis',
+    label: 'Texto da apresentação',
+    opt: 'null',
+    rows: 6,
+    wide: true,
+    hint: 'Aparece abaixo do orb. Se passar do espaço da tela, o aluno rola com a setinha.',
   },
 ];
 
-const MIDIA: Spec[] = [
-  { t: 'media', k: 'introMedia', label: 'Áudio da Intro (etapa 3)', kind: 'audio', opt: 'null' },
-  { t: 'text', k: 'songTitle', label: 'Título da música', opt: 'null' },
-  { t: 'media', k: 'songMedia', label: 'Música (etapas 1 e 10)', kind: 'audio', opt: 'null' },
-  { t: 'media', k: 'sceneMedia', label: 'Vídeo da cena (etapa 4)', kind: 'video', opt: 'null' },
-  { t: 'text', k: 'sceneNote', label: 'Nota da cena', opt: 'null', rows: 2 },
-];
-
+/** The song file itself (songMedia) is set by the "Música e sincronização" panel above the form. */
 const MUSICA: Spec[] = [
+  { t: 'text', k: 'songTitle', label: 'Título da música', opt: 'null' },
   {
     t: 'list',
     k: 'lyrics',
     label: 'Letra',
     item: 'linha',
     inline: true,
-    hint: 'A lacuna é a palavra que o aluno completa no karaokê.',
+    hint: 'Início: segundo da música em que a linha começa (vazio = estimado).',
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },
-      { t: 'text', k: 'gap', label: 'Lacuna', opt: 'undef' },
+      { t: 'num', k: 't', label: 'Início (s)', opt: 'undef', min: 0, step: 0.1 },
     ],
   },
 ];
 
 const OLHAR: Spec[] = [
   {
+    t: 'media',
+    k: 'lookMedia',
+    label: 'Áudio de contexto',
+    kind: 'audio',
+    opt: 'null',
+    hint: '"1º Ouça o contexto e prepare a mente": toca antes do vídeo. Opcional.',
+  },
+  { t: 'media', k: 'sceneMedia', label: 'Vídeo da cena', kind: 'video', opt: 'null' },
+  { t: 'text', k: 'sceneNote', label: 'Nota da cena', opt: 'null', rows: 2 },
+  {
     t: 'list',
     k: 'visual',
     label: 'Vocabulário da cena',
     item: 'palavra',
     inline: true,
-    hint: 'Viram flashcards quando o aluno termina a etapa 4.',
+    hint: 'Viram Cards quando o aluno termina a etapa 3.',
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },
     ],
   },
+  LOOK_VOICE,
 ];
 
 const DIALOGO: Spec[] = [
@@ -133,6 +169,7 @@ const DIALOGO: Spec[] = [
       { t: 'text', k: 'hook', label: 'Destaque', opt: 'undef' },
     ],
   },
+  CAST_VOICES,
 ];
 
 const MIC: Spec[] = [
@@ -144,12 +181,22 @@ const MIC: Spec[] = [
     open: false,
     of: [
       { t: 'text', k: 'en', label: 'Frase em inglês', wide: true },
+      {
+        t: 'text',
+        k: 'who',
+        label: 'Quem fala',
+        opt: 'null',
+        max: 40,
+        ph: 'Automático',
+        hint: 'O aluno ouve a frase com a voz deste personagem (Zach, Margaret, Robert, Becky, Barbara…). Vazio: automático, pelo personagem que diz a frase no Take It In ou que se apresenta nela; sem ninguém, a narração.',
+      },
       { t: 'text', k: 'tip', label: 'Dica de pronúncia', opt: 'null', rows: 2 },
       { t: 'text', k: 'fb', label: 'Retorno no modo demo', opt: 'null', rows: 2 },
       { t: 'int', k: 'demoResult', label: 'Nota no modo demo (0 a 10)', opt: 'null', min: 0, max: 10 },
       { t: 'bool', k: 'blue', label: 'Retorno em azul (ajuste)', hint: 'Mostra o retorno demo como correção.' },
     ],
   },
+  MIC_VOICE,
 ];
 
 const ROW_SPECS: Spec[] = [
@@ -230,6 +277,7 @@ const LICAO: Spec[] = [
       { t: 'strings', k: 'words', label: 'Palavras para treinar', wide: true },
     ],
   },
+  LESSON_VOICE,
 ];
 
 const AWAY: Spec[] = [
@@ -239,7 +287,7 @@ const AWAY: Spec[] = [
     label: 'Expressões',
     item: 'expressão',
     inline: true,
-    hint: 'Viram flashcards quando o aluno termina a etapa 8.',
+    hint: 'Viram Cards quando o aluno termina a etapa 7.',
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },
@@ -247,6 +295,7 @@ const AWAY: Spec[] = [
     ],
   },
   { t: 'strings', k: 'awayWords', label: 'Palavras-chave', wide: true },
+  AWAY_VOICE,
 ];
 
 const ITEM_SPECS: Spec[] = [
@@ -299,6 +348,7 @@ const EXERCICIOS: Spec[] = [
       },
     ],
   },
+  ACTION_VOICE,
 ];
 
 const FIM: Spec[] = [
@@ -322,7 +372,7 @@ const FIM: Spec[] = [
         k: 'go',
         label: 'Destino do botão',
         mono: true,
-        hint: 'Rota sem "#/": episodio/2, ebook/1 ou inicio.',
+        hint: 'Rota sem "#/": episodio/2, extra ou inicio.',
       },
     ],
   },
@@ -330,7 +380,7 @@ const FIM: Spec[] = [
 
 export const TAB_SPECS: Record<TabId, readonly Spec[]> = {
   geral: GERAL,
-  midia: MIDIA,
+  apresentacao: APRESENTACAO,
   musica: MUSICA,
   olhar: OLHAR,
   dialogo: DIALOGO,
@@ -346,6 +396,7 @@ export const ALL_SPECS: readonly Spec[] = Object.values(TAB_SPECS).flat();
 /** Tab of an error path ("dialog.3.en" → dialogo). */
 export function tabOf(path: string): TabId {
   const head = path.split('.')[0] ?? '';
+  if (head === 'songMedia') return 'musica';
   for (const [tab, specs] of Object.entries(TAB_SPECS) as [TabId, readonly Spec[]][]) {
     if (specs.some((s) => s.k === head)) return tab;
   }

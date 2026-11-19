@@ -17,11 +17,14 @@ describe('srs parity with review.js', () => {
   });
 
   it('cardsOf for every scripted episode and step', () => {
+    // PROD step order (STEP): Take a Look is step 3 and Take Away step 7, the prototype's 4 and 8, so
+    // production step `upTo` unlocks what the prototype unlocks at `upTo + 1`.
     for (const n of [1, 2, 5]) {
       const E = T.data.EPS[n];
       const ep = tsEpisode(T.data, n);
-      for (const upTo of [undefined, 0, 1, 4, 5, 8, 9, 10, 11]) {
-        expect(cardsOf(ep, upTo), `${n}/${upTo}`).toEqual(plain(T.review.cardsOf(E, upTo)));
+      for (const upTo of [undefined, 0, 1, 3, 4, 7, 8, 9, 10]) {
+        const proto = upTo ? upTo + 1 : upTo;
+        expect(cardsOf(ep, upTo), `${n}/${upTo}`).toEqual(plain(T.review.cardsOf(E, proto)));
       }
     }
   });
