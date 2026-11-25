@@ -140,6 +140,42 @@ export const AssistantVoice = z.object({
 });
 export type AssistantVoice = z.infer<typeof AssistantVoice>;
 
+/** Mic modes an ElevenLabs agent can hold (pronúncia scores single sentences, so it stays ours). */
+export const AGENT_MODES = ['livre', 'missao', 'extra'] as const;
+export const AgentMode = z.enum(AGENT_MODES);
+export type AgentMode = z.infer<typeof AgentMode>;
+
+/** Assistia avatar slug: the path segment of https://assistia-backend…/embed/<slug>. */
+export const ASSISTIA_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,59}$/i;
+/** ElevenLabs Agents Platform id ("agent_…"). */
+export const ELEVEN_AGENT_ID_RE = /^agent_[a-z0-9]{8,60}$/i;
+
+/**
+ * PROD (spec 05 "Mic avatar per assistant"): what the Mic stage shows for an assistant. null = its own
+ * 3D model or video clips. `assistia`: the Assistia embed gives the face and voice, our tutor writes
+ * every line. `elevenlabs`: in `modes`, the conversation itself runs on an ElevenLabs agent (its own
+ * voice, ears and brain); the agent id stays on the server, which hands out signed URLs.
+ */
+export const MicAvatar = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('assistia'),
+    slug: z.string().regex(ASSISTIA_SLUG_RE, 'Identificador do avatar inválido.'),
+  }),
+  z.object({
+    kind: z.literal('elevenlabs'),
+    agentId: z.string().regex(ELEVEN_AGENT_ID_RE, 'ID de agente inválido (começa com "agent_").'),
+    modes: z.array(AgentMode).min(1, 'Escolha pelo menos um modo.').max(AGENT_MODES.length),
+  }),
+]);
+export type MicAvatar = z.infer<typeof MicAvatar>;
+
+/** The catalog's copy: the agent id never reaches the client. */
+export const MicAvatarPublic = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('assistia'), slug: z.string() }),
+  z.object({ kind: z.literal('elevenlabs'), modes: z.array(AgentMode) }),
+]);
+export type MicAvatarPublic = z.infer<typeof MicAvatarPublic>;
+
 export const AssistantPublic = z.object({
   k: z.string(),
   name: z.string(),
@@ -155,6 +191,8 @@ export const AssistantPublic = z.object({
   poster: OptMedia,
   thumb: OptMedia,
   clips: z.partialRecord(ClipState, MediaUrl),
+  /** Absent in catalogs published before migration 0019 (the client then keeps its old defaults). */
+  avatar: MicAvatarPublic.nullable().optional(),
 });
 export type AssistantPublic = z.infer<typeof AssistantPublic>;
 

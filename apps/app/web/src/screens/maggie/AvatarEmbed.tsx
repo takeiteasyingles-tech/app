@@ -5,14 +5,23 @@
 // embed.js (postMessage {source:'assistia', type}) instead of loading that script, so the strict CSP only
 // gains a frame-src. If the frame never gets ready, the 3D/video avatar takes the stage (onFail); a line
 // that cannot start falls back to our own voice.
+import type { AssistantPublic } from '@tie/shared/content/schema';
 import { useEffect, useRef } from 'preact/hooks';
 import { setExternalVoice } from '../../core/speech';
 import type { AvatarAssistant } from './Avatar';
 
 /** Assistia's origin: the iframe's src and the only origin whose messages are read (CSP frame-src). */
 export const MIC_EMBED_ORIGIN = 'https://assistia-backend.perfectdesigner.workers.dev';
-/** Assistant key → Assistia avatar slug. */
-export const MIC_EMBEDS: Readonly<Record<string, string>> = { margaret: 'marguert' };
+/**
+ * Catalogs published before migration 0019 carry no `avatar`: Margaret's embed was hardcoded then.
+ * From that migration on the admin sets it (Assistentes → Avatar no Mic) and null means none.
+ */
+const LEGACY_EMBEDS: Readonly<Record<string, string>> = { margaret: 'marguert' };
+/** The assistant's Assistia avatar slug, if its Mic avatar is the embed. */
+export function embedSlug(a: Pick<AssistantPublic, 'k' | 'avatar'>): string | undefined {
+  if (a.avatar === undefined) return LEGACY_EMBEDS[a.k];
+  return a.avatar?.kind === 'assistia' ? a.avatar.slug : undefined;
+}
 /** Test builds (tools/parity build.ts sets VITE_MIC_EMBED=off) never reach Assistia. */
 export const micEmbedOn = import.meta.env.VITE_MIC_EMBED !== 'off';
 

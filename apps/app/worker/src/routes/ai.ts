@@ -58,6 +58,7 @@ import {
   vJson,
 } from '@tie/worker-core';
 import { Hono } from 'hono';
+import { hadAgentConversation } from '../ai/agentUsage';
 import { signAttempt } from '../ai/attempt';
 import { MAGGIE_SEC_PRONOUNCE, MAGGIE_SEC_TURN, MAX_TURN_AWARDS_PER_DAY, recentAwards, tryAward } from '../ai/award';
 import {
@@ -456,7 +457,11 @@ async function buildReport(
 
   const demo: BuiltReport = { report: demoReport({ turns: reportTurns, aThe }), reservation: null, outcome: null };
   const spoke = reportTurns.some((t) => t.who === 'me');
-  const usedServerAi = turns.some((t) => t.source === TURN_SOURCE.tutor || t.source === TURN_SOURCE.pronounce);
+  // An ElevenLabs agent conversation (spec 05 "Mic avatar per assistant") is AI the server reserved and
+  // billed, so its transcript (client turns) earns the AI report too.
+  const usedServerAi =
+    turns.some((t) => t.source === TURN_SOURCE.tutor || t.source === TURN_SOURCE.pronounce) ||
+    (await hadAgentConversation(db, row.id, s.userId));
   if (!spoke || !usedServerAi || !(await aiEnabled(env, flagSubject(s)))) return demo;
 
   let recent = reportTurns.slice(-REPORT_MAX_TURNS);

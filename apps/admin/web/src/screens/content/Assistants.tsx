@@ -1,20 +1,37 @@
 // Assistentes do Mic: public profile (name, tag, greeting), voice (server TTS speaker and browser
-// voice), poster, thumbnail and the four video clips. The persona (the AI's instructions) is a separate,
-// admin-only field (ai.persona): editors never see it.
+// voice), poster, thumbnail, the four video clips and the Mic avatar (PROD, spec 05 "Mic avatar per
+// assistant": the Assistia embed or an ElevenLabs agent). The persona (the AI's instructions) is a
+// separate, admin-only field (ai.persona): editors never see it.
+import { AGENT_MODES, type AgentMode, type MicAvatar } from '@tie/shared/content/schema';
 import {
   type AssistantRow,
   AssistantEdit as AssistantSchema,
   adminAiApi,
   adminContentApi,
 } from '@tie/shared/contracts/admin';
+import { adminVoicesApi, type ElevenAgentInfo } from '@tie/shared/contracts/voices';
 import { useEffect, useState } from 'preact/hooks';
 import { call, errorMessage } from '../../api';
 import { go } from '../../router';
 import { can } from '../../session';
 import { useLoad } from '../../ui/async';
-import type { Obj, Spec } from '../../ui/form';
+import type { CustomProps, Obj, Spec } from '../../ui/form';
 import { Icon } from '../../ui/icons';
-import { Area, Async, Button, Card, Empty, ErrorBox, Field, Page, Pill, Skeleton } from '../../ui/kit';
+import {
+  Area,
+  Async,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Field,
+  Page,
+  Pill,
+  Sel,
+  Skeleton,
+  Switch,
+  TextIn,
+} from '../../ui/kit';
 import { useMedia } from '../../ui/media';
 import { toast } from '../../ui/toast';
 import { zodErrors } from '../../ui/validate';
@@ -46,6 +63,184 @@ export function voiceLabel(key: string): string {
   const g = SPEAKERS.find(([k]) => k === key)?.[1];
   const name = key.charAt(0).toUpperCase() + key.slice(1);
   return g ? `${name} (${g === 'f' ? 'feminina' : 'masculina'})` : name;
+}
+
+/** Assistia's embed origin (the student app's AvatarEmbed.tsx and both CSPs' frame-src). */
+const ASSISTIA_ORIGIN = 'https://assistia-backend.perfectdesigner.workers.dev';
+
+const AVATAR_KINDS = [
+  ['none', 'Vídeos e 3D da própria assistente'],
+  ['assistia', 'Assistente virtual (embed)'],
+  ['elevenlabs', 'Agente ElevenLabs'],
+] as const;
+
+const MODE_LABEL: Record<AgentMode, string> = { livre: 'Conversa livre', missao: 'Missões', extra: 'Extras' };
+
+type AvatarDraft = { kind?: string; slug?: string; agentId?: string; modes?: string[] } | null;
+
+const AVATAR_ERRORS: Record<string, string> = {
+  agentId: 'Cole o ID do agente da ElevenLabs (começa com “agent_”).',
+  slug: 'Use o identificador do avatar: letras, números, - e _ (ex.: marguert).',
+  modes: 'Escolha pelo menos um modo para o agente.',
+};
+
+/** "Agente ElevenLabs" / "Assistente virtual" (list card and preview). */
+export function avatarLabel(a: MicAvatar | null | undefined): string {
+  return a?.kind === 'elevenlabs' ? 'Agente ElevenLabs' : a?.kind === 'assistia' ? 'Assistente virtual' : 'Vídeos e 3D';
+}
+
+/** The agent as the stored ElevenLabs key sees it, with what would keep tie-app from using it. */
+function AgentCheck({ agentId }: { agentId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<ElevenAgentInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setInfo(null);
+    setError(null);
+  }, [agentId]);
+  const valid = /^agent_[a-z0-9]{8,60}$/i.test(agentId);
+  const check = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setInfo((await call(adminVoicesApi.agent, { query: { id: agentId } })).agent);
+    } catch (e) {
+      setInfo(null);
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const missing = info ? ['student_name', 'student_level'].filter((v) => !info.variables.includes(v)) : [];
+  return (
+    <div class="ad-span stack" style={{ '--gap': '8px' }}>
+      <div class="row" style={{ '--gap': '8px' }}>
+        <Button
+          label="Verificar agente"
+          icon="check"
+          kind="light"
+          busy={busy}
+          disabled={!valid}
+          onClick={() => void check()}
+        />
+        <span class="xs grow">Usa a chave da ElevenLabs salva em Configurações → Vozes.</span>
+      </div>
+      {error ? <div class="ad-note">{error}</div> : null}
+      {info ? (
+        <div class="ad-note bl stack" style={{ '--gap': '4px' }}>
+          <b>{info.name}</b>
+          <span class="xs">
+            Idioma {info.language ?? '—'} · modelo {info.llm ?? '—'} · voz {info.voiceId ?? '—'}
+            {info.maxDurationS ? ` · até ${Math.round(info.maxDurationS / 60)} min por conversa` : ''}
+          </span>
+          {info.firstMessage ? <span class="xs">Primeira fala: “{info.firstMessage}”</span> : null}
+          {info.authEnabled ? (
+            <span class="xs">Autenticação ligada: só o app, com URLs assinadas, inicia conversas.</span>
+          ) : (
+            <span class="xs ad-err-t">
+              A autenticação do agente está desligada: quem souber o ID pode conversar com ele e gastar os créditos da
+              conta. Ligue “Enable authentication” em ElevenLabs → Agente → Security (o app continua funcionando, ele já
+              usa URLs assinadas).
+            </span>
+          )}
+          {missing.length ? (
+            <span class="xs">
+              O prompt não usa {missing.join(' e ')}: o app envia o nome e o nível do aluno nessas variáveis.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Avatar no Mic: the assistant's own 3D/videos, the Assistia embed or an ElevenLabs agent. */
+function AvatarField({ value, set, id, err }: CustomProps) {
+  const v = (value && typeof value === 'object' ? value : null) as AvatarDraft;
+  const kind = v?.kind ?? 'none';
+  const pick = (k: string) =>
+    set(
+      k === 'assistia'
+        ? { kind: 'assistia', slug: v?.slug ?? '' }
+        : k === 'elevenlabs'
+          ? { kind: 'elevenlabs', agentId: v?.agentId ?? '', modes: v?.modes?.length ? v.modes : ['livre'] }
+          : null,
+    );
+  const modes = v?.modes ?? [];
+  const toggle = (m: AgentMode, on: boolean) =>
+    set({ ...v, modes: AGENT_MODES.filter((x) => (x === m ? on : modes.includes(x))) });
+  return (
+    <div class="ad-span stack" style={{ '--gap': '12px' }}>
+      <Field
+        id={id}
+        label="Avatar no Mic"
+        hint="O que o aluno vê e ouve na conversa do Mic. Os vídeos abaixo seguem valendo quando o embed não carrega e como rosto do agente."
+        err={kind === 'none' ? err : null}
+      >
+        <Sel id={id} value={kind} options={AVATAR_KINDS} onValue={pick} />
+      </Field>
+      {kind === 'assistia' ? (
+        <Field
+          id={`${id}-slug`}
+          label="Identificador do avatar"
+          hint="O fim do endereço do embed: …/embed/marguert. A IA do curso escreve as falas; o embed dá o rosto e a voz."
+          err={err}
+        >
+          <TextIn
+            id={`${id}-slug`}
+            class="ad-mono"
+            value={v?.slug ?? ''}
+            err={err}
+            maxLength={60}
+            onValue={(slug) => set({ kind: 'assistia', slug: slug.trim() })}
+          />
+        </Field>
+      ) : null}
+      {kind === 'elevenlabs' ? (
+        <>
+          <Field
+            id={`${id}-agent`}
+            label="ID do agente"
+            hint="Em ElevenLabs → Agents, começa com “agent_”. O agente conversa com a própria voz e o próprio prompt; o ID nunca vai para o app do aluno."
+            err={err}
+          >
+            <TextIn
+              id={`${id}-agent`}
+              class="ad-mono"
+              value={v?.agentId ?? ''}
+              err={err}
+              maxLength={70}
+              placeholder="agent_…"
+              onValue={(agentId) => set({ ...v, kind: 'elevenlabs', agentId: agentId.trim() })}
+            />
+          </Field>
+          <fieldset class="ad-span ad-obj">
+            <legend class="ad-flabel">Modos em que o agente conversa</legend>
+            <div class="row wrapx" style={{ '--gap': '16px' }}>
+              {AGENT_MODES.map((m) => (
+                <span key={m} class="row" style={{ '--gap': '8px' }}>
+                  <Switch
+                    id={`${id}-mode-${m}`}
+                    on={modes.includes(m)}
+                    label={MODE_LABEL[m]}
+                    onChange={(on) => toggle(m, on)}
+                  />
+                  <label for={`${id}-mode-${m}`} class="sm">
+                    {MODE_LABEL[m]}
+                  </label>
+                </span>
+              ))}
+            </div>
+            <small class="xs">
+              Nos outros modos (e na Pronúncia) a conversa segue com a IA do curso. Cada conversa reserva até 10 minutos
+              do plano do aluno e cobra o tempo que a ElevenLabs mediu.
+            </small>
+          </fieldset>
+          <AgentCheck agentId={v?.agentId ?? ''} />
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 const SPECS: Record<string, readonly Spec[]> = {
@@ -104,6 +299,7 @@ const SPECS: Record<string, readonly Spec[]> = {
     },
   ],
   midia: [
+    { t: 'custom', k: 'avatar', label: 'Avatar no Mic', wide: true, render: (p) => <AvatarField {...p} /> },
     { t: 'media', k: 'posterMedia', label: 'Pôster', kind: 'image', opt: 'null' },
     { t: 'media', k: 'thumbMedia', label: 'Miniatura (rosto)', kind: 'image', opt: 'null' },
     {
@@ -216,7 +412,36 @@ function Preview({ d }: { d: AssistantRow }) {
           ) : null}
         </div>
       </div>
+      <AvatarPreview a={d.avatar} name={d.fullName} />
     </aside>
+  );
+}
+
+/** Avatar no Mic, as the student will get it: the live embed, or what the agent takes over. */
+function AvatarPreview({ a, name }: { a: MicAvatar | null | undefined; name: string }) {
+  const slug = a?.kind === 'assistia' && /^[a-z0-9][a-z0-9_-]{0,59}$/i.test(a.slug) ? a.slug : null;
+  return (
+    <div class="stack mt12" style={{ '--gap': '6px' }}>
+      <span class="lbl">Avatar no Mic · {avatarLabel(a)}</span>
+      {slug ? (
+        <iframe
+          class="ad-avemb"
+          src={`${ASSISTIA_ORIGIN}/embed/${encodeURIComponent(slug)}`}
+          title={name}
+          allow="autoplay"
+          sandbox="allow-scripts allow-same-origin"
+          referrerpolicy="strict-origin-when-cross-origin"
+          loading="lazy"
+        />
+      ) : a?.kind === 'elevenlabs' ? (
+        <p class="xs">
+          Em {a.modes.map((m) => MODE_LABEL[m]).join(', ')}, o aluno conversa por voz, ao vivo, com o agente da
+          ElevenLabs: o microfone fica aberto e o avatar 3D (ou os vídeos) acompanha a voz do agente.
+        </p>
+      ) : (
+        <p class="xs">O Mic mostra o avatar 3D da assistente, se houver, senão os vídeos desta aba.</p>
+      )}
+    </div>
   );
 }
 
@@ -237,7 +462,14 @@ export function AssistantEdit({ params, q }: ScreenProps) {
       tabOf={tabOf}
       idp="as"
       header={(d) => <Pill label={d.active ? 'Disponível' : 'Fora da escolha'} tone={d.active ? 'gr' : ''} />}
-      validate={(d) => zodErrors(AssistantSchema.create, d)}
+      validate={(d) => {
+        // The avatar is one custom field: its inner errors (avatar.agentId…) become one, under it.
+        const e = zodErrors(AssistantSchema.create, d);
+        const inner = Object.keys(e).filter((k) => k.startsWith('avatar.'));
+        for (const k of inner) delete e[k];
+        if (inner.length) e.avatar = AVATAR_ERRORS[inner[0]?.split('.')[1] ?? ''] ?? 'Confira o avatar.';
+        return e;
+      }}
       persist={async (base, d) => {
         const patch = patchOf(base, d, KEYS);
         if (!Object.keys(patch).length) return d;
@@ -297,10 +529,17 @@ function AssistantCard({ a }: { a: AssistantRow }) {
             <dt>Voz</dt>
             <dd>{voiceLabel(a.ttsSpeaker)}</dd>
           </div>
-          <div>
-            <dt>Vídeos</dt>
-            <dd class={clips < 4 ? 'ad-err-t' : ''}>{clips} de 4</dd>
-          </div>
+          {a.avatar ? (
+            <div>
+              <dt>Avatar</dt>
+              <dd>{avatarLabel(a.avatar)}</dd>
+            </div>
+          ) : (
+            <div>
+              <dt>Vídeos</dt>
+              <dd class={clips < 4 ? 'ad-err-t' : ''}>{clips} de 4</dd>
+            </div>
+          )}
         </dl>
       </span>
     </a>

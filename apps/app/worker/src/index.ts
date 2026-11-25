@@ -2,6 +2,7 @@
 import { appApi, isOutboxPath } from '@tie/shared';
 import { type AppEnv, createApp, type Env, fail, idempotency, type ServiceFactories } from '@tie/worker-core';
 import type { Hono } from 'hono';
+import { reconcileAgentUsage } from './ai/agentUsage';
 import { quotaFactory } from './ai/quota';
 import { awardFactory } from './game';
 import { runRetention } from './retention';
@@ -72,8 +73,10 @@ app.all('*', (c) => {
 
 export default {
   fetch: app.fetch,
-  // triggers.crons in wrangler.jsonc: the daily retention run (retention.ts).
+  // triggers.crons in wrangler.jsonc: the daily retention run (retention.ts) and the reconcile of
+  // ElevenLabs agent conversations still open (ai/agentUsage.ts).
   scheduled(controller, env, ctx) {
     ctx.waitUntil(runRetention(env, controller.scheduledTime));
+    ctx.waitUntil(reconcileAgentUsage(env, controller.scheduledTime).catch((err) => console.error(err)));
   },
 } satisfies ExportedHandler<Env>;

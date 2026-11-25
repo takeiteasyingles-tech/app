@@ -497,6 +497,8 @@ const assistants: Entity = {
     f('thumbMedia', 'thumb_media', 'media', ['image']),
     f('sort', 'sort', 'int'),
     f('active', 'active', 'bool'),
+    // PROD (migration 0019, spec 05 "Mic avatar per assistant"): Assistia embed or ElevenLabs agent.
+    f('avatar', 'avatar', 'jsonNull'),
   ],
   orderBy: 'sort, key',
   api: C.assistants,

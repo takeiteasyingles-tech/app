@@ -135,6 +135,17 @@ function emit(e: SpeechEvent): void {
 }
 
 /**
+ * A voice played outside say() (the Mic's ElevenLabs agent, core/elevenAgent.ts) moves the avatar's
+ * mouth through the same taps: a mouth shape while it talks, then the end of the line.
+ */
+export function emitMouth(v: Viseme): void {
+  emit({ type: 'mouth', v });
+}
+export function emitSpeechEnd(): void {
+  emit({ type: 'end' });
+}
+
+/**
  * A voice outside the page that speaks one assistant's lines in its place (the Mic's Assistia embed,
  * screens/maggie/AvatarEmbed.tsx): it gets the text, calls onStart when the audio starts, and resolves
  * true once the line was spoken (or stopped), false when it could not start (the line then falls back to

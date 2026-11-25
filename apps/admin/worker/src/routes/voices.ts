@@ -21,6 +21,7 @@ import {
   ElevenError,
   elevenAddLibraryVoice,
   elevenClone,
+  elevenGetAgent,
   elevenListVoices,
   elevenSearchLibrary,
   elevenSpeak,
@@ -272,6 +273,20 @@ route(routes, api.account, async (c) => {
     return c.json({ voices: await elevenListVoices(apiKey) });
   } catch (err) {
     elevenFail(err, 'listar as vozes');
+  }
+});
+
+// PROD (spec 05 "Mic avatar per assistant"): the assistant editor checks an agent id before saving it.
+route(routes, api.agent, async (c) => {
+  const query = queryOf(c, api.agent.query);
+  const { apiKey } = await keyOrFail(c);
+  try {
+    return c.json({ agent: await elevenGetAgent(apiKey, query.id) });
+  } catch (err) {
+    if (err instanceof ElevenError && (err.status === 404 || err.status === 422)) {
+      throw new ApiError('not_found', 'A ElevenLabs não encontrou esse agente na conta da chave salva em Vozes.');
+    }
+    elevenFail(err, 'ler o agente');
   }
 });
 

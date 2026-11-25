@@ -6,7 +6,7 @@
 import type { Bilingual, Catalog } from '@tie/shared/content/schema';
 import type { Feedback, PronounceResult, PronTip } from '@tie/shared/contracts/ai';
 import { meApi } from '@tie/shared/contracts/me';
-import { type ClientTurn, micApi, type StartSessionRes } from '@tie/shared/contracts/mic';
+import { type AgentStartRes, type ClientTurn, micApi, type StartSessionRes } from '@tie/shared/contracts/mic';
 import { norm } from '@tie/shared/domain/norm';
 import { defaults, missions, tutorContext } from '@tie/shared/domain/personalize';
 import { ApiError } from '@tie/shared/errors';
@@ -16,6 +16,15 @@ import { type ComponentChildren, Fragment } from 'preact';
 import { useEffect, useLayoutEffect, useState } from 'preact/hooks';
 import { call, errorMessage } from '../../api';
 import { hint as aiHint, aiOnline, pronounce as aiPronounce, tutor as aiTutor } from '../../core/aiClient';
+import {
+  type AgentCall,
+  agentSupported,
+  closeMicrophone,
+  connectAgent,
+  openMicrophone,
+  primeAgentAudio,
+  releaseAgentAudio,
+} from '../../core/elevenAgent';
 import { sfx } from '../../core/sound';
 import * as speech from '../../core/speech';
 import { type ScreenProps, useChrome } from '../../frame';
@@ -27,6 +36,7 @@ import { set, state } from '../../store/state';
 import { AiBadge } from '../../ui-blocks/chrome';
 import { MicAvatar } from './Avatar3D';
 import {
+  agentModes,
   assistant,
   fmt,
   isLocalSession,
@@ -88,6 +98,12 @@ interface Session {
   mood: string;
   typed: string;
   q: string;
+  /**
+   * PROD (spec 05 "Mic avatar per assistant"): the assistant's ElevenLabs agent holds this call. It
+   * listens all the time (the mic button only mutes it) and its lines are client turns of the /end.
+   */
+  agent: AgentCall | null;
+  muted: boolean;
 }
 
 // Estado da conversa, como o M do protótipo: vive enquanto a tela está montada.
@@ -137,6 +153,8 @@ function newSession(c: Catalog, q: Readonly<Record<string, string>>): Session {
     mood: 'happy',
     typed: '',
     q: JSON.stringify(q),
+    agent: null,
+    muted: false,
   };
 }
 
@@ -171,7 +189,131 @@ function stopListening(): void {
 function hangup(): void {
   stopListening();
   speech.stop();
+  void endAgent();
   if (M) M.speaking = false;
+}
+
+// ---------- ElevenLabs agent (PROD, spec 05 "Mic avatar per assistant") ----------
+
+let agentTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Hangs up the session's agent call; resolves once the socket closed. */
+function endAgent(m: Session | null = M): Promise<void> {
+  const a = m?.agent;
+  if (!m || !a) return Promise.resolve();
+  m.agent = null;
+  clearTimeout(agentTimer);
+  speech.emitSpeechEnd();
+  return a.end();
+}
+
+/** Agent voice loudness → a mouth shape for the 3D avatar (the same flap the browser voice gives). */
+const mouthOf = (v: number): speech.Viseme =>
+  v > 0.3 ? 'a' : v > 0.16 ? 'e' : v > 0.06 ? 'o' : v > 0.02 ? 'm' : 'rest';
+
+/**
+ * Moves the call to the assistant's ElevenLabs agent: microphone first (a refusal spends nothing), then
+ * the signed URL (the server reserves the quota), then the socket. false: the call goes on with our
+ * tutor, as before.
+ */
+async function startAgent(m: Session): Promise<boolean> {
+  let stream: MediaStream | null = null;
+  try {
+    stream = await openMicrophone();
+  } catch {
+    releaseAgentAudio();
+    if (M === m) toast('Libere o microfone para conversar por voz ao vivo. Seguimos com a conversa por texto.');
+    return false;
+  }
+  if (M !== m || !m.id) {
+    closeMicrophone(stream);
+    releaseAgentAudio();
+    return M !== m;
+  }
+  let res: AgentStartRes;
+  try {
+    res = await call(micApi.agent, { params: { id: m.id } });
+  } catch (err) {
+    closeMicrophone(stream);
+    releaseAgentAudio();
+    if (err instanceof ApiError && err.code === 'quota_exceeded') toast(errorMessage(err));
+    return M !== m;
+  }
+  if (M !== m) {
+    closeMicrophone(stream);
+    releaseAgentAudio();
+    return true;
+  }
+  // The clock at the top counts down from what was left before this call's reservation.
+  set((st) => ({ maggie: { ...st.maggie, secLeft: res.quotaLeftS + res.maxSecs } }));
+  let agent: AgentCall;
+  try {
+    agent = await connectAgent(
+      { url: res.signedUrl, variables: res.dynamicVariables, stream },
+      {
+        onUser: (text) => {
+          if (M !== m) return;
+          m.turns.push({ who: 'me', en: text, local: true });
+          re();
+        },
+        onAgent: (text) => {
+          if (M !== m) return;
+          m.turns.push({ who: 'her', en: text, pt: '', words: [], local: true });
+          re();
+        },
+        onAgentCorrection: (original, corrected) => {
+          if (M !== m || !corrected) return;
+          for (let i = m.turns.length - 1; i >= 0; i--) {
+            const t = m.turns[i];
+            if (t?.who === 'her' && t.en === original) {
+              t.en = corrected;
+              re();
+              return;
+            }
+          }
+        },
+        onSpeaking: (on) => {
+          if (M !== m) return;
+          m.speaking = on;
+          if (!on) speech.emitSpeechEnd();
+          re();
+        },
+        onLevel: (v) => {
+          if (M === m && m.speaking) speech.emitMouth(mouthOf(v));
+        },
+        onEnd: (reason) => {
+          if (M !== m) return;
+          m.agent = null;
+          clearTimeout(agentTimer);
+          m.speaking = false;
+          m.ended = true;
+          if (reason === 'error') toast('A ligação com a assistente caiu. Veja o relatório do que deu tempo.');
+          re();
+        },
+      },
+    );
+  } catch {
+    // The reservation is settled by the server (/end): a call that never connected costs nothing.
+    closeMicrophone(stream);
+    if (M === m) toast('A conversa por voz não conectou. Seguimos no modo normal.');
+    return M !== m;
+  }
+  if (M !== m) {
+    void agent.end();
+    return true;
+  }
+  m.agent = agent;
+  m.muted = false;
+  m.busy = false;
+  agentTimer = setTimeout(() => {
+    if (M !== m || !m.agent) return;
+    void endAgent(m);
+    m.ended = true;
+    toast('O tempo desta conversa acabou.');
+    re();
+  }, res.maxSecs * 1000);
+  re();
+  return true;
 }
 
 /** maggieSays: fala em inglês com a voz do assistente; no modo mãos livres o microfone liga depois. */
@@ -327,6 +469,10 @@ async function mgCall(): Promise<void> {
   const m = M;
   if (!m || !c || m.stage !== 'lobby' || m.busy) return;
   const A = assistant(c);
+  // The assistant's ElevenLabs agent holds this mode's conversation when it can: the audio is set up
+  // inside this tap (iOS), before any await.
+  const viaAgent = agentModes(A).includes(m.mode) && aiOnline.value && agentSupported();
+  if (viaAgent) primeAgentAudio();
   m.stage = 'call';
   m.secStart = Date.now();
   m.turns = [];
@@ -358,6 +504,7 @@ async function mgCall(): Promise<void> {
     if (M !== m) return;
     if (!runsLocally(err)) {
       // Missão ou Extra que o servidor recusou (plano, conteúdo): volta para o lobby com o motivo.
+      if (viaAgent) releaseAgentAudio();
       hangup();
       m.stage = 'lobby';
       m.busy = false;
@@ -374,6 +521,12 @@ async function mgCall(): Promise<void> {
     if (left > 0 || aiOnline.value) set((st) => ({ maggie: { ...st.maggie, secLeft: left } }));
   }
   if (m.mode === 'pronuncia') return;
+  if (viaAgent) {
+    // A conversa vai para o agente; se ele não conectar, segue com o nosso tutor, como antes.
+    if (started && started.quotaLeftS > 0 && (await startAgent(m))) return;
+    releaseAgentAudio();
+    if (M !== m) return;
+  }
 
   let o = started?.opener;
   if (!o) {
@@ -399,6 +552,13 @@ async function mgCall(): Promise<void> {
 
 function mgMic(): void {
   if (!M || M.busy || M.ended) return;
+  if (M.agent) {
+    // O agente escuta o tempo todo: o botão só silencia o microfone.
+    M.muted = !M.muted;
+    M.agent.setMuted(M.muted);
+    re();
+    return;
+  }
   if (M.listening) {
     stopListening();
     re();
@@ -412,6 +572,12 @@ function mgSend(): void {
   const t = M.typed.trim();
   if (!t || M.busy || M.ended) return;
   M.typed = '';
+  if (M.agent) {
+    M.turns.push({ who: 'me', en: t, local: true });
+    M.agent.sendText(t);
+    re();
+    return;
+  }
   void sendLine(t);
 }
 
@@ -448,6 +614,13 @@ function mgHelp(en: string): void {
   const h = c.mic.help.find((x) => x.en === en);
   const last = lastHer(M);
   if (!h || !last || M.busy) return;
+  if (M.agent) {
+    // "Slowly, please." / "Sorry?" vão para o agente como uma fala sua: ele mesmo repete.
+    M.turns.push({ who: 'me', en: h.en, local: true });
+    M.agent.sendText(h.en);
+    re();
+    return;
+  }
   M.turns.push({ who: 'me', en: h.en, local: true });
   M.turns.push({ who: 'her', en: last.en, pt: last.pt, words: [], local: true });
   re();
@@ -652,9 +825,12 @@ async function mgEnd(): Promise<void> {
   const c = C();
   const m = M;
   if (!m || !c || m.stage !== 'call' || m.ending) return;
+  // The agent's call is closed before /end, so ElevenLabs already has its length to bill.
+  const agentDone = endAgent(m);
   hangup();
   m.ending = true;
   re();
+  await agentDone;
   const id = await finish(c, m);
   if (M === m) M = null;
   go(`maggie/relatorio/${id}`);
@@ -685,7 +861,8 @@ function MicStage(c: Catalog, m: Session) {
   const last = lastHer(m);
   const talking = m.speaking;
   // Uma gravação do modo pronúncia também é escuta (av.listening(true) do mgPronRec do protótipo).
-  const hearing = m.listening || m.pronState === 'rec';
+  // Com o agente ElevenLabs, o microfone fica aberto enquanto ele não fala (e não está silenciado).
+  const hearing = m.listening || m.pronState === 'rec' || (!!m.agent && !m.muted && !m.speaking);
   // Na conversa o palco diz o que está acontecendo (ouvindo, pensando, falando) e ganha um anel da
   // mesma cor (maggie.css): laranja ouvindo você, verde enquanto o assistente fala.
   const status = on
@@ -1309,10 +1486,13 @@ function Dock(c: Catalog, m: Session) {
           <Icon name="cc" size={16} />
           {m.subsPt ? ' Esconder PT' : ' Mostrar PT'}
         </button>
-        <button type="button" class={`mg-tgl${m.hands ? ' on' : ''}`} onClick={activator(undefined, mgHands)}>
-          <Icon name="ear" size={16} />
-          {m.hands ? ' Mãos livres: sim' : ' Mãos livres: não'}
-        </button>
+        {/* Com o agente a conversa já é de mãos livres: o microfone fica aberto. */}
+        {m.agent ? null : (
+          <button type="button" class={`mg-tgl${m.hands ? ' on' : ''}`} onClick={activator(undefined, mgHands)}>
+            <Icon name="ear" size={16} />
+            {m.hands ? ' Mãos livres: sim' : ' Mãos livres: não'}
+          </button>
+        )}
       </div>
       <div class="say">
         {/* O enviar fica dentro do campo (maggie.css): o campo ganha a largura do botão, e a dica "Fale
@@ -1341,16 +1521,30 @@ function Dock(c: Catalog, m: Session) {
             <Icon name="send" size={20} />
           </button>
         </div>
-        <button
-          type="button"
-          class={`mic${m.listening ? ' rec' : ''}`}
-          aria-label={m.listening ? 'Parar' : 'Falar'}
-          disabled={off}
-          style={off ? { opacity: '.5' } : undefined}
-          onClick={activator(undefined, mgMic)}
-        >
-          <Icon name={m.listening ? 'stop' : 'mic'} size={28} />
-        </button>
+        {m.agent ? (
+          <button
+            type="button"
+            class={`mic${m.muted ? '' : ' rec'}`}
+            aria-label={m.muted ? 'Ligar o microfone' : 'Silenciar o microfone'}
+            aria-pressed={!m.muted}
+            disabled={off}
+            style={off ? { opacity: '.5' } : undefined}
+            onClick={activator(undefined, mgMic)}
+          >
+            <Icon name={m.muted ? 'mic' : 'pause'} size={28} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            class={`mic${m.listening ? ' rec' : ''}`}
+            aria-label={m.listening ? 'Parar' : 'Falar'}
+            disabled={off}
+            style={off ? { opacity: '.5' } : undefined}
+            onClick={activator(undefined, mgMic)}
+          >
+            <Icon name={m.listening ? 'stop' : 'mic'} size={28} />
+          </button>
+        )}
       </div>
     </div>
   );

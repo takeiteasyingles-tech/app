@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ELEVEN_MODELS, ELEVEN_SAMPLE_MAX_BYTES, ELEVEN_SAMPLE_MIME } from '../constants';
+import { ELEVEN_AGENT_ID_RE } from '../content/schema';
 import { Timestamp } from './common';
 import { endpoint } from './http';
 
@@ -76,6 +77,26 @@ export const VoicePreviewBody = z.strictObject({
   text: z.string().trim().min(1).max(300).optional(),
 });
 
+/**
+ * PROD (spec 05 "Mic avatar per assistant"): an ElevenLabs agent as the stored key sees it, so the
+ * assistant editor can tell whether tie-app will be able to start conversations with it.
+ */
+export const ElevenAgentInfo = z.object({
+  id: z.string(),
+  name: z.string(),
+  language: z.string().nullable(),
+  llm: z.string().nullable(),
+  voiceId: z.string().nullable(),
+  firstMessage: z.string().nullable(),
+  /** "Enable authentication": only signed URLs (what tie-app uses) can start a conversation. */
+  authEnabled: z.boolean(),
+  /** Hard cap of one conversation, in seconds (null = the platform default). */
+  maxDurationS: z.int().nullable(),
+  /** Dynamic variables the agent's prompt expects (tie-app fills student_name and student_level). */
+  variables: z.array(z.string()),
+});
+export type ElevenAgentInfo = z.infer<typeof ElevenAgentInfo>;
+
 export const adminVoicesApi = {
   get: endpoint({
     method: 'GET',
@@ -147,6 +168,16 @@ export const adminVoicesApi = {
     perm: 'content.edit',
     query: z.object({ url: z.string().url().max(600) }),
     res: 'binary',
+  }),
+  /** An ElevenLabs agent read with the stored key (assistant editor, "Verificar agente"). */
+  agent: endpoint({
+    method: 'GET',
+    path: '/admin-api/voices/agent',
+    access: 'staff',
+    perm: 'content.edit',
+    query: z.object({ id: z.string().regex(ELEVEN_AGENT_ID_RE) }),
+    res: z.object({ agent: ElevenAgentInfo }),
+    rateLimit: 'RL_AI',
   }),
   /** Any account voice reading a short line (audio/mpeg). */
   preview: endpoint({

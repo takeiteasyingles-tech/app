@@ -22,6 +22,10 @@ export const the = assistantThe;
 export const The = assistantTheCap;
 export const of = assistantOf;
 
+/** PROD (spec 05 "Mic avatar per assistant"): the Mic modes the assistant's ElevenLabs agent holds. */
+export const agentModes = (a: Pick<AssistantPublic, 'avatar'>): readonly string[] =>
+  a.avatar?.kind === 'elevenlabs' ? a.avatar.modes : [];
+
 export const modeCard = (c: Catalog, k: string): MicModeCard | undefined => c.mic.modes.find((m) => m.k === k);
 export const mission = (c: Catalog, k: string | null | undefined): Mission | undefined =>
   c.mic.missions.find((m) => m.k === k) ?? c.mic.missions[0];

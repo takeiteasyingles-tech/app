@@ -19,6 +19,7 @@ import {
   KaraokeLine,
   LeadTurn,
   LyricLine,
+  MicAvatar,
   MicMode,
   MissionTurn,
   PointKind,
@@ -440,6 +441,8 @@ export const AssistantRow = z.object({
   clips: z.partialRecord(ClipState, IdString),
   sort: z.int(),
   active: z.boolean(),
+  /** PROD (migration 0019): the Mic avatar; null = the assistant's own 3D model or clips. */
+  avatar: MicAvatar.nullable().default(null),
 });
 export type AssistantRow = z.infer<typeof AssistantRow>;
 

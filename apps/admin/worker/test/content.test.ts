@@ -300,6 +300,38 @@ describe('content CRUD', () => {
       'SECRET-PERSONA warm and elegant',
     );
   });
+
+  it('saves the Mic avatar: Assistia embed, ElevenLabs agent or none (spec 05 "Mic avatar per assistant")', async () => {
+    const path = p(C.assistants.update.path, 'margaret');
+    const agent = { kind: 'elevenlabs', agentId: 'agent_0test1tie2margaret3agent4id', modes: ['livre'] };
+    const r = await editor.client.json(path, { method: 'PUT', json: { avatar: agent } });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.item.avatar).toEqual(agent);
+    expect(
+      JSON.parse((await one<{ avatar: string }>("SELECT avatar FROM assistants WHERE key = 'margaret'"))?.avatar ?? ''),
+    ).toEqual(agent);
+    // Another field leaves it alone.
+    expect((await editor.client.json(path, { method: 'PUT', json: { tag: 'Calorosa' } })).body.item.avatar).toEqual(
+      agent,
+    );
+
+    const bad = await editor.client.json(path, {
+      method: 'PUT',
+      json: { avatar: { kind: 'elevenlabs', agentId: 'margaret', modes: ['pronuncia'] } },
+    });
+    expect(bad.status).toBe(400);
+
+    const embed = await editor.client.json(path, {
+      method: 'PUT',
+      json: { avatar: { kind: 'assistia', slug: 'marguert' } },
+    });
+    expect(embed.body.item.avatar).toEqual({ kind: 'assistia', slug: 'marguert' });
+    const none = await editor.client.json(path, { method: 'PUT', json: { avatar: null } });
+    expect(none.body.item.avatar).toBeNull();
+    // "None" (stored as JSON null) reads back as null in the list too.
+    const list = await editor.client.json(C.assistants.list.path);
+    expect(list.body.items.find((a: { key: string }) => a.key === 'margaret').avatar).toBeNull();
+  });
 });
 
 describe('blobs and option lists', () => {

@@ -1307,6 +1307,19 @@ a.ad-kpi:hover {
   background: var(--blueT);
   color: var(--navy);
 }
+.ad-note.stack {
+  flex-direction: column;
+}
+
+/* Assistentes → prévia do Avatar no Mic: o embed da Assistia como o aluno vê no palco. */
+.ad-avemb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border: 0;
+  border-radius: 14px;
+  background: var(--navy);
+}
 
 /* ---------- Toasts ---------- */
 .ad-toasts {

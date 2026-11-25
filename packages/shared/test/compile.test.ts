@@ -451,7 +451,37 @@ describe('compileContent', () => {
       thumb: null,
       voice: { gender: 'female', pitch: 1.05, rate: 1, tts: 'asteria' },
       clips: { idle: '/m/media/abcd1234/video/mic/margaret-idle.mp4' },
+      avatar: null,
     });
+  });
+
+  it('publishes the Mic avatar without the ElevenLabs agent id (spec 05 "Mic avatar per assistant")', async () => {
+    const withAvatar = (avatar: unknown) => {
+      const r = rows();
+      (r.assistants[0] as { avatar?: string | null }).avatar = avatar === null ? null : JSON.stringify(avatar);
+      return r;
+    };
+    const agentId = 'agent_0test1tie2margaret3agent4id';
+    const agent = await compileContent(
+      withAvatar({ kind: 'elevenlabs', agentId, modes: ['livre', 'livre', 'extra'] }),
+      { publishedAt: NOW },
+    );
+    expect(agent.catalog.assistants[0]?.avatar).toEqual({ kind: 'elevenlabs', modes: ['livre', 'extra'] });
+    for (const text of Object.values(agent.files)) expect(text).not.toContain(agentId);
+
+    const embed = await compileContent(withAvatar({ kind: 'assistia', slug: 'marguert' }), { publishedAt: NOW });
+    expect(embed.catalog.assistants[0]?.avatar).toEqual({ kind: 'assistia', slug: 'marguert' });
+
+    // The JSON null the admin stores for "no avatar" reads as none.
+    const none = rows();
+    (none.assistants[0] as { avatar?: string | null }).avatar = 'null';
+    expect((await compileContent(none, { publishedAt: NOW })).catalog.assistants[0]?.avatar).toBeNull();
+
+    await expect(
+      compileContent(withAvatar({ kind: 'elevenlabs', agentId: 'not-an-agent', modes: ['livre'] }), {
+        publishedAt: NOW,
+      }),
+    ).rejects.toThrow(/avatar/);
   });
 
   it('episode files carry stable ids, sorted items, scene stills and inlined defaults', async () => {

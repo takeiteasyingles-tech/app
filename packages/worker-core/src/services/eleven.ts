@@ -285,6 +285,112 @@ export async function elevenSearchLibrary(
   return out;
 }
 
+// ---------- Agents (spec 05 "Mic avatar per assistant") ----------
+
+/**
+ * Hosts a signed conversation URL may point at (the student app's CSP connect-src lists the same).
+ * Anything else is refused, so a changed API answer can never send the learner's microphone elsewhere.
+ */
+export const ELEVEN_AGENT_WSS_HOSTS: readonly string[] = ['api.elevenlabs.io'];
+
+export function isElevenAgentWss(u: string): boolean {
+  try {
+    const url = new URL(u);
+    return (
+      url.protocol === 'wss:' &&
+      ELEVEN_AGENT_WSS_HOSTS.includes(url.hostname) &&
+      url.pathname.startsWith('/v1/convai/conversation')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A one-time wss URL that starts one conversation with the agent (GET /v1/convai/conversation/
+ * get-signed-url). With include_conversation_id the URL carries the conversation's id (`conversation_id`
+ * query parameter), so the server knows which call to bill without asking the client.
+ */
+export async function elevenAgentSignedUrl(apiKey: string, agentId: string): Promise<string> {
+  const q = new URLSearchParams({ agent_id: agentId, include_conversation_id: 'true' });
+  const r = await fetch(`${API}/convai/conversation/get-signed-url?${q}`, {
+    headers: { 'xi-api-key': apiKey, Accept: 'application/json' },
+  });
+  if (!r.ok) throw new ElevenError(`ElevenLabs signed URL ${r.status}`, r.status, await detailOf(r));
+  const j = (await r.json()) as { signed_url?: unknown };
+  if (typeof j.signed_url !== 'string' || !isElevenAgentWss(j.signed_url))
+    throw new ElevenError('ElevenLabs signed URL: unexpected answer', 502);
+  return j.signed_url;
+}
+
+export interface ElevenAgent {
+  id: string;
+  name: string;
+  language: string | null;
+  llm: string | null;
+  voiceId: string | null;
+  firstMessage: string | null;
+  authEnabled: boolean;
+  maxDurationS: number | null;
+  variables: string[];
+}
+
+const obj = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+
+/** The agent's settings that matter to tie-app (GET /v1/convai/agents/{id}). */
+export async function elevenGetAgent(apiKey: string, agentId: string): Promise<ElevenAgent> {
+  const r = await fetch(`${API}/convai/agents/${encodeURIComponent(agentId)}`, {
+    headers: { 'xi-api-key': apiKey, Accept: 'application/json' },
+  });
+  if (!r.ok) throw new ElevenError(`ElevenLabs agent ${r.status}`, r.status, await detailOf(r));
+  const j = obj(await r.json());
+  const cc = obj(j.conversation_config);
+  const agent = obj(cc.agent);
+  const prompt = obj(agent.prompt);
+  const dyn = obj(obj(agent.dynamic_variables).dynamic_variable_placeholders);
+  const max = Number(obj(cc.conversation).max_duration_seconds);
+  return {
+    id: str(j.agent_id, 80) ?? agentId,
+    name: str(j.name, 200) ?? agentId,
+    language: str(agent.language, 20),
+    llm: str(prompt.llm, 80),
+    voiceId: str(obj(cc.tts).voice_id, 40),
+    firstMessage: str(agent.first_message, 600),
+    authEnabled: obj(obj(j.platform_settings).auth).enable_auth === true,
+    maxDurationS: Number.isFinite(max) && max > 0 ? Math.floor(max) : null,
+    variables: Object.keys(dyn).slice(0, 50),
+  };
+}
+
+export interface ElevenConversation {
+  agentId: string | null;
+  /** initiated | in-progress | processing | done | failed */
+  status: string;
+  /** Unix seconds; null when ElevenLabs did not say. */
+  startS: number | null;
+  /** Length of the call; null while it is still going on. */
+  durationS: number | null;
+}
+
+/** A conversation's status and length (GET /v1/convai/conversations/{id}). */
+export async function elevenGetConversation(apiKey: string, conversationId: string): Promise<ElevenConversation> {
+  const r = await fetch(`${API}/convai/conversations/${encodeURIComponent(conversationId)}`, {
+    headers: { 'xi-api-key': apiKey, Accept: 'application/json' },
+  });
+  if (!r.ok) throw new ElevenError(`ElevenLabs conversation ${r.status}`, r.status, await detailOf(r));
+  const j = obj(await r.json());
+  const meta = obj(j.metadata);
+  const start = Number(meta.start_time_unix_secs);
+  const dur = Number(meta.call_duration_secs);
+  return {
+    agentId: str(j.agent_id, 80),
+    status: str(j.status, 40) ?? 'unknown',
+    startS: Number.isFinite(start) && start > 0 ? start : null,
+    durationS: Number.isFinite(dur) && dur >= 0 ? dur : null,
+  };
+}
+
 /** Adds a Voice Library voice to the account (POST /v1/voices/add/{owner}/{voice}); its id in the account. */
 export async function elevenAddLibraryVoice(
   apiKey: string,

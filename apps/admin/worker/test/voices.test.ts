@@ -221,6 +221,55 @@ describe('voices', () => {
     expect((await moderator.client.send(V.account.path)).status).toBe(403);
   });
 
+  it('reads an ElevenLabs agent for the assistant editor, with the stored key', async () => {
+    const editor = await staff(['editor']);
+    const id = 'agent_0test1tie2margaret3agent4id';
+    // Without a key the editor is told where to save one.
+    const nokey = await editor.client.json(`${V.agent.path}?id=${id}`);
+    expect(nokey.status).toBe(409);
+
+    await admin.client.json(V.put.path, { method: 'PUT', json: { apiKey: KEY } });
+    const calls = stubEleven((url) =>
+      url.endsWith(`/v1/convai/agents/${id}`)
+        ? Response.json({
+            agent_id: id,
+            name: 'TIE – Margaret Woods (Conversação)',
+            conversation_config: {
+              agent: {
+                first_message: 'Hello! I’m Margaret.',
+                language: 'en',
+                prompt: { llm: 'qwen36-35b-a3b' },
+                dynamic_variables: { dynamic_variable_placeholders: { student_name: '', student_level: '' } },
+              },
+              tts: { voice_id: 'PN2GfyiVwoO6lqAssz0s' },
+              conversation: { max_duration_seconds: 600 },
+            },
+            platform_settings: { auth: { enable_auth: false } },
+          })
+        : new Response('{"detail":{"status":"document_not_found"}}', { status: 404 }),
+    );
+    const res = await editor.client.json(`${V.agent.path}?id=${id}`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.agent).toEqual({
+      id,
+      name: 'TIE – Margaret Woods (Conversação)',
+      language: 'en',
+      llm: 'qwen36-35b-a3b',
+      voiceId: 'PN2GfyiVwoO6lqAssz0s',
+      firstMessage: 'Hello! I’m Margaret.',
+      authEnabled: false,
+      maxDurationS: 600,
+      variables: ['student_name', 'student_level'],
+    });
+    expect(calls[0]?.init.headers).toMatchObject({ 'xi-api-key': KEY });
+
+    const missing = await editor.client.json(`${V.agent.path}?id=agent_doesnotexist000`);
+    expect(missing.status).toBe(404);
+    expect((await editor.client.send(`${V.agent.path}?id=not-an-agent`)).status).toBe(400);
+    const moderator = await staff(['moderator']);
+    expect((await moderator.client.send(`${V.agent.path}?id=${id}`)).status).toBe(403);
+  });
+
   it('saves the lesson voices on the episode (strict ids, audited)', async () => {
     const editor = await staff(['editor']);
     const path = buildPath(adminApi.content.episodes.update.path, { id: 1 });

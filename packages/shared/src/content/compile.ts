@@ -37,6 +37,8 @@ import {
   type EpisodeIndexEntry,
   Extra,
   type ExtraMeta,
+  MicAvatar,
+  type MicAvatarPublic,
   type MicCatalog,
   type OnboardingLists,
   type OptionItem,
@@ -244,6 +246,8 @@ export interface AssistantRowDb {
   thumb_media: Text;
   sort: number;
   active: number;
+  /** JSON MicAvatar (migration 0019); absent in rows read before it. */
+  avatar?: Text;
 }
 export interface AssistantClipRowDb {
   assistant_key: string;
@@ -452,6 +456,19 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
   const J = <T>(text: string | null | undefined, fallback: T, where: string) =>
     parseJson(text, fallback, where, issues);
 
+  // Mic avatar (migration 0019): checked like any column, and the agent id stays on the server.
+  const publicAvatar = (raw: unknown, where: string): MicAvatarPublic | null => {
+    if (raw == null) return null;
+    const p = MicAvatar.safeParse(raw);
+    if (!p.success) {
+      issues.push({ file: 'rows', path: where, message: 'invalid Mic avatar' });
+      return null;
+    }
+    return p.data.kind === 'assistia'
+      ? { kind: 'assistia', slug: p.data.slug }
+      : { kind: 'elevenlabs', modes: [...new Set(p.data.modes)] };
+  };
+
   // Media id → URL. An unknown id is a broken reference and fails the compile.
   const mediaById = new Map(rows.media.map((m) => [m.id, m]));
   const url = (id: string | null | undefined, where: string): string | null => {
@@ -608,6 +625,7 @@ export async function compileContent(rows: ContentRows, opts: CompileOptions): P
         poster: url(a.poster_media, `assistants.${a.key}.poster`),
         thumb: url(a.thumb_media, `assistants.${a.key}.thumb`),
         clips: clipsOf(a.key),
+        avatar: publicAvatar(J<unknown>(a.avatar, null, `assistants.${a.key}.avatar`), `assistants.${a.key}.avatar`),
       };
     });
 

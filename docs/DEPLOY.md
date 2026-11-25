@@ -154,6 +154,16 @@ An assistant with a cloned voice speaks the HD voice (`/api/tts`) through Eleven
 
 If ElevenLabs fails, `/api/tts` answers `ai_unavailable` and the app falls back to the browser voice, as for any TTS failure. The old env route still works as a fallback when nothing is set in the admin: the `ELEVENLABS_API_KEY` secret and the `ELEVENLABS_VOICES` / `ELEVENLABS_MODEL` vars of tie-app.
 
+### ElevenLabs agents in the Mic (spec 05 "Mic avatar per assistant")
+
+An assistant can hand its Mic conversations to an ElevenLabs agent (Admin → Assistentes → the assistant → Imagens e vídeos → **Avatar no Mic → Agente ElevenLabs**: the agent id and the modes). Requirements:
+
+1. The key saved in Configurações → Vozes must belong to the ElevenLabs workspace that owns the agent and be allowed to use **Agents** (tie-app asks it for signed URLs and reads each conversation's length to bill it). **Verificar agente** in the assistant editor checks exactly that.
+2. In ElevenLabs → the agent → **Security**, turn on **Enable authentication**: only signed URLs (what tie-app uses) can then start a conversation, and nobody can spend the account's credits with the bare agent id.
+3. The agent's audio formats stay PCM (the default `pcm_16000`); μ-law is not supported by the app.
+
+Each conversation reserves up to 10 minutes of the learner's monthly quota when it starts and is settled with the length ElevenLabs measured, on `/end` or by the daily cron. Nothing to deploy when switching an assistant between the embed, the agent and its own avatar.
+
 ## 6. Migrations (remote)
 
 ```powershell
@@ -162,7 +172,7 @@ npx wrangler d1 migrations apply tie-db --remote
 cd ../..
 ```
 
-This applies every file in `packages/db/migrations` (`0001…0010`). The admin config points at the same directory, so there is only one migration history. The seed in step 7 also runs this, but applying migrations on their own first shows any SQL error right away.
+This applies every file in `packages/db/migrations` (`0001…0019`). The admin config points at the same directory, so there is only one migration history. The seed in step 7 also runs this, but applying migrations on their own first shows any SQL error right away.
 
 ## 7. Seed content and media (remote)
 

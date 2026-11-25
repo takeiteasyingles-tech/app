@@ -10,7 +10,7 @@ export const CSP = [
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
   "font-src 'self'",
-  "connect-src 'self'",
+  "connect-src 'self' wss://api.elevenlabs.io", // ElevenLabs agent conversations (Mic, app)
   "worker-src 'self'",
   "manifest-src 'self'",
   "object-src 'none'",
