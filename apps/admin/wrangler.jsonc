@@ -33,6 +33,9 @@
     { "name": "RL_API", "namespace_id": "2003", "simple": { "limit": 100, "period": 10 } },
     { "name": "RL_UPLOAD", "namespace_id": "2004", "simple": { "limit": 5, "period": 60 } }
   ],
+  // Backup cron (worker/src/lib/backups.ts runScheduledBackup): every hour at :05; it only works when
+  // the hour matches the schedule set in Operação → Backup (São Paulo time).
+  "triggers": { "crons": ["5 * * * *"] },
   "placement": { "mode": "smart" },
   "observability": { "enabled": true },
   // Production values only, as in tie-app: fill both before the first deploy (the admin origin, not

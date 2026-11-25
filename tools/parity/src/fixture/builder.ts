@@ -66,7 +66,7 @@ export async function buildFixtureInPage(): Promise<Any> {
   Object.assign(s.settings, {
     ts: 1,
     sound: true,
-    hd: false,
+    hd: true, // PROD (spec 05 "Character voices by default")
     trans: true,
     slow: P.defaults.speed < 1,
     remind: true,

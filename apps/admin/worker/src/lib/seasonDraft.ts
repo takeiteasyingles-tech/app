@@ -6,6 +6,7 @@
 // is off, both calls fail or the answer does not fit the contract. Drafts are proposals only: they are
 // stored as status 'draft' and staff approve them.
 import {
+  AI_MODEL_ID_RE,
   AI_PROMPT_KEYS,
   DEFAULT_MODELS,
   type DraftQuestion,
@@ -16,10 +17,11 @@ import {
   SETTINGS,
   seasonTestQuestionIssues,
 } from '@tie/shared';
-import { all, fromJson, isEnabled, one } from '@tie/worker-core';
+import { type AiEnv, aiRunner, all, fromJson, isEnabled, one } from '@tie/worker-core';
 import { z } from 'zod';
 
-const MODEL_ID_RE = /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i;
+// PROD (spec 05 "Paid AI providers"): Workers AI, Claude or OpenAI ids (aiRunner dispatches).
+const MODEL_ID_RE = AI_MODEL_ID_RE;
 /** The material sent to the model is capped (prompt size); dialog lines are the first to go. */
 const CONTENT_MAX_CHARS = 14_000;
 
@@ -219,10 +221,6 @@ export function contentJson(eps: readonly DraftEpisode[]): string {
   return '[]';
 }
 
-interface AiRunner {
-  run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
-}
-
 const hasAi = (env: { AI?: unknown }): boolean => !!env.AI && typeof (env.AI as { run?: unknown }).run === 'function';
 
 async function models(db: D1Database): Promise<string[]> {
@@ -261,7 +259,7 @@ export interface DraftOutcome {
 }
 
 /** Workers AI first, the demo drafter on any failure. Never throws for an AI problem. */
-export async function draftQuestions(env: { DB: D1Database; AI?: unknown }, req: DraftRequest): Promise<DraftOutcome> {
+export async function draftQuestions(env: AiEnv & { DB: D1Database }, req: DraftRequest): Promise<DraftOutcome> {
   const demo = (detail: string): DraftOutcome => ({
     questions: demoSeasonTestDraft({
       episodes: req.episodes,
@@ -292,7 +290,7 @@ export async function draftQuestions(env: { DB: D1Database; AI?: unknown }, req:
     instructions: req.instructions?.trim() || '(nenhuma)',
   });
   const nums = new Set(req.episodes.map((e) => e.num));
-  const ai = env.AI as AiRunner;
+  const ai = aiRunner(env);
   let lastError = '';
   for (const model of await models(env.DB)) {
     try {

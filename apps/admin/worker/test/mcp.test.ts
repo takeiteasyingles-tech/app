@@ -7,6 +7,7 @@ import {
   AUDIT_AGENT_ROLE,
   adminApi,
   buildPath,
+  CONTENT_ENTITIES,
   DURATIONS,
   MCP_PATH,
   MCP_PROTOCOL_VERSIONS,
@@ -16,7 +17,8 @@ import {
 } from '@tie/shared';
 import { sha256Hex } from '@tie/worker-core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { type Account, auditRows, Client, exec, ins, one, resetDb, seedContent, staff } from './helpers';
+import { ENTITIES } from '../src/lib/entities';
+import { type Account, auditRows, Client, exec, ins, learner, one, resetDb, seedContent, staff } from './helpers';
 
 const T = adminApi.apiTokens;
 
@@ -97,9 +99,11 @@ describe('API tokens', () => {
       json: { name: 'b', scopes: ['content.read'], expiresInDays: null },
     });
     expect(never.body.item.expiresAt).toBeNull();
-    expect((await admin.client.send(T.create.path, { json: { name: 'c', scopes: ['content.publish'] } })).status).toBe(
+    expect((await admin.client.send(T.create.path, { json: { name: 'c', scopes: ['content.delete'] } })).status).toBe(
       400,
     );
+    const pub = await admin.client.json(T.create.path, { json: { name: 'p', scopes: ['content.publish'] } });
+    expect(pub.status).toBe(201);
     expect(
       (await admin.client.send(T.create.path, { json: { name: 'c', scopes: ['content.read', 'content.read'] } }))
         .status,
@@ -118,6 +122,12 @@ describe('API tokens', () => {
     expect(await auditRows('api_token.revoke', since)).toHaveLength(1);
     const editor = await staff(['editor']);
     expect((await editor.client.send(T.list.path)).status).toBe(403);
+  });
+});
+
+describe('MCP content entities', () => {
+  it('cover every CMS entity of the admin', () => {
+    expect([...CONTENT_ENTITIES].sort()).toEqual(ENTITIES.map((e) => e.name).sort());
   });
 });
 
@@ -402,5 +412,128 @@ describe('MCP endpoint', () => {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
     expect(parse.body.error.code).toBe(-32700);
+  });
+
+  it('creates, edits and deletes any content entity (exercises and their items)', async () => {
+    const since = Date.now();
+    const desc = await callTool(token, 'describe_content', { entity: 'exercises' });
+    expect(desc.isError).toBe(false);
+    expect(desc.data).toMatchObject({
+      idKey: 'id',
+      numericId: false,
+      parent: { key: 'episodeNum', entity: 'episodes' },
+    });
+    expect(desc.data.schema.type).toBe('object');
+    const itemDesc = await callTool(token, 'describe_content', { entity: 'items' });
+    expect(itemDesc.data.parent).toEqual({ key: 'exerciseId', entity: 'exercises' });
+
+    const ex = await callTool(token, 'create_content', {
+      entity: 'exercises',
+      item: { ...desc.data.example, id: 'e1-ex1', sort: 1, title: 'Novo exercício' },
+    });
+    expect(ex.isError, JSON.stringify(ex.data)).toBe(false);
+    expect(ex.data.item).toMatchObject({ id: 'e1-ex1', episodeNum: 1, title: 'Novo exercício' });
+    const it1 = await callTool(token, 'create_content', {
+      entity: 'items',
+      item: { ...itemDesc.data.example, id: 'e1-ex1-i0', exerciseId: 'e1-ex1', q: 'Q nova' },
+    });
+    expect(it1.isError, JSON.stringify(it1.data)).toBe(false);
+    const listed = await callTool(token, 'list_content', { entity: 'items', parent: 'e1-ex1' });
+    expect(listed.data.items.map((i: { id: string }) => i.id)).toEqual(['e1-ex1-i0']);
+
+    const upd = await callTool(token, 'update_content', {
+      entity: 'exercises',
+      id: 'e1-ex1',
+      patch: { title: 'Revisado' },
+    });
+    expect(upd.data.item.title).toBe('Revisado');
+    const bad = await callTool(token, 'create_content', { entity: 'items', item: { id: 'x', exerciseId: 'nope' } });
+    expect(bad.data.error).toBe('validation_failed');
+
+    // The exercise goes with its items.
+    const del = await callTool(token, 'delete_content', { entity: 'exercises', id: 'e1-ex1' });
+    expect(del.data).toMatchObject({ ok: true, deleted: { id: 'e1-ex1' } });
+    expect(await one('SELECT id FROM exercise_items WHERE id = ?', 'e1-ex1-i0')).toBeNull();
+
+    // Learner answers protect what they point at.
+    const ana = await learner();
+    await ins('exercise_answers', {
+      user_id: ana.id,
+      item_id: 'e1-ex0-i0',
+      choice_idx: 1,
+      correct: 1,
+      answered_at: Date.now(),
+    });
+    const used = await callTool(token, 'delete_content', { entity: 'exercises', id: 'e1-ex0' });
+    expect(used.data.error).toBe('in_use');
+
+    const creates = await auditRows('content.exercises.create', since);
+    expect(creates[0]?.actor_role).toBe(AUDIT_AGENT_ROLE);
+    expect(JSON.parse(creates[0]?.diff ?? '{}')._agent.tool).toBe('create_content');
+    expect(await auditRows('content.exercises.delete', since)).toHaveLength(1);
+  });
+
+  it('edits blobs, option lists and the Concluído screen', async () => {
+    const ep = await callTool(token, 'get_content', { entity: 'episodes', id: 1 });
+    const done = { ...ep.data.item.done, title: 'Episódio concluído!' };
+    const upd = await callTool(token, 'update_content', { entity: 'episodes', id: 1, patch: { done } });
+    expect(upd.data.item.done.title).toBe('Episódio concluído!');
+    const blobs = await callTool(token, 'list_blobs', { key: 'focus' });
+    expect(blobs.data.items).toHaveLength(1);
+    const put = await callTool(token, 'put_blob', { key: 'focus', json: blobs.data.items[0].json });
+    expect(put.isError, JSON.stringify(put.data)).toBe(false);
+    const goals = await callTool(token, 'put_option_list', {
+      listKey: 'goals',
+      items: [{ itemKey: 'viajar', sort: 0, label: 'Viajar' }],
+    });
+    expect(goals.data.items.map((i: { itemKey: string }) => i.itemKey)).toEqual(['viajar']);
+  });
+
+  it('keeps publishing behind the content.publish scope', async () => {
+    // read + edit only: no status change to or from published, no release.
+    const st = await callTool(token, 'set_episode_status', { num: 2, status: 'published' });
+    expect(st.data.error).toBe('forbidden');
+    const gen = await callTool(token, 'update_content', { entity: 'episodes', id: 1, patch: { status: 'draft' } });
+    expect(gen.data.error).toBe('forbidden');
+    expect((await callTool(token, 'publish_release', {})).data.error).toBe('forbidden');
+    // A move that does not touch "published" needs no publish scope.
+    const quiet = await callTool(token, 'update_content', { entity: 'episodes', id: 2, patch: { status: 'draft' } });
+    expect(quiet.isError, JSON.stringify(quiet.data)).toBe(false);
+
+    const pub = await createToken(admin, {
+      name: 'autonomo',
+      scopes: ['content.read', 'content.edit', 'content.publish'],
+    });
+    const since = Date.now();
+    const back = await callTool(pub.token, 'set_episode_status', { num: 2, status: 'title_only' });
+    expect(back.data.item.status).toBe('title_only');
+    const rel = await callTool(pub.token, 'publish_release', { notes: 'Primeira versão pelo agente' });
+    expect(rel.isError, JSON.stringify(rel.data)).toBe(false);
+    expect(rel.data.release.notes).toBe('Primeira versão pelo agente');
+    expect(rel.data.changed).toContain('catalog.json');
+    const list = await callTool(pub.token, 'list_releases', {});
+    expect(list.data.current).toBe(rel.data.release.version);
+    const [audit] = await auditRows('content.publish', since);
+    expect(audit?.actor_role).toBe(AUDIT_AGENT_ROLE);
+    const rb = await callTool(pub.token, 'rollback_release', { id: rel.data.release.id });
+    expect(rb.data.current).toBe(rel.data.release.version);
+
+    // Season test: an agent can approve and try to open it (not ready: too few questions).
+    const draft = await callTool(pub.token, 'draft_season_test_questions', {
+      seasonN: 1,
+      questions: [{ q: 'Como se diz "porta"?', accept: ['door'] }],
+    });
+    const ids = draft.data.items.map((x: { id: string }) => x.id);
+    const rev = await callTool(pub.token, 'review_season_test_questions', { seasonN: 1, ids, status: 'approved' });
+    expect(rev.data.items[0].status).toBe('approved');
+    const open = await callTool(pub.token, 'publish_season_test', { seasonN: 1, published: true });
+    expect(open.data.error).toBe('conflict');
+  });
+
+  it('backs up the content for an agent', async () => {
+    const res = await callTool(token, 'create_backup', { note: 'Antes de reescrever' });
+    expect(res.isError, JSON.stringify(res.data)).toBe(false);
+    expect(res.data.item).toMatchObject({ kind: 'agent', scope: 'content', status: 'ok', createdBy: admin.id });
+    expect(res.data.item.rows).toBeGreaterThan(0);
   });
 });

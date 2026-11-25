@@ -21,12 +21,18 @@ import { Icon } from '../ui/icons';
 import { Area, Async, Button, Card, Empty, Field, Page, Pill, Sel, Switch, TabsNav, TextIn } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { toast } from '../ui/toast';
+import { AiProviders } from './AiProviders';
 import { ApiTokens } from './ApiTokens';
 import type { ScreenProps } from './registry';
+import { VoicesSettings } from './Voices';
 
 const FLAG_INFO: Record<string, string> = {
-  [FLAGS.aiEnabled]: 'IA ligada: conversa, pronúncia e voz pelo Workers AI. Desligada, o app usa o modo demo.',
-  [FLAGS.freeSteps]: 'Etapas livres: pula a trava entre as etapas do episódio (testes).',
+  [FLAGS.aiEnabled]:
+    'IA ligada: conversa, pronúncia e voz pelos modelos de Provedores de IA (Workers AI, Claude ou OpenAI). Desligada, o app usa o modo demo.',
+  [FLAGS.freeSteps]:
+    'Modo Dev: libera o botão de avançar sem concluir vídeos, áudios, gravações ou exercícios. Vale para os alunos definidos nas regras, sem ativação adicional no perfil.',
+  [FLAGS.stepFeedback]:
+    'Feedback da plataforma: exige uma avaliação da experiência antes de avançar em cada etapa do episódio, inclusive ao concluir. Pergunta sobre dificuldades e sugestões de melhoria da tela.',
   [FLAGS.storeRecordings]: 'Guardar as gravações do Mic (para moderação).',
 };
 
@@ -34,10 +40,6 @@ const SETTING_INFO: readonly (readonly [string, string, string])[] = [
   [SETTINGS.retentionTranscriptsDays, 'Dias que as conversas do Mic ficam guardadas', 'Entre 1 e 3650. Padrão: 180.'],
   [SETTINGS.termsVersion, 'Versão dos termos de uso', 'Ex.: 2026-10. Quem aceitou outra versão aceita de novo.'],
   ['app.origin', 'Endereço do app dos alunos', 'Usado nos links de nova senha (https://…, sem barra no fim).'],
-  [SETTINGS.modelTutor, 'Modelo da conversa', 'Id do Workers AI (@cf/…).'],
-  [SETTINGS.modelTutorFallback, 'Modelo reserva da conversa', 'Usado quando o principal falha.'],
-  [SETTINGS.modelAsr, 'Modelo de transcrição', 'Whisper.'],
-  [SETTINGS.modelTts, 'Modelo de voz', 'Deepgram Aura.'],
   [SETTINGS.modelGuard, 'Modelo de segurança', 'Llama Guard.'],
 ];
 
@@ -292,33 +294,36 @@ function SettingRow({
 function AppSettings() {
   const load = useLoad((signal) => call(adminOpsApi.settings, { signal }), []);
   const current = load.data?.items.find((s) => s.key === SETTINGS.contentCurrent);
+  const put = (s: AppSetting) =>
+    load.setData((p) => ({ items: [...(p?.items ?? []).filter((x) => x.key !== s.key), s] }));
   return (
-    <Card title="Valores do app" sub="O que o Worker lê a cada pedido. Vazio = o padrão do código.">
-      {current ? (
-        <div class="ad-note bl">
-          <Icon name="rocket" size={18} /> Versão publicada: <code class="ad-mono">{current.value.slice(0, 12)}</code>{' '}
-          desde {fmtDateTime(current.updatedAt)}. Ela só muda por Publicações.
-        </div>
-      ) : null}
-      <Async load={load}>
-        {(d) => (
-          <div class="stack" style={{ '--gap': '6px' }}>
-            {SETTING_INFO.map(([k, label, hint]) => (
-              <SettingRow
-                key={k}
-                k={k}
-                label={label}
-                hint={hint}
-                s={d.items.find((x) => x.key === k)}
-                onSaved={(s) =>
-                  load.setData((p) => ({ items: [...(p?.items ?? []).filter((x) => x.key !== s.key), s] }))
-                }
-              />
-            ))}
+    <>
+      <AiProviders settings={load.data?.items ?? []} onSetting={put} />
+      <Card title="Valores do app" sub="O que o Worker lê a cada pedido. Vazio = o padrão do código.">
+        {current ? (
+          <div class="ad-note bl">
+            <Icon name="rocket" size={18} /> Versão publicada: <code class="ad-mono">{current.value.slice(0, 12)}</code>{' '}
+            desde {fmtDateTime(current.updatedAt)}. Ela muda sozinha a cada conteúdo salvo.
           </div>
-        )}
-      </Async>
-    </Card>
+        ) : null}
+        <Async load={load}>
+          {(d) => (
+            <div class="stack" style={{ '--gap': '6px' }}>
+              {SETTING_INFO.map(([k, label, hint]) => (
+                <SettingRow
+                  key={k}
+                  k={k}
+                  label={label}
+                  hint={hint}
+                  s={d.items.find((x) => x.key === k)}
+                  onSaved={put}
+                />
+              ))}
+            </div>
+          )}
+        </Async>
+      </Card>
+    </>
   );
 }
 
@@ -414,6 +419,7 @@ export function Settings({ q }: ScreenProps) {
   const tabs = [
     ...(can('flags.manage') ? ([['flags', 'Flags']] as const) : []),
     ...(can('settings.manage') ? ([['app', 'Valores do app']] as const) : []),
+    ...(can('settings.manage') ? ([['vozes', 'Vozes']] as const) : []),
     ...(can('ai.prompts') ? ([['prompts', 'Prompts da IA']] as const) : []),
     ...(can('api_tokens.manage') ? ([['integracoes', 'Integrações']] as const) : []),
   ];
@@ -447,6 +453,8 @@ export function Settings({ q }: ScreenProps) {
         <Flags />
       ) : tab === 'app' ? (
         <AppSettings />
+      ) : tab === 'vozes' ? (
+        <VoicesSettings />
       ) : tab === 'integracoes' ? (
         <ApiTokens />
       ) : (

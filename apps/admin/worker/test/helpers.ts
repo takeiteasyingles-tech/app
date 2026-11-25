@@ -3,7 +3,7 @@
 // reset and a compile-valid content fixture.
 import { createExecutionContext, type D1Migration, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
-import { newId, type Role } from '@tie/shared';
+import { newId, type Role, STEP_COUNT } from '@tie/shared';
 import { createSession, type Env, hashPassword } from '@tie/worker-core';
 import { buildAdminApp } from '../src/index';
 
@@ -180,7 +180,15 @@ export async function learner(opts: { email?: string; name?: string; password?: 
   return { id, email, appToken: session.token };
 }
 
-const USER_TABLES = ['sessions', 'one_time_tokens', 'moderation_items', 'uploads', 'ai_usage_events', 'users'];
+const USER_TABLES = [
+  'backups',
+  'sessions',
+  'one_time_tokens',
+  'moderation_items',
+  'uploads',
+  'ai_usage_events',
+  'users',
+];
 const CONTENT_TABLES = [
   'assistant_clips',
   'album_tracks',
@@ -270,7 +278,8 @@ export async function seedContent(): Promise<void> {
   await media('m-img', 'media/aaaa0003/img/home.webp', 'image', 'image/webp');
   await media('m-pdf', 'media/aaaa0004/ebook.pdf', 'pdf', 'application/pdf');
   await media('m-clip', 'media/aaaa0005/video/idle.mp4', 'video', 'video/mp4');
-  for (let n = 1; n <= 10; n++) await ins('steps', { n, name: `Step ${n}`, pt: `etapa ${n}`, group_label: null });
+  for (let n = 1; n <= STEP_COUNT; n++)
+    await ins('steps', { n, name: `Step ${n}`, pt: `etapa ${n}`, group_label: null });
   await ins('seasons', { n: 1, title: 'Arrival', synopsis: 'A família' });
   await ins('cast_members', { name: 'Zach', initials: 'ZW', color: '#3C5580' });
   await ins('ebooks', {

@@ -266,6 +266,50 @@ async function typeLine(page: Page, text: string) {
 }
 
 // =====================================================================================
+test('Mic uses the configured assistant voice with profile HD switched off', async ({ context, page }) => {
+  await context.route('**/api/health', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ai: true }) }),
+  );
+  // A valid short PCM WAV exercises real Web Audio playback without calling a paid TTS service.
+  const audio = Buffer.alloc(44 + 3200);
+  audio.write('RIFF', 0);
+  audio.writeUInt32LE(audio.length - 8, 4);
+  audio.write('WAVEfmt ', 8);
+  audio.writeUInt32LE(16, 16);
+  audio.writeUInt16LE(1, 20);
+  audio.writeUInt16LE(1, 22);
+  audio.writeUInt32LE(16000, 24);
+  audio.writeUInt32LE(32000, 28);
+  audio.writeUInt16LE(2, 32);
+  audio.writeUInt16LE(16, 34);
+  audio.write('data', 36);
+  audio.writeUInt32LE(3200, 40);
+  const voices: string[] = [];
+  await context.route('**/api/tts', async (route) => {
+    voices.push(route.request().postDataJSON().voice);
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: audio });
+  });
+  await signup(page);
+  // The character voices start on (spec 05 "Character voices by default"): switch them off first, so
+  // this checks that the Mic still asks for the assistant's voice.
+  const origin = new URL(page.url()).origin;
+  const off = await page.request.patch('/api/me/settings', {
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', Origin: origin },
+    data: JSON.stringify({ hd: false }),
+  });
+  expect(off.status()).toBe(200);
+  await page.reload();
+  const current = await page.request.get('/api/me/state');
+  expect((await current.json()).settings.hd).toBe(false);
+  await openLobby(page);
+  await startCall(page);
+  await expect.poll(() => voices.length).toBe(1);
+  await btn(page, /Again, please/).click();
+  await expect.poll(() => voices.length).toBe(2);
+  expect(voices).toEqual(['margaret', 'margaret']);
+  expect(await said(page)).toEqual([]);
+});
+
 test.describe('mobile', () => {
   test('lobby: assistant picker, modes, per-mode pickers, minutes, persistence', async ({ page }) => {
     await signup(page);
@@ -278,13 +322,12 @@ test.describe('mobile', () => {
     // Bottom tabs visible in the lobby (tabs: !inCall).
     await expect(page.locator('.tabs, nav.tabbar, .tabbar').first()).toBeVisible();
 
-    // Stage: avatar-stage with status = assistant full name, video avatar.
+    // Stage: avatar-stage with status = assistant full name; Margaret has the 3D avatar
+    // (05-foundation-notes § "3D Mic avatar"), the other assistants the video clips.
     const stage = page.locator('#av-live.avatar-stage');
     await expect(stage).toBeVisible();
     await expect(stage.locator('.status')).toHaveText('Margaret Woods'); // A.full, as AS().full in the prototype
-    await expect(stage.locator('.av2d.vid')).toHaveCount(1);
-    await expect(stage.locator('.av2d video[data-k="idle"]')).toHaveCount(1);
-    await expect(stage.locator('.av2d video.on')).toHaveCount(1);
+    await expect(stage.locator('.av2d.av3d .av3d-canvas')).toHaveCount(1, { timeout: 15_000 });
 
     // Assistant picker
     const picker = page.getByRole('radiogroup', { name: 'Seu assistente' });
@@ -536,12 +579,12 @@ test.describe('mobile', () => {
     await expect.poll(() => apiHits(page, 'POST', /^\/api\/srs\/cards$/).length).toBe(1);
     expect(apiHits(page, 'POST', /^\/api\/srs\/cards$/)[0]?.status).toBe(200);
     await expectToast(page, /^pts-toast\|\+\d+ pontos$/); // award 'word' from POST /api/srs/cards
-    await expectToast(page, new RegExp(`Levei “${wordEn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}” para a Revisão\\.`));
+    await expectToast(page, new RegExp(`Levei “${wordEn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}” para os Cards\\.`));
     await expect.poll(async () => (await apiState(page)).deck.some((d) => d.en === wordEn)).toBe(true);
     expect((await apiState(page)).deck.find((d) => d.en === wordEn)?.scene).toBe('Mic · Maggie');
     await clearToasts(page);
     await pill.click();
-    await expectToast(page, /Já está na sua Revisão\./);
+    await expectToast(page, /Já está nos seus Cards\./);
     expect(apiHits(page, 'POST', /^\/api\/srs\/cards$/).length).toBe(1);
 
     await page
@@ -594,7 +637,7 @@ test.describe('mobile', () => {
       '[U6] report fixes:',
       await fixes.count(),
       'save btn:',
-      await page.getByRole('button', { name: /^Levar \d+ para a Revisão$/ }).count(),
+      await page.getByRole('button', { name: /^Levar \d+ para os Cards$/ }).count(),
       'head:',
       await head.innerText(),
     );
@@ -602,19 +645,19 @@ test.describe('mobile', () => {
     if (process.env.U6_SHOTS)
       await page.screenshot({ path: `${process.env.U6_SHOTS}report-mobile.png`, fullPage: true });
 
-    // Words → Revisão.
-    const save = page.getByRole('button', { name: /^Levar \d+ para a Revisão$/ });
+    // Words → Cards.
+    const save = page.getByRole('button', { name: /^Levar \d+ para os Cards$/ });
     if (await save.count()) {
       const deck0 = (await apiState(page)).deck.length;
       await clearToasts(page);
       await save.click();
       await expect.poll(() => apiHits(page, 'POST', /^\/api\/srs\/cards$/).length).toBe(2);
       expect(apiHits(page, 'POST', /^\/api\/srs\/cards$/)[1]?.status).toBe(200);
-      await expectToast(page, /(cartões novos|cartão novo) na Revisão\.|Essas palavras já estavam na Revisão\./);
+      await expectToast(page, /(cartões novos|cartão novo) nos Cards\.|Essas palavras já estavam nos seus Cards\./);
       expect((await apiState(page)).deck.length).toBeGreaterThanOrEqual(deck0);
       await clearToasts(page);
       await save.click();
-      await expectToast(page, /Essas palavras já estavam na Revisão\./);
+      await expectToast(page, /Essas palavras já estavam nos seus Cards\./);
     }
 
     // Persisted: server session with transcript + report; reload keeps the report (no second write).
@@ -836,10 +879,29 @@ test.describe('mobile', () => {
     await expect(page.locator('#mg-input')).toBeFocused();
   });
 
+  test('3D avatar (Margaret): canvas at rest, talking while she speaks, back to rest', async ({ page }) => {
+    test.setTimeout(120_000);
+    await signup(page);
+    await openLobby(page);
+    const av = page.locator('#av-live .av2d.av3d');
+    await expect(av.locator('.av3d-canvas')).toHaveCount(1, { timeout: 15_000 });
+    await expect(av).toHaveAttribute('data-talking', '0');
+    await page.evaluate(() => {
+      (window as unknown as { __speakMs: number }).__speakMs = 4000;
+    });
+    await startCall(page);
+    await expect(av).toHaveAttribute('data-talking', '1', { timeout: 10_000 });
+    await expect(av).toHaveAttribute('data-talking', '0', { timeout: 10_000 });
+    await page.evaluate(() => {
+      (window as unknown as { __speakMs: number }).__speakMs = 200;
+    });
+  });
+
   test('avatar: idle clip at rest, talking clip while the assistant speaks (mood → clip)', async ({ page }) => {
     test.setTimeout(120_000);
     await signup(page);
     await openLobby(page);
+    await page.getByRole('radio', { name: /Robert/ }).click(); // a video assistant (Margaret is 3D)
     const on = () => page.locator('#av-live .av2d video.on').getAttribute('data-k');
     await expect.poll(on).toBe('idle');
     const keys = await page
@@ -983,7 +1045,7 @@ test.describe('desktop', () => {
     if (process.env.U6_SHOTS) await page.screenshot({ path: `${process.env.U6_SHOTS}lobby-desktop.png` });
     await startCall(page);
     await expect(grid.locator('.left .xs')).toContainText(
-      'A legenda mostra a última fala da Maggie. Toque nas palavras azuis para levar para a Revisão.',
+      'A legenda mostra a última fala da Maggie. Toque nas palavras azuis para levar para os Cards.',
     );
     await expect(grid.locator('.right #mg-tr .bub.her')).toHaveCount(1, { timeout: 15_000 });
     await expect(grid.locator('.right .dock .say #mg-input')).toBeVisible();
@@ -1051,6 +1113,7 @@ test.describe('round 3 · mobile', () => {
     test.setTimeout(120_000);
     await signup(page);
     await openLobby(page);
+    await page.getByRole('radio', { name: /Robert/ }).click(); // a video assistant (Margaret is 3D)
     await startCall(page);
     await expect(page.locator('#mg-tr .bub.her')).toHaveCount(1, { timeout: 15_000 });
     await expect
@@ -1232,12 +1295,12 @@ test.describe('round 3 · desktop', () => {
     expect(await unnamedControls(page)).toEqual([]);
     if (process.env.U6_SHOTS)
       await page.screenshot({ path: `${process.env.U6_SHOTS}report-desktop.png`, fullPage: true });
-    // Words → Revisão on desktop.
-    const save = page.getByRole('button', { name: /^Levar \d+ para a Revisão$/ });
+    // Words → Cards on desktop.
+    const save = page.getByRole('button', { name: /^Levar \d+ para os Cards$/ });
     if (await save.count()) {
       await clearToasts(page);
       await save.click();
-      await expectToast(page, /(cartões novos|cartão novo) na Revisão\.|Essas palavras já estavam na Revisão\./);
+      await expectToast(page, /(cartões novos|cartão novo) nos Cards\.|Essas palavras já estavam nos seus Cards\./);
     }
     // Back to the lobby: the conversation is listed and opens its report.
     await page.goto('/#/maggie');
@@ -1511,7 +1574,7 @@ test.describe('round 5 · mobile', () => {
     // Focus ring on the report's buttons.
     const bad: string[] = [];
     for (const loc of [
-      page.getByRole('button', { name: /^Levar \d+ para a Revisão$/ }),
+      page.getByRole('button', { name: /^Levar \d+ para os Cards$/ }),
       page.getByRole('button', { name: /Conversar de novo/ }).or(page.getByRole('link', { name: /Conversar de novo/ })),
       page.locator('.topbar').getByRole('button', { name: 'Voltar' }),
     ]) {
@@ -1670,7 +1733,8 @@ test.describe('round 6 · api', () => {
 // =====================================================================================
 test('static: no innerHTML in the slice, no persona/secrets in the client bundle or catalog', async ({ page }) => {
   const slice = fileURLToPath(new URL('../../../apps/app/web/src/screens/maggie/', import.meta.url));
-  for (const f of readdirSync(slice)) {
+  for (const f of readdirSync(slice, { recursive: true, encoding: 'utf8' })) {
+    if (!/\.(ts|tsx|css)$/.test(f)) continue; // avatar3d/ is a folder
     const src = readFileSync(join(slice, f), 'utf8');
     expect(src, `${f} innerHTML`).not.toMatch(/innerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|outerHTML\s*=/);
   }

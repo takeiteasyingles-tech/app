@@ -89,21 +89,51 @@ describe('preview and publish', () => {
     expect(m1.status).toBe(200);
     expect(m1.body.version).toBe(ver);
 
-    // An edit changes nothing for learners until the next publish …
-    const upd = await editor.client.json(buildPath(C.episodes.update.path, { id: 1 }), {
+    // PROD (spec 05 "Saving publishes"): an edit goes live at once, audited with the save behind it.
+    const since2 = Date.now();
+    const upd = await editor.client.send(buildPath(C.episodes.update.path, { id: 1 }), {
       method: 'PUT',
       json: { title: 'Good Morning, Woods!' },
     });
     expect(upd.status).toBe(200);
-    expect((await studentManifest(student.appToken)).body.version).toBe(ver);
-    const pv = await editor.client.json(C.preview.path, { method: 'POST' });
-    expect(pv.body.changed).toEqual(['catalog.json', 'ep/1.json']);
-
-    // … which moves the app's manifest to the new version.
-    const r2 = await editor.client.json(C.publish.path, { json: {} });
-    const ver2: string = r2.body.release.version;
+    expect(upd.headers.get('X-Content-Publish')).toBe('published');
+    const ver2: string = (await studentManifest(student.appToken)).body.version;
     expect(ver2).not.toBe(ver);
+    const [auto] = await auditRows('content.publish', since2);
+    expect(JSON.parse(auto?.diff ?? '{}')).toMatchObject({
+      auto: true,
+      trigger: { method: 'PUT', path: '/admin-api/content/episodes/1' },
+      changed: ['catalog.json', 'ep/1.json'],
+      current: { from: ver, to: ver2 },
+    });
+    expect((await editor.client.json(C.preview.path, { method: 'POST' })).body.changed).toEqual([]);
+
+    // A save that changes nothing publishes nothing; a deferred part of a bigger save waits for its end.
+    const same = await editor.client.send(buildPath(C.episodes.update.path, { id: 1 }), {
+      method: 'PUT',
+      json: { title: 'Good Morning, Woods!' },
+    });
+    expect(same.headers.get('X-Content-Publish')).toBe('unchanged');
+    const deferred = await editor.client.send(buildPath(C.episodes.update.path, { id: 1 }), {
+      method: 'PUT',
+      json: { title: 'Good Morning, Woods' },
+      headers: { 'X-Publish': 'defer' },
+    });
+    expect(deferred.headers.get('X-Content-Publish')).toBeNull();
     expect((await studentManifest(student.appToken)).body.version).toBe(ver2);
+    const end = await editor.client.json(C.autoPublish.path, { json: { what: 'Episódio 1' } });
+    expect(end.body.status).toBe('published');
+    expect((await studentManifest(student.appToken)).body.version).toBe(end.body.version);
+    const [last] = await auditRows('content.publish', Date.now() - 5_000).then((rows) => rows.slice(-1));
+    expect(last?.diff).toContain('Episódio 1');
+
+    // Back to the earlier title through the explicit publish (kept for agents and rollbacks).
+    await editor.client.send(buildPath(C.episodes.update.path, { id: 1 }), {
+      method: 'PUT',
+      json: { title: 'Good Morning, Woods!' },
+    });
+    const r2 = await editor.client.json(C.publish.path, { json: {} });
+    expect(r2.body.release.version).toBe(ver2);
     const ep = JSON.parse((await (await testEnv.MEDIA.get(contentKey(ver2, 'ep/1.json')))?.text()) ?? '{}');
     expect(ep.title).toBe('Good Morning, Woods!');
 

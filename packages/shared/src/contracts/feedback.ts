@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LIMITS } from '../constants';
 import { EpisodeFeedbackState } from '../state';
-import { NumParams, Page, PageQuery, QueryBool, Timestamp } from './common';
+import { IdParams, NumParams, Ok, Page, PageQuery, QueryBool, Timestamp } from './common';
 import { endpoint } from './http';
 
 // NPS per episode (spec 07, feature C). The learner rates an episode 1-5 stars on the Concluído
@@ -36,7 +36,27 @@ export const EpisodeFeedbackRes = z.object({
 });
 export type EpisodeFeedbackRes = z.infer<typeof EpisodeFeedbackRes>;
 
+/** Platform experience at the end of a step, independent of the episode's final rating. */
+export const StepFeedbackBody = z.object({
+  episodeNum: z.int().positive(),
+  step: z.int().min(1).max(10),
+  stars: Stars,
+  hadDifficulty: z.boolean(),
+  difficulty: FeedbackComment.nullable().optional(),
+  improvement: FeedbackComment.nullable().optional(),
+});
+export type StepFeedbackBody = z.infer<typeof StepFeedbackBody>;
+
 export const feedbackApi = {
+  step: endpoint({
+    method: 'PUT',
+    path: '/api/feedback/steps/:id',
+    access: 'user',
+    params: IdParams,
+    body: StepFeedbackBody,
+    res: Ok,
+    rateLimit: 'RL_API',
+  }),
   episode: endpoint({
     method: 'PUT',
     path: '/api/feedback/episodes/:n',
@@ -80,6 +100,20 @@ export const FeedbackQuery = PageQuery.extend({
 });
 export type FeedbackQuery = z.infer<typeof FeedbackQuery>;
 
+export const AdminStepFeedbackRow = StepFeedbackBody.extend({
+  id: z.string(),
+  userId: z.string(),
+  userName: z.string().nullable(),
+  episodeTitle: z.string().nullable(),
+  createdAt: Timestamp,
+});
+export type AdminStepFeedbackRow = z.infer<typeof AdminStepFeedbackRow>;
+
+export const StepFeedbackQuery = PageQuery.extend({
+  episode: QueryInt.positive().optional(),
+  step: QueryInt.min(1).max(10).optional(),
+});
+
 /** domain/feedback.ts feedbackStats(): dist[0] = 1★ … dist[4] = 5★; nps = %5★ − %(1-2★), −100..100. */
 export const FeedbackStatsSchema = z.object({
   count: z.int().min(0),
@@ -104,6 +138,14 @@ export const FeedbackSummary = z.object({
 export type FeedbackSummary = z.infer<typeof FeedbackSummary>;
 
 export const adminFeedbackApi = {
+  steps: endpoint({
+    method: 'GET',
+    path: '/admin-api/feedback/steps',
+    access: 'staff',
+    perm: 'feedback.read',
+    query: StepFeedbackQuery,
+    res: Page(AdminStepFeedbackRow),
+  }),
   list: endpoint({
     method: 'GET',
     path: '/admin-api/feedback',

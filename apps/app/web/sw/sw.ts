@@ -6,6 +6,7 @@
 //   /api/me/export is never cached.
 // - /m/media/*: CacheFirst + RangeRequestsPlugin + Expiration (60 entries / 30 days, purge on quota).
 //   User uploads (/m/users/*) are never cached (moderation can remove them).
+// - /avatars/*: CacheFirst (the 3D Mic avatar models; not precached, they are large).
 // - Offline outbox: non-GET /api/* writes that carry an Idempotency-Key and fail on the network are
 //   stored in IndexedDB (workbox-background-sync) and replayed by Background Sync (or on the next SW
 //   start / an explicit flush), with the same Idempotency-Key, so the server applies them once.
@@ -106,6 +107,18 @@ registerRoute(
       new CacheableResponsePlugin({ statuses: [200] }),
       new RangeRequestsPlugin(),
       new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60, purgeOnQuotaError: true }),
+    ],
+  }),
+);
+
+// 3D Mic avatars (web/public/avatars/*): fetched on the first Mic call, then served from the cache.
+registerRoute(
+  ({ url, request }) => sameOrigin(url) && request.method === 'GET' && url.pathname.startsWith('/avatars/'),
+  new CacheFirst({
+    cacheName: CACHE_NAMES.avatars,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [200] }),
+      new ExpirationPlugin({ maxEntries: 40, maxAgeSeconds: 30 * 24 * 60 * 60, purgeOnQuotaError: true }),
     ],
   }),
 );

@@ -21,7 +21,8 @@ const FIXED: Record<string, string> = {
   'plans.create': 'Criou um plano',
   'plans.update': 'Editou um plano',
   'plans.deactivate': 'Desativou um plano',
-  'content.publish': 'Publicou o conteúdo',
+  'content.publish': 'Publicou o conteúdo no app',
+  'content.publish_failed': 'Salvou, mas o conteúdo não foi para o app (erro no conteúdo)',
   'content.rollback': 'Voltou a uma publicação anterior',
   'content.blobs.put': 'Editou um bloco de conteúdo',
   'content.option_lists.put': 'Editou uma lista do cadastro',
@@ -42,6 +43,13 @@ const FIXED: Record<string, string> = {
   'season_test.publish': 'Abriu ou fechou o teste da temporada',
   'certificate.revoke': 'Revogou um certificado',
   'certificate.reinstate': 'Reativou um certificado',
+  'backup.create': 'Fez um backup',
+  'backup.delete': 'Excluiu um backup',
+  'backup.restore': 'Restaurou o conteúdo de um backup',
+  'backup.config': 'Mudou o backup automático',
+  'voice.settings': 'Mudou a configuração de vozes',
+  'voice.clone': 'Clonou a voz de uma assistente',
+  'voice.library_add': 'Adicionou uma voz da biblioteca da ElevenLabs',
 };
 
 const ENTITY: Record<string, string> = {
@@ -94,6 +102,8 @@ const TARGET: Record<string, string> = {
   prompt: 'Prompt da IA',
   game_rules: 'Gamificação',
   season: 'Temporada',
+  backup: 'Backup',
+  app_setting: 'Configuração',
   api_token: 'Token de API',
   season_test_question: 'Questão do teste da temporada',
   certificate: 'Certificado',
@@ -134,6 +144,8 @@ export function auditIcon(action: string): string {
   if (action.startsWith('ai.')) return 'mic';
   if (action.startsWith('game.') || action.startsWith('certificate.')) return 'trophy';
   if (action.startsWith('season_test.')) return 'pen';
+  if (action.startsWith('backup.')) return 'database';
+  if (action.startsWith('voice.')) return 'mic';
   return 'history';
 }
 

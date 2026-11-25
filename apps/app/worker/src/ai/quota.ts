@@ -41,6 +41,13 @@ export interface AiQuotaService extends QuotaService {
    * and zeroes the event's seconds, once (a replayed refund is a no-op).
    */
   refund(userId: string, r: ReserveResultWithEvent, outcome: Omit<UsageOutcome, 'ok'>): Promise<void>;
+  /**
+   * Sets a usage event to what it really cost (`seconds`) and moves the month it was billed in by the
+   * difference: an ElevenLabs agent conversation shorter than its reservation gives seconds back, one
+   * found longer later (daily reconcile) takes them. Guarded by the event's current seconds, so a
+   * concurrent or replayed settle with the same reading changes nothing twice.
+   */
+  settle(userId: string, eventId: number, seconds: number, outcome: UsageOutcome): Promise<void>;
   /** Logs a call that billed nothing (cache hit, demo fallback, guard). */
   log(userId: string, kind: AiUsageKind, outcome: UsageOutcome & { sessionId?: string | null }): Promise<void>;
 }
@@ -179,6 +186,41 @@ export function createQuotaService(env: Pick<Env, 'DB'>, clock: () => number = D
             'UPDATE ai_usage_events SET seconds = 0, ok = 0, latency_ms = ?, model = COALESCE(?, model) WHERE id = ?',
           )
           .bind(outcome.latencyMs ?? null, outcome.model ?? null, r.eventId),
+      ]);
+    },
+
+    async settle(userId, eventId, seconds, outcome) {
+      const ev = await one<{ seconds: number; created_at: number }>(
+        db,
+        'SELECT seconds, created_at FROM ai_usage_events WHERE id = ? AND user_id = ?',
+        eventId,
+        userId,
+      );
+      if (!ev) return;
+      const next = Math.max(0, Math.ceil(seconds));
+      const diff = next - ev.seconds;
+      const s = await subject(userId, ev.created_at);
+      const p = period(ev.created_at, s.tz);
+      // Both statements are guarded by the seconds read above, so a concurrent or replayed settle that
+      // lost the race leaves the month and the event as the first one wrote them.
+      await db.batch([
+        db
+          .prepare('INSERT OR IGNORE INTO ai_usage_monthly(user_id, period, seconds_used) VALUES(?, ?, 0)')
+          .bind(userId, p),
+        db
+          .prepare(
+            `UPDATE ai_usage_monthly SET seconds_used = MAX(0, seconds_used + ?1)
+             WHERE user_id = ?2 AND period = ?3 AND ?1 <> 0
+               AND EXISTS(SELECT 1 FROM ai_usage_events WHERE id = ?4 AND seconds = ?5)`,
+          )
+          .bind(diff, userId, p, eventId, ev.seconds),
+        db
+          .prepare(
+            `UPDATE ai_usage_events SET seconds = ?1, ok = ?2, latency_ms = COALESCE(?3, latency_ms),
+               model = COALESCE(?4, model)
+             WHERE id = ?5 AND seconds = ?6`,
+          )
+          .bind(next, outcome.ok, outcome.latencyMs ?? null, outcome.model ?? null, eventId, ev.seconds),
       ]);
     },
 

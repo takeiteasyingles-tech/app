@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EBOOK_EXTRAS, ELEVEN_VOICE_ID_RE, STEP_COUNT } from '../constants';
 
 // Published content snapshots (R2 content/{ver}/*). Field names follow the prototype's js/data/* so the
 // screen port stays mechanical; tuples ([en, pt], [name, ini, color]) became objects.
@@ -52,6 +53,8 @@ export const EbookIndexEntry = z.object({
   testEnabled: z.boolean().default(true),
   testRequiredEpisodes: z.array(z.int().positive()).default([]),
   testMinCompleted: z.int().positive().nullable().default(null),
+  /** PROD (0018): the extras the episode end offers (switched on and with content), for the Trilha. */
+  extras: z.array(z.enum(EBOOK_EXTRAS)).default([]),
 });
 export type EbookIndexEntry = z.infer<typeof EbookIndexEntry>;
 
@@ -137,6 +140,42 @@ export const AssistantVoice = z.object({
 });
 export type AssistantVoice = z.infer<typeof AssistantVoice>;
 
+/** Mic modes an ElevenLabs agent can hold (pronúncia scores single sentences, so it stays ours). */
+export const AGENT_MODES = ['livre', 'missao', 'extra'] as const;
+export const AgentMode = z.enum(AGENT_MODES);
+export type AgentMode = z.infer<typeof AgentMode>;
+
+/** Assistia avatar slug: the path segment of https://assistia-backend…/embed/<slug>. */
+export const ASSISTIA_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,59}$/i;
+/** ElevenLabs Agents Platform id ("agent_…"). */
+export const ELEVEN_AGENT_ID_RE = /^agent_[a-z0-9]{8,60}$/i;
+
+/**
+ * PROD (spec 05 "Mic avatar per assistant"): what the Mic stage shows for an assistant. null = its own
+ * 3D model or video clips. `assistia`: the Assistia embed gives the face and voice, our tutor writes
+ * every line. `elevenlabs`: in `modes`, the conversation itself runs on an ElevenLabs agent (its own
+ * voice, ears and brain); the agent id stays on the server, which hands out signed URLs.
+ */
+export const MicAvatar = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('assistia'),
+    slug: z.string().regex(ASSISTIA_SLUG_RE, 'Identificador do avatar inválido.'),
+  }),
+  z.object({
+    kind: z.literal('elevenlabs'),
+    agentId: z.string().regex(ELEVEN_AGENT_ID_RE, 'ID de agente inválido (começa com "agent_").'),
+    modes: z.array(AgentMode).min(1, 'Escolha pelo menos um modo.').max(AGENT_MODES.length),
+  }),
+]);
+export type MicAvatar = z.infer<typeof MicAvatar>;
+
+/** The catalog's copy: the agent id never reaches the client. */
+export const MicAvatarPublic = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('assistia'), slug: z.string() }),
+  z.object({ kind: z.literal('elevenlabs'), modes: z.array(AgentMode) }),
+]);
+export type MicAvatarPublic = z.infer<typeof MicAvatarPublic>;
+
 export const AssistantPublic = z.object({
   k: z.string(),
   name: z.string(),
@@ -152,6 +191,8 @@ export const AssistantPublic = z.object({
   poster: OptMedia,
   thumb: OptMedia,
   clips: z.partialRecord(ClipState, MediaUrl),
+  /** Absent in catalogs published before migration 0019 (the client then keeps its old defaults). */
+  avatar: MicAvatarPublic.nullable().optional(),
 });
 export type AssistantPublic = z.infer<typeof AssistantPublic>;
 
@@ -208,6 +249,17 @@ export const Track = z.object({
   lines: z.array(KaraokeLine),
 });
 export type Track = z.infer<typeof Track>;
+
+/**
+ * PROD: id of the album track compile adds for a published episode no album lists (`e3-song`). The
+ * worker's karaoke and song routes read it as "the episode's song".
+ */
+export const autoTrackId = (ep: number): string => `e${ep}-song`;
+/** Episode number of an autoTrackId, or null. */
+export function autoTrackEp(id: string): number | null {
+  const m = /^e([1-9]\d{0,3})-song$/.exec(id);
+  return m ? Number(m[1]) : null;
+}
 
 export const Album = z.object({
   id: z.string(),
@@ -302,7 +354,7 @@ export type SrsGrade = z.infer<typeof SrsGrade>;
 
 export const Catalog = z.object({
   version: z.string(),
-  steps: z.array(Step).length(10),
+  steps: z.array(Step).length(STEP_COUNT),
   seasons: z.array(Season),
   /** Episode titles by position (index = num - 1), as TIE.data.TITLES. */
   titles: z.array(z.string()),
@@ -358,6 +410,11 @@ export const LyricLine = z.object({
   en: z.string(),
   pt: z.string(),
   gap: z.string().optional(),
+  /**
+   * PROD: start of the line in the episode recording, in seconds. The player follows these times when
+   * set (domain/songSync.ts) and the prototype's proportional highlight when no line has one.
+   */
+  t: z.number().min(0).max(3600).optional(),
 });
 export type LyricLine = z.infer<typeof LyricLine>;
 
@@ -386,6 +443,8 @@ export const MicPhrase = z.object({
   result: z.int().min(0).max(10),
   blue: z.boolean().optional(),
   fb: z.string(),
+  /** PROD (0017): the character who says it (its voice reads it); absent = the narration. */
+  who: z.string().optional(),
 });
 export type MicPhrase = z.infer<typeof MicPhrase>;
 
@@ -438,6 +497,30 @@ export const EpisodeDone = z.object({
 });
 export type EpisodeDone = z.infer<typeof EpisodeDone>;
 
+/**
+ * PROD (spec 05 "Lesson voices", 0016): the ElevenLabs voices of one lesson. `narrator` reads what no
+ * character says (vocabulary, Mic phrases, Take Away, exercises); `cast` maps a character name (as in
+ * the dialogue) to its voice. Anything not set uses the course voice (Configurações → Vozes).
+ */
+export const EpisodeVoices = z.object({
+  narrator: z.string().regex(ELEVEN_VOICE_ID_RE).nullable().optional(),
+  /** PROD: one step's own narration (step number → voice id), over `narrator` for that step. */
+  steps: z.record(z.string().regex(/^[0-9]{1,2}$/), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+  cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+  /**
+   * PROD (spec 05 "Extras voices"): this episode's Take Some Extras. `narrator` = the extras' own voice
+   * (anyone speaking there without a voice of their own); `cast` = a character's voice in the extras
+   * (e.g. Margaret in Take the Lead). Unset = the course's extras voice (Configurações → Vozes).
+   */
+  extras: z
+    .object({
+      narrator: z.string().regex(ELEVEN_VOICE_ID_RE).nullable().optional(),
+      cast: z.record(z.string().min(1).max(40), z.string().regex(ELEVEN_VOICE_ID_RE)).optional(),
+    })
+    .optional(),
+});
+export type EpisodeVoices = z.infer<typeof EpisodeVoices>;
+
 export const Episode = z.object({
   num: z.int().positive(),
   title: z.string(),
@@ -452,6 +535,10 @@ export const Episode = z.object({
   songAudio: OptMedia,
   songTitle: z.string(),
   sceneVideo: OptMedia,
+  /** PROD (0014): Take a Look's context audio, "1º Ouça o contexto e prepare a mente". */
+  lookAudio: OptMedia.optional(),
+  /** PROD (0014): questions of the episode test (Take the Test, the last step); 0 = no test. */
+  testCount: z.int().min(0).optional(),
   /** Still shown in Take a Look when there is no video. */
   sceneImage: OptMedia,
   sceneNote: z.string(),
@@ -468,6 +555,8 @@ export const Episode = z.object({
   awayWords: z.array(z.string()),
   ex: z.array(Exercise),
   done: EpisodeDone,
+  /** PROD (0016): the lesson's voices; absent or empty = the course voices. */
+  voices: EpisodeVoices.optional(),
 });
 export type Episode = z.infer<typeof Episode>;
 
@@ -529,6 +618,11 @@ export const Ebook = z.object({
   lead: z.array(LeadTurn),
   chat: z.array(ChatTurn),
   extrasCards: z.array(EbookExtraCard),
+  /**
+   * PROD (0018, spec 05 "Take Some Extras at the end of every episode"): the extras the episode's
+   * Concluído screen offers, in this order. Absent = all of them.
+   */
+  extrasOn: z.array(z.enum(EBOOK_EXTRAS)).optional(),
   pdf: OptMedia,
   passScore: z.int().min(0),
   testEnabled: z.boolean().default(true),

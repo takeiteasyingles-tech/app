@@ -20,8 +20,15 @@ import { type Col, Table } from '../ui/table';
 import { toast } from '../ui/toast';
 
 const SCOPE_INFO: Record<ApiTokenScope, [string, string]> = {
-  'content.read': ['Ler conteúdo', 'Temporadas, episódios, e-books, questões do teste e a prévia da publicação.'],
-  'content.edit': ['Editar e rascunhar', 'Muda episódios, e-books e temporadas; cria questões do teste como rascunho.'],
+  'content.read': ['Ler conteúdo', 'Todo o conteúdo do curso, as publicações e a prévia da publicação.'],
+  'content.edit': [
+    'Criar, editar e excluir',
+    'Temporadas, episódios, exercícios, conclusões, e-books, testes, Extras, Mic, assistentes e cadastro, no rascunho; faz backup do conteúdo.',
+  ],
+  'content.publish': [
+    'Publicar',
+    'Publica episódios e Extras, aprova e abre testes da temporada, publica e volta versões para os alunos.',
+  ],
 };
 
 const EXPIRY: readonly (readonly [string, string])[] = [
@@ -53,7 +60,11 @@ function StatePill({ t }: { t: ApiTokenRow }) {
 
 function CreateForm({ onCreated }: { onCreated: (item: ApiTokenRow, token: string) => void }) {
   const [name, setName] = useState('');
-  const [scopes, setScopes] = useState<Record<ApiTokenScope, boolean>>({ 'content.read': true, 'content.edit': true });
+  const [scopes, setScopes] = useState<Record<ApiTokenScope, boolean>>({
+    'content.read': true,
+    'content.edit': true,
+    'content.publish': true,
+  });
   const [expiry, setExpiry] = useState('90');
   const [busy, setBusy] = useState(false);
   const chosen = API_TOKEN_SCOPES.filter((s) => scopes[s]);
@@ -114,8 +125,9 @@ function CreateForm({ onCreated }: { onCreated: (item: ApiTokenRow, token: strin
           })}
         </fieldset>
         <div class="ad-note bl">
-          <Icon name="rocket" size={18} /> Nenhum token publica: o agente edita o rascunho e alguém da equipe publica em
-          Publicações. Toda mudança fica na Auditoria como "agent".
+          <Icon name="rocket" size={18} /> Com "Publicar", o agente leva as mudanças até os alunos sozinho; sem ela, ele
+          só mexe no rascunho e alguém da equipe publica em Publicações. Toda mudança fica na Auditoria como "agent", e
+          dá para voltar atrás em Publicações ou em Backup.
         </div>
         <div class="row" style={{ '--gap': '8px' }}>
           <Button label="Criar token" icon="key" type="submit" busy={busy} disabled={!name.trim() || !chosen.length} />
@@ -163,6 +175,8 @@ function HowToConnect({ token }: { token: string | null }) {
   const url = endpointUrl();
   const t = token ?? '<token>';
   const code = `claude mcp add --transport http ${SERVER_NAME} ${url} --header "Authorization: Bearer ${t}"`;
+  const codex = [`[mcp_servers.${SERVER_NAME}]`, `url = "${url}"`, 'bearer_token_env_var = "TIE_TOKEN"'].join('\n');
+  const codexEnv = `TIE_TOKEN=${t}`;
   const desktop = JSON.stringify(
     {
       mcpServers: {
@@ -193,6 +207,12 @@ function HowToConnect({ token }: { token: string | null }) {
           <code class="ad-mono">claude_desktop_config.json</code> e reinicie o app (precisa do Node.js instalado).
         </p>
         <Snippet title="claude_desktop_config.json" text={desktop} />
+        <p class="sm">
+          <b>Codex</b> (OpenAI): junte isto ao <code class="ad-mono">~/.codex/config.toml</code> e deixe o token na
+          variável de ambiente <code class="ad-mono">TIE_TOKEN</code> antes de abrir o Codex.
+        </p>
+        <Snippet title="~/.codex/config.toml" text={codex} />
+        <Snippet title="Variável de ambiente" text={codexEnv} />
         <p class="xs">
           Endereço do servidor: <code class="ad-mono ad-break">{url}</code>. Peça, por exemplo: "liste os episódios da
           temporada 1", "melhore a sinopse do episódio 3", "rascunhe 10 questões para o teste da temporada 1". O token é

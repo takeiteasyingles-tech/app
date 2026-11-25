@@ -31,7 +31,7 @@ export function LoadFailed({ onRetry }: { onRetry: () => void }) {
     <div class="wrap">
       <div class="card mt24 stack" style={{ '--gap': '12px' }}>
         <div class="h3" style={{ color: '#fff' }}>
-          Não deu para carregar o EXTRA.
+          Não deu para carregar o FLIX.
         </div>
         <p class="p" style={{ color: 'var(--onNavy)' }}>
           Confira a internet e tente de novo.

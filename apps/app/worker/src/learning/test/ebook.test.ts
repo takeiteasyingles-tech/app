@@ -1,4 +1,4 @@
-import { ApiError } from '@tie/shared';
+import { ApiError, STEP } from '@tie/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { download, saveAnswers, submitTest } from '../ebook';
 import { isCorrect, toGradable } from '../grade';
@@ -122,6 +122,19 @@ describe('e-book test unlock (trilha)', () => {
   let w: World;
   beforeEach(() => {
     w = world();
+  });
+
+  it('PROD: reaching Take the Test (the last step, not yet done) counts for the test rule', async () => {
+    expect(await code(submitTest(w.deps(), 1, { answers: ALL_RIGHT }))).toBe('gated');
+    for (const ep of [1, 2]) {
+      w.db.exec(
+        'INSERT INTO episode_progress(user_id, episode_num, furthest_step, done_at, updated_at) VALUES(?, ?, ?, NULL, 1)',
+        USER,
+        ep,
+        STEP.TEST,
+      );
+    }
+    expect((await submitTest(w.deps(), 1, { answers: ALL_RIGHT })).passed).toBe(true);
   });
 
   it('refuses answers and submits until every published episode of the e-book is done', async () => {

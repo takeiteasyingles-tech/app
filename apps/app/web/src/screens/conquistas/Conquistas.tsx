@@ -20,7 +20,6 @@ const EARN: readonly (readonly [string, PointKind])[] = [
   ['Extra até o fim', 'extra'],
   ['Cartão revisado', 'card'],
   ['Missão do dia', 'mission'],
-  ['Teste do e-book', 'test_pass'],
 ];
 
 const BALANCE = { 'text-wrap': 'balance' } as const;

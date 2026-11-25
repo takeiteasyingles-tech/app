@@ -132,19 +132,18 @@ async function main() {
     await page.getByRole('heading', { level: 1, name: /Oi, Sofia/ }).waitFor({ timeout: 20_000 });
     step(`signup + onboarding (${email}) → Hoje`);
 
-    // 2. Episode 1, steps 1-5 (server-side gating, e-book download at step 2).
+    // 2. Episode 1, the media steps up to Take It In (server-side gating; no e-book step since 0013).
     // step-ok marks the media of step s as played; advance names the step to move to (s + 1).
-    for (const s of [1, 2, 3, 4, 5]) {
-      if (s === STEP.EBOOK) ok(await api(page, 'POST', '/api/ebooks/1/download', {}), 'ebook download');
-      else ok(await api(page, 'POST', '/api/progress/step-ok', { ep: 1, step: s }), `step-ok ${s}`);
+    for (const s of [STEP.INTRO, STEP.SONG, STEP.LOOK, STEP.DIALOG]) {
+      ok(await api(page, 'POST', '/api/progress/step-ok', { ep: 1, step: s }), `step-ok ${s}`);
       ok(await api(page, 'POST', '/api/progress/advance', { ep: 1, step: s + 1 }), `advance ${s} → ${s + 1}`);
     }
     const state1 = ok(await api<{ prog: Record<string, number> }>(page, 'GET', '/api/me/state'), 'state');
-    assert.equal(state1.prog['1'], 6, `prog[1] after five steps: ${JSON.stringify(state1.prog)}`);
-    await screenOk(page, '/#/episodio/1/6', 'player');
-    step('episode 1 steps 1-5 accepted; player opens on step 6');
+    assert.equal(state1.prog['1'], STEP.MIC, `prog[1] after four steps: ${JSON.stringify(state1.prog)}`);
+    await screenOk(page, `/#/episodio/1/${STEP.MIC}`, 'player');
+    step('episode 1 steps 1-4 accepted; player opens on Take the Mic');
 
-    // 3. Review: step 4 unlocked the episode's visual words.
+    // 3. Review: leaving Take a Look unlocked the episode's visual words.
     const queue = ok(await api<{ cards: { id: string }[] }>(page, 'GET', '/api/srs/queue'), 'srs queue');
     const cards = queue.cards ?? (queue as unknown as { items: { id: string }[] }).items ?? [];
     assert.ok(cards.length > 0, `review queue is empty: ${JSON.stringify(queue).slice(0, 200)}`);

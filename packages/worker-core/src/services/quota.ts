@@ -1,7 +1,8 @@
 import type { QuotaInfo } from '@tie/shared';
 import { NotImplementedError } from '../errors';
 
-export type AiUsageKind = 'tutor' | 'report' | 'pronounce' | 'tts' | 'asr' | 'guard';
+/** 'agent': a Mic conversation held by the assistant's ElevenLabs agent (reserved up front, settled on /end). */
+export type AiUsageKind = 'tutor' | 'report' | 'pronounce' | 'tts' | 'asr' | 'guard' | 'agent';
 
 export interface ReserveInput {
   kind: AiUsageKind;

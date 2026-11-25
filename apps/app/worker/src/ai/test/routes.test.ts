@@ -1515,6 +1515,239 @@ describe('POST /api/tts', () => {
     expect(res.headers.get('X-TTS-Source')).toBeNull();
   });
 
+  it('speaks a cloned voice through ElevenLabs and returns (and caches) its word timing', async () => {
+    const text = 'Hi, I am Maggie.';
+    const chars = [...text];
+    const real = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      calls.push(url);
+      return Response.json({
+        audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)),
+        alignment: {
+          characters: chars,
+          character_start_times_seconds: chars.map((_, i) => i * 0.05),
+          character_end_times_seconds: chars.map((_, i) => (i + 1) * 0.05),
+        },
+      });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'HyqisByK1ozCXL4PglY3' }),
+      });
+      const res = await tts(env, u1, { text, voice: 'margaret' });
+      expect(res.status).toBe(200);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain('/text-to-speech/HyqisByK1ozCXL4PglY3/with-timestamps');
+      expect(new Uint8Array(await res.arrayBuffer()).slice(0, 3)).toEqual(new Uint8Array([0x49, 0x44, 0x33]));
+      // "Hi," 0–0.15 s, "I" 0.20–0.25, "am" 0.30–0.40, "Maggie." 0.45–0.80
+      expect(res.headers.get('X-TTS-Words')).toBe('0,15;20,25;30,40;45,80');
+      // A cache or R2 hit keeps the timing and calls ElevenLabs no more.
+      const again = await tts(env, u1, { text, voice: 'margaret' });
+      expect(['cache', 'r2']).toContain(again.headers.get('X-TTS-Source'));
+      expect(again.headers.get('X-TTS-Words')).toBe('0,15;20,25;30,40;45,80');
+      expect(calls).toHaveLength(1);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
+  it('reads a lesson line with the voice that lesson sets for its role (spec 05 "Lesson voices")', async () => {
+    const real = globalThis.fetch;
+    const voices: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      voices.push(url.split('/text-to-speech/')[1]?.split('/')[0] ?? '');
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'HyqisByK1ozCXL4PglY3', narrator: 'CourseNarrator001' }),
+      });
+      const lesson = JSON.stringify({
+        narrator: 'LessonNarrator01',
+        steps: { '5': 'MicStepVoice0001' },
+        cast: { Zach: 'LessonZachVoice1' },
+      });
+      await baseEnv.DB.prepare(
+        "INSERT OR REPLACE INTO episodes(num, title, status, voices, updated_at) VALUES(1, 'Ep 1', 'published', ?1, 1), (3, 'Ep 3', 'draft', ?1, 1)",
+      )
+        .bind(lesson)
+        .run();
+      // Lesson 1 (published): its narration, and Zach by name in any case.
+      expect((await tts(env, u1, { text: 'Kitchen.', voice: 'margaret', ep: 1, role: 'narrator' })).status).toBe(200);
+      expect((await tts(env, u1, { text: 'Mom! Say hello!', voice: 'zach', ep: 1, role: 'zach' })).status).toBe(200);
+      // A step with its own voice (Take the Mic) reads with it; a step without one, with the lesson's.
+      expect((await tts(env, u1, { text: 'Bye! See you.', voice: 'margaret', ep: 1, role: 'narrator@5' })).status).toBe(
+        200,
+      );
+      expect((await tts(env, u1, { text: 'Table.', voice: 'margaret', ep: 1, role: 'narrator@3' })).status).toBe(200);
+      // A character the lesson leaves out keeps the course voice of its assistant.
+      expect((await tts(env, u1, { text: 'Good morning.', voice: 'margaret', ep: 1, role: 'Margaret' })).status).toBe(
+        200,
+      );
+      // A draft lesson's voices are not used: the course narration reads it.
+      expect((await tts(env, u1, { text: 'Window.', voice: 'margaret', ep: 3, role: 'narrator' })).status).toBe(200);
+      // Outside a lesson: the speaker's assistant, as before.
+      expect((await tts(env, u1, { text: 'Hello there.', voice: 'margaret' })).status).toBe(200);
+      expect(voices).toEqual([
+        'LessonNarrator01',
+        'LessonZachVoice1',
+        'MicStepVoice0001',
+        'LessonNarrator01',
+        'HyqisByK1ozCXL4PglY3',
+        'CourseNarrator001',
+        'HyqisByK1ozCXL4PglY3',
+      ]);
+      // The same text in another voice is another cache entry, never the first voice's audio.
+      await tts(env, u1, { text: 'Kitchen.', voice: 'margaret', ep: 3, role: 'narrator' });
+      expect(voices.at(-1)).toBe('CourseNarrator001');
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
+  it('reads Take Some Extras with the extras voices (spec 05 "Extras voices")', async () => {
+    const real = globalThis.fetch;
+    const voices: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      voices.push(url.split('/text-to-speech/')[1]?.split('/')[0] ?? '');
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'MargaretCourse01', extras: 'CourseExtras0001' }),
+      });
+      await baseEnv.DB.prepare(
+        "INSERT OR REPLACE INTO episodes(num, title, status, voices, updated_at) VALUES(1, 'Ep 1', 'published', ?1, 1), (2, 'Ep 2', 'published', ?2, 1), (4, 'Ep 4', 'published', '{}', 1)",
+      )
+        .bind(
+          JSON.stringify({ extras: { narrator: 'EpisodeExtras001', cast: { Margaret: 'ExtrasMargaret01' } } }),
+          JSON.stringify({ extras: { narrator: 'EpisodeExtras002' } }),
+        )
+        .run();
+      const say = (text: string, ep: number) =>
+        tts(env, u1, { text, voice: 'margaret', ep, role: 'extras:Margaret' });
+      // Her own extras voice in episode 1; the episode's extras voice in 2; the course's extras voice in 4.
+      expect((await say('Oh, hello! Good morning!', 1)).status).toBe(200);
+      expect((await say('Oh, hello! Good morning!', 2)).status).toBe(200);
+      expect((await say('Oh, hello! Good morning!', 4)).status).toBe(200);
+      expect(voices).toEqual(['ExtrasMargaret01', 'EpisodeExtras002', 'CourseExtras0001']);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
+  it('speaks with the Workers AI voice when ElevenLabs refuses the voice (gone from the account)', async () => {
+    const real = globalThis.fetch;
+    let elevenCalls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      elevenCalls++;
+      return Response.json({ detail: { status: 'voice_not_found' } }, { status: 404 });
+    }) as typeof fetch;
+    try {
+      const ai = mockAi();
+      const env = testEnv({
+        AI: ai as unknown as Ai,
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'GoneFromAccount01' }),
+      });
+      const res = await tts(env, u1, { text: 'Good morning, everybody.', voice: 'margaret', role: 'Margaret' });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('audio/mpeg');
+      expect(elevenCalls).toBe(1);
+      // Not cached as the ElevenLabs voice: it is asked again, and Workers AI's cached line answers.
+      const again = await tts(env, u1, { text: 'Good morning, everybody.', voice: 'margaret', role: 'Margaret' });
+      expect(again.status).toBe(200);
+      expect(elevenCalls).toBe(2);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
+  it('reads lesson audio without a voice of its own with the default lesson voice (spec 05)', async () => {
+    const real = globalThis.fetch;
+    const asked: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      const voice = url.split('/text-to-speech/')[1]?.split('/')[0] ?? '';
+      asked.push(voice);
+      if (voice === 'GoneRobertVoice1') return Response.json({ detail: 'voice_not_found' }, { status: 404 });
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const env = testEnv({
+        AI: mockAi() as unknown as Ai,
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({
+          margaret: 'MargaretVoice001',
+          robert: 'GoneRobertVoice1',
+          default: 'DefaultVoice0001',
+        }),
+      });
+      const say = (text: string, voice: string, role?: string) =>
+        tts(env, u1, { text, voice, ...(role ? { ep: 1, role } : {}) });
+      // Narration with no narration voice: the default voice, not the learner's assistant.
+      expect((await say('Kitchen.', 'margaret', 'narrator@3')).status).toBe(200);
+      // A character with no course voice of its own: the default voice.
+      expect((await say('Mom! Say hello!', 'zach', 'Zach')).status).toBe(200);
+      // A character whose voice ElevenLabs refuses: the default voice stands in.
+      expect((await say('Good morning.', 'robert', 'Robert')).status).toBe(200);
+      // Outside a lesson nothing changes: the assistant's own voice.
+      expect((await say('Hello there, friend.', 'margaret')).status).toBe(200);
+      expect(asked).toEqual([
+        'DefaultVoice0001',
+        'DefaultVoice0001',
+        'GoneRobertVoice1',
+        'DefaultVoice0001',
+        'MargaretVoice001',
+      ]);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
+  it('with Voz = ElevenLabs, reads everything without a voice with the default voice', async () => {
+    await baseEnv.DB.prepare(
+      "INSERT INTO app_settings(key, value, updated_at) VALUES('ai.model.tts', 'elevenlabs', 1)",
+    ).run();
+    const real = globalThis.fetch;
+    const asked: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://api.elevenlabs.io/')) return real(input, init);
+      asked.push(url.split('/text-to-speech/')[1]?.split('/')[0] ?? '');
+      return Response.json({ audio_base64: btoa(String.fromCharCode(0x49, 0x44, 0x33, 4, 0, 0)) });
+    }) as typeof fetch;
+    try {
+      const ai = mockAi();
+      const env = testEnv({
+        AI: ai as unknown as Ai,
+        ELEVENLABS_API_KEY: 'test-key',
+        ELEVENLABS_VOICES: JSON.stringify({ margaret: 'MargaretVoice001', default: 'DefaultVoice0001' }),
+      });
+      // Outside a lesson, an assistant without a voice of its own: the default voice, not Workers AI.
+      expect((await tts(env, u1, { text: 'Hi from Zach.', voice: 'zach' })).status).toBe(200);
+      // An assistant with its own voice keeps it.
+      expect((await tts(env, u1, { text: 'Hi from Maggie.', voice: 'margaret' })).status).toBe(200);
+      expect(asked).toEqual(['DefaultVoice0001', 'MargaretVoice001']);
+      expect(ai.run).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('enforces the 400-char limit and the quota', async () => {
     const long = await tts(testEnv(), u1, { text: 'a'.repeat(401), voice: 'margaret' });
     expect(long.status).toBe(400);

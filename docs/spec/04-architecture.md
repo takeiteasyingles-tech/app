@@ -395,6 +395,7 @@ TTS speaker per assistant: Maggie→asteria, Robert→orion, Becky→luna, Zach�
 ### TTS
 - Text ≤400 chars. The speaker comes from an allowlist.
 - Audio is cached in R2 at `tts/{sha256}.mp3` and in the Cache API.
+- An assistant with a cloned voice speaks through ElevenLabs (`/with-timestamps`). Its word timing goes back in the `X-TTS-Words` header (`TTS_WORDS_HEADER`: "start,end" centiseconds per whitespace-separated word, `;`-joined) and is cached with the audio (R2 custom metadata `words`, the Cache API response header). The 3D avatar times its visemes on it. Workers AI voices send no header.
 
 ### Quota
 - Limit: `plans.ai_minutes_month*60`. Period: YYYY-MM in the user's timezone.

@@ -47,6 +47,8 @@
   // which only delivers to the Resend account's own address. Replace it with an address on a domain
   // verified in Resend before real learners reset passwords. Without RESEND_API_KEY nothing is sent:
   // the e-mail is logged to the Worker console instead.
+  // ELEVENLABS_VOICES (docs/DEPLOY.md § 5b): JSON {assistantKey: voiceId} of cloned voices; it only
+  // takes effect with the ELEVENLABS_API_KEY secret.
   "vars": {
     "TURNSTILE_SITEKEY": "0x4AAAAAAFUuLoTnJ7uVo25K",
     "APP_ORIGIN": "https://takeiteasyingles.com.br",

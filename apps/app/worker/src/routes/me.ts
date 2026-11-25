@@ -21,7 +21,6 @@ import {
   auditFor,
   batch,
   batchRun,
-  bool,
   checkRateLimit,
   clearMediaCookie,
   clearSessionCookie,
@@ -68,7 +67,7 @@ const api = appApi.me;
 /** Re-issue tie_m when it is missing, foreign or has less than this left (it lives 12h). */
 const MEDIA_REFRESH_MS = 6 * HOUR;
 
-/** The settings PATCH also takes `free`, applied only while dev.free_steps is on for the user. */
+/** Accept the legacy `free` field for compatibility; the admin flag controls the effective value. */
 const SettingsPatchIn = SettingsPatch.extend({ free: z.boolean().optional() });
 
 async function freeStepsOn(c: Context<AppEnv>): Promise<boolean> {
@@ -87,7 +86,7 @@ const profileQuery = (db: D1Database, userId: string): Query<ProfileRow> =>
 const learnerRows = (db: D1Database, userId: string, now: number) =>
   [
     q(db, 'INSERT OR IGNORE INTO profiles(user_id, updated_at) VALUES(?, ?)', userId, now),
-    q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', userId),
+    q(db, 'INSERT OR IGNORE INTO user_settings(user_id, hd) VALUES(?, 1)', userId),
     q(db, 'INSERT OR IGNORE INTO user_stats(user_id) VALUES(?)', userId),
   ] as const;
 
@@ -193,7 +192,7 @@ routes.post(api.profileComplete.path, requireUser(), rateLimit('RL_API'), async 
   const firstTime = 'EXISTS (SELECT 1 FROM profiles WHERE user_id = ?1 AND onb_completed_at IS NULL)';
 
   const [, , , , settingsRows] = await batch(db, [
-    q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', s.userId),
+    q(db, 'INSERT OR IGNORE INTO user_settings(user_id, hd) VALUES(?, 1)', s.userId),
     q(db, `UPDATE user_settings SET slow = ?2 WHERE user_id = ?1 AND ${firstTime}`, s.userId, slow),
     q(db, 'INSERT OR IGNORE INTO user_stats(user_id) VALUES(?)', s.userId),
     // Same rule as shared touchStreak() and the S4 engine, done in SQL so a concurrent award cannot be lost.
@@ -220,7 +219,7 @@ routes.post(api.profileComplete.path, requireUser(), rateLimit('RL_API'), async 
   const free = evaluateRows(flagRows, flagSubject(s), [FLAGS.freeSteps])[FLAGS.freeSteps] === true;
   return c.json({
     profile,
-    settings: settingsFromRow(settingsRows[0], free && bool(settingsRows[0]?.free)),
+    settings: settingsFromRow(settingsRows[0], free),
   } satisfies ProfileCompleteRes);
 });
 
@@ -229,16 +228,16 @@ routes.patch(api.settings.path, requireUser(), rateLimit('RL_API'), vJson(Settin
   const body = c.req.valid('json');
   const db = c.env.DB;
   const free = await freeStepsOn(c);
-  // "Etapas livres" is a dev bypass: without the flag the field is ignored, like any unknown key.
-  const patch = free ? body : { ...body, free: undefined };
+  // A student's preferences cannot enable or disable the admin's Dev mode.
+  const patch = { ...body, free: undefined };
   const { sets, binds } = settingsSet(patch);
-  const stmts: Query<unknown>[] = [q(db, 'INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)', s.userId)];
+  const stmts: Query<unknown>[] = [q(db, 'INSERT OR IGNORE INTO user_settings(user_id, hd) VALUES(?, 1)', s.userId)];
   if (sets.length)
     stmts.push(q(db, `UPDATE user_settings SET ${sets.join(', ')} WHERE user_id = ?`, ...binds, s.userId));
   stmts.push(settingsQuery(db, s.userId));
   const results = await batch(db, stmts);
   const row = results[results.length - 1]?.[0] as SettingsRow | undefined;
-  return c.json({ settings: settingsFromRow(row, free && bool(row?.free)) } satisfies SettingsRes);
+  return c.json({ settings: settingsFromRow(row, free) } satisfies SettingsRes);
 });
 
 /** RL_AUTH (5/60s) keyed by the session user and the action: heavy or destructive account routes. */

@@ -1,8 +1,9 @@
 // compileContent on a small hand-built set of D1 rows: shapes, ids, media URLs, persona exclusion,
 // published-only files, deterministic versions and failure on broken references.
 import { describe, expect, it } from 'vitest';
+import { STEP_COUNT } from '../src/constants';
 import { ContentCompileError, type ContentRows, compileContent, contentKey } from '../src/content/compile';
-import { Catalog, Ebook, Episode, Extra } from '../src/content/schema';
+import { autoTrackEp, Catalog, Ebook, Episode, Extra } from '../src/content/schema';
 
 const NOW = 1_760_000_000_000;
 const j = JSON.stringify;
@@ -12,7 +13,7 @@ function media(id: string, rel: string, kind = 'image', mime = 'image/webp') {
 }
 
 function rows(): ContentRows {
-  const steps = Array.from({ length: 10 }, (_, i) => ({
+  const steps = Array.from({ length: STEP_COUNT }, (_, i) => ({
     n: i + 1,
     name: `Step ${i + 1}`,
     pt: `etapa ${i + 1}`,
@@ -450,7 +451,37 @@ describe('compileContent', () => {
       thumb: null,
       voice: { gender: 'female', pitch: 1.05, rate: 1, tts: 'asteria' },
       clips: { idle: '/m/media/abcd1234/video/mic/margaret-idle.mp4' },
+      avatar: null,
     });
+  });
+
+  it('publishes the Mic avatar without the ElevenLabs agent id (spec 05 "Mic avatar per assistant")', async () => {
+    const withAvatar = (avatar: unknown) => {
+      const r = rows();
+      (r.assistants[0] as { avatar?: string | null }).avatar = avatar === null ? null : JSON.stringify(avatar);
+      return r;
+    };
+    const agentId = 'agent_0test1tie2margaret3agent4id';
+    const agent = await compileContent(
+      withAvatar({ kind: 'elevenlabs', agentId, modes: ['livre', 'livre', 'extra'] }),
+      { publishedAt: NOW },
+    );
+    expect(agent.catalog.assistants[0]?.avatar).toEqual({ kind: 'elevenlabs', modes: ['livre', 'extra'] });
+    for (const text of Object.values(agent.files)) expect(text).not.toContain(agentId);
+
+    const embed = await compileContent(withAvatar({ kind: 'assistia', slug: 'marguert' }), { publishedAt: NOW });
+    expect(embed.catalog.assistants[0]?.avatar).toEqual({ kind: 'assistia', slug: 'marguert' });
+
+    // The JSON null the admin stores for "no avatar" reads as none.
+    const none = rows();
+    (none.assistants[0] as { avatar?: string | null }).avatar = 'null';
+    expect((await compileContent(none, { publishedAt: NOW })).catalog.assistants[0]?.avatar).toBeNull();
+
+    await expect(
+      compileContent(withAvatar({ kind: 'elevenlabs', agentId: 'not-an-agent', modes: ['livre'] }), {
+        publishedAt: NOW,
+      }),
+    ).rejects.toThrow(/avatar/);
   });
 
   it('episode files carry stable ids, sorted items, scene stills and inlined defaults', async () => {
@@ -465,7 +496,8 @@ describe('compileContent', () => {
     expect(e1.lyrics[0]?.gap).toBe('morning');
     expect(e1.visual[0]).toEqual({ id: 'e1-vi0', en: 'door', pt: 'porta' });
     expect(e1.dialog[0]?.id).toBe('e1-dl0');
-    expect(e1.mic[0]).toEqual({ id: 'e1-mic-0', en: 'Hi!', tip: 'tip', result: 7, blue: true, fb: 'fb' });
+    // Said by Zach in Take It In, so Zach's voice reads it (micSpeaker).
+    expect(e1.mic[0]).toEqual({ id: 'e1-mic-0', en: 'Hi!', tip: 'tip', result: 7, blue: true, fb: 'fb', who: 'Zach' });
     expect(e1.ex[0]?.items.map((i) => i.id)).toEqual(['e1-ex0-i0', 'e1-ex0-i1']);
     expect(e1.ex[0]).toMatchObject({ audio: 'tts', audioLabel: 'Ouvir' });
     expect(e1.ex[0]?.items[0]).toMatchObject({ a: 0, fix: 'f', say: 'Hi' });
@@ -498,14 +530,39 @@ describe('compileContent', () => {
 
   it('album tracks inline episode lyrics with gaps (first word when none)', async () => {
     const c = await compileContent(rows(), { publishedAt: NOW });
-    const [t0, t1] = c.catalog.albums[0]?.tracks ?? [];
-    expect(t0?.audio).toBe('/m/media/abcd1234/audio/intro.mp3');
+    const [t0] = c.catalog.albums[0]?.tracks ?? [];
+    // No episode song: the track's own audio is the fallback; the title is the episode's song title.
+    expect(t0).toMatchObject({ id: 'season-one-t0', ep: 1, title: 'Song', audio: '/m/media/abcd1234/audio/intro.mp3' });
     expect(t0?.lines).toEqual([
       { en: 'Hi! Hi! Good morning!', pt: 'Oi!', gap: 'morning' },
       { en: 'Bye bye', pt: 'Tchau', gap: 'Bye' },
     ]);
-    expect(t1).toMatchObject({ bpm: 100, key: 2, lines: [{ en: 'a b', pt: 'c', gap: 'b' }] });
-    expect(t1).not.toHaveProperty('ep');
+  });
+
+  it('PROD: albums are the episode songs (own tracks out, unlisted published episodes in)', async () => {
+    const c = await compileContent(rows(), { publishedAt: NOW });
+    const ids = c.catalog.albums.map((a) => a.id);
+    expect(ids).toEqual(['season-one']);
+    const tracks = c.catalog.albums[0]?.tracks ?? [];
+    // The own-lines track (no episode) is gone; episode 2 (published, lyrics, in no album) joins.
+    expect(tracks.map((t) => t.id)).toEqual(['season-one-t0', 'e2-song']);
+    expect(tracks[1]).toMatchObject({ ep: 2, title: 'Song', from: 'Episódio 2', audio: null });
+    expect(autoTrackEp('e2-song')).toBe(2);
+    expect(autoTrackEp('season-one-t0')).toBeNull();
+
+    // The episode's song wins over the track's file; an album with only own tracks disappears.
+    const r = rows();
+    r.media.push(media('m-song', 'audio/song.mp3', 'audio', 'audio/mpeg'));
+    r.episodes = r.episodes.map((e) => (e.num === 1 ? { ...e, song_media: 'm-song' } : e));
+    r.albums.push({ id: 'synth', title: 'Synth', sub: null, level: null, img_media: null, genres: '[]', sort: 1 });
+    r.album_tracks.push({
+      ...(r.album_tracks[1] as (typeof r.album_tracks)[number]),
+      id: 'synth-t0',
+      album_id: 'synth',
+    });
+    const c2 = await compileContent(r, { publishedAt: NOW });
+    expect(c2.catalog.albums.map((a) => a.id)).toEqual(['season-one']);
+    expect(c2.catalog.albums[0]?.tracks[0]?.audio).toBe('/m/media/abcd1234/audio/song.mp3');
   });
 
   it('extra files keep lines and vocab; premium is flagged', async () => {

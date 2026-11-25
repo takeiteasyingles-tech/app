@@ -10,6 +10,7 @@
 // Beyond the prototype: Margaret's bubbles carry an avatar, the scene card shows how many lines are
 // answered, the options use the lettered .opt rows of the exercises, the help phrases are even
 // one-line rows, and on desktop the scene and the help phrases move to a sticky side column.
+import { extrasRole } from '@tie/shared/constants';
 import type { Ebook } from '@tie/shared/content/schema';
 import { assistantThe, getAssistant } from '@tie/shared/domain/assist';
 import { activator, Btn, Icon, uiConfig } from '@tie/ui';
@@ -34,6 +35,14 @@ interface LeadState {
 
 /** The scene's speaker (her voice profile is Maggie's: aka Margaret). */
 const HER = 'Margaret';
+/**
+ * PROD (spec 05 "Extras voices"): her lines are extras audio of the e-book row's episode, read with the
+ * episode's extras voice for her (else the extras' voice, the course's extras voice, her course voice).
+ */
+const lessonOf = (eb: Ebook) => {
+  const ep = eb.episodes[0];
+  return ep ? { ep, role: extrasRole(HER) } : undefined;
+};
 const SCENE = 'Você toca a campainha da casa dos Woods, em Beacon. Margaret Woods abre a porta. Ela não conhece você.';
 const MISSION = 'cumprimentar, dizer o seu nome, responder quando ela perguntar como você está, e se despedir.';
 /** quiz_hit scope of the right answers: `lead-eb{n}:{turn}`, once per turn a day. */
@@ -144,7 +153,7 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
       const m = eb.lead[next]?.m;
       if (!m) return;
       setL((cur) => ({ ...cur, turn: next, typing: false, msgs: [...cur.msgs, { who: 'her', en: m.en, pt: m.pt }] }));
-      void say(m.en, { who: HER });
+      void say(m.en, { who: HER, lesson: lessonOf(eb) });
     });
   };
 
@@ -159,7 +168,7 @@ export function Lead({ eb, desk = false }: { eb: Ebook; desk?: boolean }) {
         typing: false,
         msgs: [...s.msgs, { who: 'her', en: cur.en, pt: `(de novo, mais devagar) ${cur.pt}` }],
       }));
-      void say(cur.en, { rate: 0.75, who: HER });
+      void say(cur.en, { rate: 0.75, who: HER, lesson: lessonOf(eb) });
     });
   };
 

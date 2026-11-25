@@ -1,7 +1,6 @@
-import { ApiError } from '@tie/shared';
+import { ApiError, STEP } from '@tie/shared';
 import { invalidateFlags } from '@tie/worker-core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { download } from '../ebook';
 import { advance, episodeDone, exercise, micScore, stepOk } from '../progress';
 import { publish, setProg, USER, type World, world } from './helpers/fixtures';
 
@@ -35,10 +34,17 @@ const prog = (w: World, ep = 1) =>
 /** Satisfies everything step `n` of episode 1 asks for. */
 async function satisfy(w: World, n: number) {
   const d = w.deps();
-  if (n === 2) await download(d, 1);
-  if (n === 1 || n === 3 || n === 4 || n === 5 || n === 10) await stepOk(d, { ep: 1, step: n });
-  if (n === 6) for (const id of ['e1-mic-0', 'e1-mic-1']) await micScore(d, { phraseId: id, score: 5, source: 'demo' });
-  if (n === 9) {
+  if (n === STEP.INTRO || n === STEP.SONG || n === STEP.LOOK || n === STEP.DIALOG || n === STEP.SING)
+    await stepOk(d, { ep: 1, step: n });
+  // Take the Test: a submitted result of the episode test (e-book 1 has questions in the fixture).
+  if (n === STEP.TEST)
+    w.db.exec(
+      'INSERT INTO ebook_test_results(user_id, ebook_num, score, passed, submitted_at) VALUES(?, 1, 4, 1, 1)',
+      USER,
+    );
+  if (n === STEP.MIC)
+    for (const id of ['e1-mic-0', 'e1-mic-1']) await micScore(d, { phraseId: id, score: 5, source: 'demo' });
+  if (n === STEP.ACTION) {
     for (const itemId of ['e1-ex0-i0', 'e1-ex0-i1', 'e1-ex1-i0', 'e1-ex1-i1']) await exercise(d, { itemId, choice: 0 });
   }
 }
@@ -60,13 +66,13 @@ describe('advance gating (server-side need())', () => {
     expect(await code(advance(w.deps(), { ep: 1, step: 3 }))).toBe('gated');
     await satisfy(w, 1);
     expect(await code(advance(w.deps(), { ep: 1, step: 3 }))).toBe('gated');
-    expect(await code(advance(w.deps(), { ep: 1, step: 10 }))).toBe('gated');
+    expect(await code(advance(w.deps(), { ep: 1, step: STEP.LAST }))).toBe('gated');
     expect(prog(w)).toBeUndefined();
     expect(w.award.calls).toEqual([]);
   });
 
-  it('step 1 needs the song played to the end, then awards step:1:2 once', async () => {
-    expect(await message(advance(w.deps(), { ep: 1, step: 2 }))).toBe('Ouça a música até o fim');
+  it('step 1 needs the Apresentação played to the end, then awards step:1:2 once', async () => {
+    expect(await message(advance(w.deps(), { ep: 1, step: 2 }))).toBe('Ouça a apresentação até o fim');
     await stepOk(w.deps(), { ep: 1, step: 1 });
     const res = await advance(w.deps(), { ep: 1, step: 2 });
     expect(res).toMatchObject({ prog: 2, cardsAdded: 0, award: { awarded: true, kind: 'step' } });
@@ -77,59 +83,46 @@ describe('advance gating (server-side need())', () => {
     expect(w.award.calls.map((c) => c.key)).toEqual(['step:1:2']);
   });
 
-  it('step 2 needs the e-book downloaded', async () => {
+  it('step 2 needs the song played to the end', async () => {
     await walkTo(w, 2);
     expect(prog(w)?.furthest_step).toBe(2);
-    expect(await message(advance(w.deps(), { ep: 1, step: 3 }))).toBe('Baixe o e-book para seguir');
-    await download(w.deps(), 1);
+    expect(await message(advance(w.deps(), { ep: 1, step: 3 }))).toBe('Ouça a música até o fim');
+    await stepOk(w.deps(), { ep: 1, step: 2 });
     expect((await advance(w.deps(), { ep: 1, step: 3 })).prog).toBe(3);
   });
 
-  it('step 3 needs the intro played to the end', async () => {
-    await walkTo(w, 3);
-    expect(await message(advance(w.deps(), { ep: 1, step: 4 }))).toBe('Ouça a abertura até o fim');
-    await stepOk(w.deps(), { ep: 1, step: 3 });
-    expect((await advance(w.deps(), { ep: 1, step: 4 })).prog).toBe(4);
+  it('PROD: no e-book step: Take a Look follows the song, with no download', async () => {
+    await walkTo(w, STEP.LOOK);
+    expect(prog(w)?.furthest_step).toBe(3);
   });
 
-  it('the e-book unlock is per e-book, shared by its episodes', async () => {
-    await download(w.deps(), 1);
-    // Episode 2 belongs to e-book 1 too and has no scene video: step 4 does not gate.
-    setProg(w, 1, 10, true);
-    setProg(w, 2, 2);
-    expect((await advance(w.deps(), { ep: 2, step: 3 })).prog).toBe(3);
-    await stepOk(w.deps(), { ep: 2, step: 3 });
-    expect((await advance(w.deps(), { ep: 2, step: 4 })).prog).toBe(4);
-    expect((await advance(w.deps(), { ep: 2, step: 5 })).prog).toBe(5);
-  });
-
-  it('step 4 with a video needs it watched; leaving 4 and 8 unlocks the cards', async () => {
-    await walkTo(w, 4);
-    expect(await message(advance(w.deps(), { ep: 1, step: 5 }))).toBe('Assista à cena até o fim');
+  it('Take a Look with a video needs it watched; leaving it and Take Away unlocks the cards', async () => {
+    await walkTo(w, STEP.LOOK);
+    expect(await message(advance(w.deps(), { ep: 1, step: STEP.DIALOG }))).toBe('Assista à cena até o fim');
     expect(w.srs.calls).toEqual([]);
-    await stepOk(w.deps(), { ep: 1, step: 4 });
-    expect(await advance(w.deps(), { ep: 1, step: 5 })).toMatchObject({ prog: 5, cardsAdded: 2 });
-    await walkTo(w, 9);
+    await stepOk(w.deps(), { ep: 1, step: STEP.LOOK });
+    expect(await advance(w.deps(), { ep: 1, step: STEP.DIALOG })).toMatchObject({ prog: 4, cardsAdded: 2 });
+    await walkTo(w, STEP.ACTION);
     expect(w.srs.calls).toEqual([
-      { episode: 1, step: 4 },
-      { episode: 1, step: 8 },
+      { episode: 1, step: STEP.LOOK },
+      { episode: 1, step: STEP.AWAY },
     ]);
   });
 
-  it('step 6 needs every phrase recorded, step 9 every exercise answered', async () => {
-    await walkTo(w, 6);
-    expect(await message(advance(w.deps(), { ep: 1, step: 7 }))).toBe('Faltam 2 frases para gravar');
+  it('Take the Mic needs every phrase recorded, Take Action every exercise answered', async () => {
+    await walkTo(w, STEP.MIC);
+    expect(await message(advance(w.deps(), { ep: 1, step: STEP.LESSON }))).toBe('Faltam 2 frases para gravar');
     await micScore(w.deps(), { phraseId: 'e1-mic-0', score: 3, source: 'demo' });
-    expect(await message(advance(w.deps(), { ep: 1, step: 7 }))).toBe('Falta gravar 1 frase');
-    await satisfy(w, 6);
-    await advance(w.deps(), { ep: 1, step: 7 });
-    await advance(w.deps(), { ep: 1, step: 8 });
-    await advance(w.deps(), { ep: 1, step: 9 });
-    expect(await message(advance(w.deps(), { ep: 1, step: 10 }))).toBe('Faltam 4 respostas');
-    await satisfy(w, 9);
-    expect((await advance(w.deps(), { ep: 1, step: 10 })).prog).toBe(10);
+    expect(await message(advance(w.deps(), { ep: 1, step: STEP.LESSON }))).toBe('Falta gravar 1 frase');
+    await satisfy(w, STEP.MIC);
+    await advance(w.deps(), { ep: 1, step: STEP.LESSON });
+    await advance(w.deps(), { ep: 1, step: STEP.AWAY });
+    await advance(w.deps(), { ep: 1, step: STEP.ACTION });
+    expect(await message(advance(w.deps(), { ep: 1, step: STEP.SING }))).toBe('Faltam 4 respostas');
+    await satisfy(w, STEP.ACTION);
+    expect((await advance(w.deps(), { ep: 1, step: STEP.SING })).prog).toBe(STEP.SING);
     expect(w.award.awardedKeys().filter((k) => k.startsWith('step:'))).toEqual(
-      [2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `step:1:${n}`),
+      [2, 3, 4, 5, 6, 7, 8, 9].map((n) => `step:1:${n}`),
     );
   });
 
@@ -153,6 +146,17 @@ describe('advance gating (server-side need())', () => {
     }
   });
 
+  it('"Etapas livres" follows the flag alone: no student opt-in needed (user_settings.free = 0)', async () => {
+    w.db.exec("INSERT INTO feature_flags(key, enabled, rollout_pct, updated_at) VALUES('dev.free_steps', 1, 100, 1)");
+    invalidateFlags();
+    try {
+      expect((await advance(w.deps(), { ep: 1, step: 2 })).prog).toBe(2);
+    } finally {
+      w.db.exec("DELETE FROM feature_flags WHERE key = 'dev.free_steps'");
+      invalidateFlags();
+    }
+  });
+
   it('other users progress independently', async () => {
     await walkTo(w, 3);
     expect(await code(advance(w.deps('u_bob'), { ep: 1, step: 2 }))).toBe('gated');
@@ -163,7 +167,6 @@ describe('episode lock (trilha: only done and current episodes open)', () => {
   it('refuses every write on an episode while an earlier published one is unfinished', async () => {
     const w = world();
     const d = w.deps();
-    await download(d, 1);
     setProg(w, 2, 6);
     expect(await message(stepOk(d, { ep: 2, step: 1 }))).toBe('Termine o episódio 1 para abrir este.');
     expect(await code(advance(d, { ep: 2, step: 7 }))).toBe('gated');
@@ -173,7 +176,7 @@ describe('episode lock (trilha: only done and current episodes open)', () => {
     // Navigation to reached steps writes nothing and stays allowed.
     expect(await advance(d, { ep: 2, step: 3 })).toEqual({ prog: 6, cardsAdded: 0, award: null });
 
-    setProg(w, 1, 10, true);
+    setProg(w, 1, STEP.LAST, true);
     expect(await stepOk(d, { ep: 2, step: 1 })).toMatchObject({ stepOk: '2-1' });
     expect((await advance(d, { ep: 2, step: 7 })).prog).toBe(7);
   });
@@ -201,13 +204,13 @@ describe('gating against the published snapshot (S9 ContentService)', () => {
     w.db.exec(
       `INSERT INTO exercise_items(id, exercise_id, sort, q, opts, answer_idx) VALUES('e1-ex0-i9', 'e1-ex0', 9, 'new', '["a","b"]', 0)`,
     );
-    await walkTo(w, 6);
-    await satisfy(w, 6);
-    expect((await advance(w.deps(), { ep: 1, step: 7 })).prog).toBe(7);
-    await advance(w.deps(), { ep: 1, step: 8 });
-    await advance(w.deps(), { ep: 1, step: 9 });
-    await satisfy(w, 9);
-    expect((await advance(w.deps(), { ep: 1, step: 10 })).prog).toBe(10);
+    await walkTo(w, STEP.MIC);
+    await satisfy(w, STEP.MIC);
+    expect((await advance(w.deps(), { ep: 1, step: STEP.LESSON })).prog).toBe(STEP.LESSON);
+    await advance(w.deps(), { ep: 1, step: STEP.AWAY });
+    await advance(w.deps(), { ep: 1, step: STEP.ACTION });
+    await satisfy(w, STEP.ACTION);
+    expect((await advance(w.deps(), { ep: 1, step: STEP.SING })).prog).toBe(STEP.SING);
   });
 
   it('an episode unpublished in the snapshot is unavailable even if D1 says published, and vice versa', async () => {
@@ -240,38 +243,41 @@ describe('gating against the published snapshot (S9 ContentService)', () => {
 });
 
 describe('step-ok', () => {
-  it('records reached media steps only; step 10 also awards song once', async () => {
+  it('records reached media steps only; the sing-along also awards song once', async () => {
     const w = world();
-    expect(await code(stepOk(w.deps(), { ep: 1, step: 3 }))).toBe('gated');
-    expect(await code(stepOk(w.deps(), { ep: 1, step: 2 }))).toBe('bad_request');
+    expect(await code(stepOk(w.deps(), { ep: 1, step: 2 }))).toBe('gated');
+    expect(await code(stepOk(w.deps(), { ep: 1, step: STEP.MIC }))).toBe('bad_request');
     expect(await stepOk(w.deps(), { ep: 1, step: 1 })).toEqual({ stepOk: '1-1', award: null });
     expect(await stepOk(w.deps(), { ep: 1, step: 1 })).toEqual({ stepOk: '1-1', award: null });
     expect(w.db.rows('SELECT step FROM step_completions WHERE user_id = ?', USER)).toEqual([{ step: 1 }]);
 
-    setProg(w, 1, 10);
-    const first = await stepOk(w.deps(), { ep: 1, step: 10 });
+    setProg(w, 1, STEP.SING);
+    const first = await stepOk(w.deps(), { ep: 1, step: STEP.SING });
     expect(first.award).toMatchObject({ awarded: true, kind: 'song' });
-    expect((await stepOk(w.deps(), { ep: 1, step: 10 })).award?.awarded).toBe(false);
+    expect((await stepOk(w.deps(), { ep: 1, step: STEP.SING })).award?.awarded).toBe(false);
     expect(w.award.awardedKeys()).toEqual(['song:1']);
   });
 });
 
 describe('episode-done', () => {
-  it('needs step 10 reached and sung, then awards episode once', async () => {
+  it('needs the song sung and the test handed in (Take the Test, the last step), then awards episode once', async () => {
     const w = world();
     expect(await code(episodeDone(w.deps(), { ep: 1 }))).toBe('gated');
-    await walkTo(w, 10);
+    await walkTo(w, STEP.SING);
     expect(await message(episodeDone(w.deps(), { ep: 1 }))).toBe('Cante a música até o fim');
-    await stepOk(w.deps(), { ep: 1, step: 10 });
+    await stepOk(w.deps(), { ep: 1, step: STEP.SING });
+    expect((await advance(w.deps(), { ep: 1, step: STEP.TEST })).prog).toBe(STEP.TEST);
+    expect(await message(episodeDone(w.deps(), { ep: 1 }))).toBe('Faça o teste até o fim');
+    await satisfy(w, STEP.TEST);
     const res = await episodeDone(w.deps(), { ep: 1 });
     expect(res).toMatchObject({ epsDone: true, cardsAdded: 0, award: { awarded: true, kind: 'episode' } });
-    expect(prog(w)).toEqual({ furthest_step: 10, done_at: expect.any(Number) });
+    expect(prog(w)).toEqual({ furthest_step: STEP.LAST, done_at: expect.any(Number) });
     const doneAt = prog(w)?.done_at;
 
     const again = await episodeDone(w.deps(undefined, Date.now() + 1000), { ep: 1 });
     expect(again.award?.awarded).toBe(false);
     expect(prog(w)?.done_at).toBe(doneAt);
     // A finished episode is fully open for navigation.
-    expect(await advance(w.deps(), { ep: 1, step: 3 })).toEqual({ prog: 10, cardsAdded: 0, award: null });
+    expect(await advance(w.deps(), { ep: 1, step: 3 })).toEqual({ prog: STEP.LAST, cardsAdded: 0, award: null });
   });
 });

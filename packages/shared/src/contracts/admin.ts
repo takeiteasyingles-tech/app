@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Permission, Role } from '../authz';
-import { LIMITS, MEDIA_MIME } from '../constants';
+import { EBOOK_EXTRAS, LIMITS, MEDIA_MIME } from '../constants';
 import {
   AssistantVoice,
   AwayExp,
@@ -13,11 +13,13 @@ import {
   EbookExtraCard,
   EpisodeDone,
   EpisodeStatus,
+  EpisodeVoices,
   ExtraCast,
   ExtraLine,
   KaraokeLine,
   LeadTurn,
   LyricLine,
+  MicAvatar,
   MicMode,
   MissionTurn,
   PointKind,
@@ -26,7 +28,9 @@ import {
 } from '../content/schema';
 import { QuotaInfo } from '../state';
 import { Feedback, PronTip, ReportResult } from './ai';
+import { adminAiProvidersApi } from './aiProviders';
 import { adminApiTokensApi } from './apiTokens';
+import { adminBackupsApi } from './backups';
 import { adminCertificatesApi } from './certificates';
 import {
   Email,
@@ -45,7 +49,9 @@ import { adminFeedbackApi } from './feedback';
 import { BadgeRule } from './game';
 import { type EndpointDef, endpoint } from './http';
 import { adminSeasonTestApi } from './seasonTest';
+import { adminSongLyricsApi } from './songLyrics';
 import { adminStatsApi } from './stats';
+import { adminVoicesApi } from './voices';
 
 // Admin API (/admin-api). Bodies are strict (unknown keys rejected). Every staff endpoint names the
 // permission it needs; every mutation is audited with a JSON diff. Media fields are media ids.
@@ -266,6 +272,8 @@ export const EpisodeRow = z.object({
   songMedia: MediaId,
   songTitle: z.string().nullable(),
   sceneMedia: MediaId,
+  /** PROD (0014): Take a Look's context audio. */
+  lookMedia: MediaId.default(null),
   sceneNote: z.string().nullable(),
   dialogTitle: z.string().nullable(),
   dialogSub: z.string().nullable(),
@@ -278,6 +286,8 @@ export const EpisodeRow = z.object({
   awayExp: z.array(AwayExp),
   awayWords: z.array(z.string()),
   done: EpisodeDone.nullable(),
+  /** PROD (0016): the lesson's ElevenLabs voices (narration and characters). */
+  voices: EpisodeVoices.default({}),
   updatedAt: Timestamp,
   updatedBy: z.string().nullable(),
 });
@@ -292,6 +302,8 @@ export const MicPhraseRow = z.object({
   demoResult: z.int().min(0).max(10).nullable(),
   blue: z.boolean(),
   fb: z.string().nullable(),
+  /** PROD (0017): "Quem fala"; null = automatic (micSpeaker). */
+  who: z.string().trim().max(40).nullable().default(null),
 });
 export type MicPhraseRow = z.infer<typeof MicPhraseRow>;
 
@@ -329,6 +341,8 @@ export const EbookRow = z.object({
   lead: z.array(LeadTurn),
   chat: z.array(ChatTurn),
   extrasCards: z.array(EbookExtraCard),
+  /** PROD (0018): which extras the episode end offers. */
+  extrasOn: z.array(z.enum(EBOOK_EXTRAS)).default([...EBOOK_EXTRAS]),
   pdfMedia: MediaId,
   passScore: z.int().min(0),
   testEnabled: z.boolean().default(true),
@@ -427,6 +441,8 @@ export const AssistantRow = z.object({
   clips: z.partialRecord(ClipState, IdString),
   sort: z.int(),
   active: z.boolean(),
+  /** PROD (migration 0019): the Mic avatar; null = the assistant's own 3D model or clips. */
+  avatar: MicAvatar.nullable().default(null),
 });
 export type AssistantRow = z.infer<typeof AssistantRow>;
 
@@ -482,7 +498,17 @@ export type OptionListRow = z.infer<typeof OptionListRow>;
 /** Create body = the row's editable columns (strict); update body = the same, all optional. */
 function editable<T extends z.ZodRawShape>(row: z.ZodObject<T>) {
   const create = z.strictObject(row.shape);
-  return { create, update: create.partial() };
+  // An update changes only what it sends: a field left out never takes its create default (a partial
+  // of a defaulted field still applies the default in zod 4, which wiped Take a Look's context audio
+  // whenever another field of the episode was saved).
+  const shape = Object.fromEntries(
+    Object.entries(row.shape).map(([k, s]) => [
+      k,
+      (s instanceof z.ZodDefault ? (s.removeDefault() as z.ZodType) : (s as z.ZodType)).optional(),
+    ]),
+  );
+  const update = z.strictObject(shape) as unknown as ReturnType<typeof create.partial>;
+  return { create, update };
 }
 
 function crud<Item extends z.ZodType, Create extends z.ZodType, Update extends z.ZodType>(
@@ -1057,6 +1083,22 @@ export const adminContentApi = {
     body: PublishBody,
     res: z.object({ release: Release }),
   }),
+  /**
+   * PROD (spec 05 "Saving publishes"): publishes the draft if it changed, after a save made of several
+   * requests sent with X-Publish: defer (the episode editor). Single-request saves publish by themselves.
+   */
+  autoPublish: endpoint({
+    method: 'POST',
+    path: '/admin-api/content/publish/auto',
+    access: 'staff',
+    perm: 'content.edit',
+    body: z.strictObject({ what: z.string().trim().min(1).max(200) }),
+    res: z.object({
+      status: z.enum(['published', 'unchanged', 'failed']),
+      version: z.string().nullable(),
+      message: z.string().nullable(),
+    }),
+  }),
 } as const;
 
 export const adminAiApi = {
@@ -1246,6 +1288,14 @@ export const adminApi = {
   feedback: adminFeedbackApi,
   stats: adminStatsApi,
   apiTokens: adminApiTokensApi,
+  // Operação → Backup (contracts/backups.ts).
+  backups: adminBackupsApi,
+  // Configurações → Vozes (contracts/voices.ts).
+  voices: adminVoicesApi,
+  // Configurações → App → Provedores de IA (contracts/aiProviders.ts).
+  aiProviders: adminAiProvidersApi,
+  // Episode editor → Música: lyrics and line times from the song (contracts/songLyrics.ts).
+  songLyrics: adminSongLyricsApi,
 } as const;
 
 /** Flattens a nested endpoint map (for route tables and tests). */

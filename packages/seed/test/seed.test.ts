@@ -229,7 +229,10 @@ describe('compiled snapshot of the real prototype', () => {
     expect(e2.sceneImage).toMatch(/scene\/cafe-counter\.webp$/);
     expect(e2.introAudio).toBeNull();
     const eb = Ebook.parse(JSON.parse(compiled.files['ebook/1.json'] as string));
-    expect(eb.test.flatMap((p) => p.qs)).toHaveLength(20);
+    // PROD (spec 05 "Take the Test: six questions"): six of the prototype's 20 (this e-book row covers
+    // episodes 1 and 2 here, so one per part, then two more), 5 to pass.
+    expect(eb.test.flatMap((p) => p.qs).map((q) => q.n)).toEqual([1, 2, 9, 10, 14, 18]);
+    expect(eb.passScore).toBe(5);
     expect(eb.teaser?.title).toMatch(/^O almoço/);
     expect(eb.extrasCards).toHaveLength(4);
   });

@@ -97,6 +97,7 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 export function agentWriter(c: Ctx, token: AgentToken, tool: McpToolName): Writer {
   return {
     userId: token.createdBy,
+    roles: token.roles,
     audit: (entry, now) => {
       const diff = entry.diff !== undefined ? entry.diff : jsonDiff(entry.before, entry.after);
       const agent = { tokenId: token.id, tokenName: token.name, tool };

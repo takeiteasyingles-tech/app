@@ -143,6 +143,27 @@ Confirm with `npx wrangler secret list` in each app dir.
 
 Without `RESEND_API_KEY` the app still works: the request answers as usual, nothing is sent, and the Worker logs a warning (`mail not sent: RESEND_API_KEY is not set`, without the link). Staff can still issue a reset link from Admin → Usuários. Locally (`npm run dev:app`) leave the key unset: the reset link is printed in the wrangler console.
 
+## 5b. Cloned assistant voices (ElevenLabs)
+
+An assistant with a cloned voice speaks the HD voice (`/api/tts`) through ElevenLabs; every other assistant keeps the Workers AI voice. The audio is cached in R2 like any TTS and billed against the same Mic quota. Everything is set in the admin, no deploy needed:
+
+1. ElevenLabs account on a plan with Instant Voice Clone (Starter or above). Developers → API Keys → create a key with access to Text to Speech and Voices.
+2. Admin → **Configurações → Vozes** (admins, `settings.manage`): paste the key and save. It is stored sealed in `app_settings['voice.eleven.key']` (AES-GCM under a key derived from `MEDIA_TOKEN_KEY`, which is why that secret must be the same on both Workers) and never shown again, only its last 4 characters.
+3. For each assistant, either paste the id of a voice that already exists in the ElevenLabs account, or click **Clonar voz…** and send a sample (1 to 3 minutes of clean speech, MP3 or WAV up to 10 MB; Margaret's is `prototipo/personagens/Margaret/voz.mp3`). **Testar** plays a short line with the stored key, model and voice.
+4. Pick the model on the same screen (default `eleven_turbo_v2_5`, low latency).
+
+If ElevenLabs fails, `/api/tts` answers `ai_unavailable` and the app falls back to the browser voice, as for any TTS failure. The old env route still works as a fallback when nothing is set in the admin: the `ELEVENLABS_API_KEY` secret and the `ELEVENLABS_VOICES` / `ELEVENLABS_MODEL` vars of tie-app.
+
+### ElevenLabs agents in the Mic (spec 05 "Mic avatar per assistant")
+
+An assistant can hand its Mic conversations to an ElevenLabs agent (Admin → Assistentes → the assistant → Imagens e vídeos → **Avatar no Mic → Agente ElevenLabs**: the agent id and the modes). Requirements:
+
+1. The key saved in Configurações → Vozes must belong to the ElevenLabs workspace that owns the agent and be allowed to use **Agents** (tie-app asks it for signed URLs and reads each conversation's length to bill it). **Verificar agente** in the assistant editor checks exactly that.
+2. In ElevenLabs → the agent → **Security**, turn on **Enable authentication**: only signed URLs (what tie-app uses) can then start a conversation, and nobody can spend the account's credits with the bare agent id.
+3. The agent's audio formats stay PCM (the default `pcm_16000`); μ-law is not supported by the app.
+
+Each conversation reserves up to 10 minutes of the learner's monthly quota when it starts and is settled with the length ElevenLabs measured, on `/end` or by the daily cron. Nothing to deploy when switching an assistant between the embed, the agent and its own avatar.
+
 ## 6. Migrations (remote)
 
 ```powershell
@@ -151,7 +172,7 @@ npx wrangler d1 migrations apply tie-db --remote
 cd ../..
 ```
 
-This applies `packages/db/migrations/0001…0005`. The admin config points at the same directory, so there is only one migration history. The seed in step 7 also runs this, but applying migrations on their own first shows any SQL error right away.
+This applies every file in `packages/db/migrations` (`0001…0019`). The admin config points at the same directory, so there is only one migration history. The seed in step 7 also runs this, but applying migrations on their own first shows any SQL error right away.
 
 ## 7. Seed content and media (remote)
 
@@ -213,22 +234,32 @@ Invite the rest of the team from the admin panel (Usuários → Gerar convite).
 
 ## 11. Connecting Claude (MCP)
 
-tie-admin serves an MCP endpoint at `https://tie-admin.<subdomain>.workers.dev/admin-api/mcp`. Through it, Claude (Claude Code or Claude Desktop) can read and edit the content draft. It cannot publish. The endpoint needs no extra configuration: it uses the D1 binding, `RL_API` and migration 0007 (`api_tokens`).
+tie-admin serves an MCP endpoint at `https://tie-admin.<subdomain>.workers.dev/admin-api/mcp`. Through it, an agent (Claude Code, Claude Desktop or Codex) can create, edit and delete the course content and, with the "Publicar" permission on its token, publish it. The endpoint needs no extra configuration: it uses the D1 and R2 bindings, `RL_API` and migrations 0007 (`api_tokens`) and 0010 (`backups`, for `create_backup`).
 
 1. Sign in to the admin as an admin, open **Configurações → Integrações** and create a token. Choose a name, the permissions and a validity (90 days by default). Copy the `tie_pat_…` value; it is shown only once.
 2. Connect Claude Code:
    ```powershell
    claude mcp add --transport http take-it-easy https://tie-admin.<subdomain>.workers.dev/admin-api/mcp --header "Authorization: Bearer <token>"
    ```
-   For Claude Desktop, use the `mcp-remote` snippet on the same screen.
-3. Smoke test: in Claude Code, `/mcp` lists `take-it-easy` with 13 tools. Ask it to "list the seasons". Its edits appear in Auditoria with the role `agent`.
+   For Claude Desktop (`mcp-remote`) and Codex (`~/.codex/config.toml`), use the snippets on the same screen.
+3. Smoke test: in Claude Code, `/mcp` lists `take-it-easy` with 30 tools. Ask it to "list the seasons". Its edits appear in Auditoria with the role `agent`.
 
 The tool list, the safety rules and the troubleshooting steps are in `docs/MCP.md`. To cut an agent's access, revoke its token on the same screen.
+
+## 12. Backups
+
+Admin → **Operação → Backup** (admins, permission `backups.manage`). It needs migration `0010_backups.sql` and the tie-admin cron in `apps/admin/wrangler.jsonc` (`5 * * * *`, deployed with the Worker).
+
+- **Make one now**: "Completo" dumps every table except sessions, one-time tokens and idempotency keys; "Só o conteúdo" dumps the course tables only. The file is gzip JSON in the private R2 bucket under `backups/`, and only leaves through the download button.
+- **Automatic**: the cron runs every hour and makes a backup when the hour (São Paulo time) and, for weekly, the weekday match the schedule. It keeps the newest N automatic backups and deletes the older ones. Manual, agent and pre-restore backups are never pruned. The default is daily at 03:00, complete, keeping 14.
+- **Restore** puts back the course content of a backup (either kind) into the draft. It upserts the backup's rows; with "Remover o que foi criado depois do backup" it also deletes newer content rows that nothing points at. Learner accounts, progress, answers, ratings and points never change, and rows they point at stay. A content backup of the current state ("Antes de restaurar") is taken first, so a restore can be undone. Learners see the result only after a publish in Publicações.
+- **Disaster recovery of user data**: the panel does not restore users. To bring the whole database back to a point in time, use D1 Time Travel (`cd apps/app; npx wrangler d1 time-travel info tie-db`, then `npx wrangler d1 time-travel restore tie-db --timestamp=<unix>`). It covers the last 30 days. A complete backup file holds every row as `{tables: {name: {columns, rows}}}`, which you can use to recover specific records by hand.
 
 ## Updating later
 
 - Code only: `npm run typecheck; npm test; npm run build` (with `VITE_TURNSTILE_SITEKEY` set for the admin), then `npm run deploy -w @tie/app` and `npm run deploy -w @tie/admin`.
 - New migration in `packages/db/migrations/`: `cd apps/app; npx wrangler d1 migrations apply tie-db --remote` **before** you deploy code that depends on it.
+  - `0010_backups` (the Backup screen and its cron): apply it before deploying tie-admin, or the Backup screen and the cron answer errors.
   - `0006_step_order` (steps 1-3 become song → e-book → intro) changes the `steps` content rows: right after applying it and deploying both Workers, publish once from Admin → Publicações so `catalog.json` carries the new order. Until then the app shows the old step names on the new step bodies.
 - Content is edited and published from the admin panel. Do not re-seed production to change content.
 - Rollback: Admin → Publicações → rollback to a previous content release. For code, use `npx wrangler rollback` in the app's directory.

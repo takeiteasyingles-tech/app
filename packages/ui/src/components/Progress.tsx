@@ -1,7 +1,7 @@
-import { STEP_GROUP_STARTS } from '@tie/shared/constants';
+import { STEP_COUNT, STEP_GROUP_STARTS } from '@tie/shared/constants';
 import type { ComponentChildren } from 'preact';
 
-export const STEP_COUNT = 10;
+export { STEP_COUNT };
 
 export type SegsProps = {
   /** Current step (1-based). */

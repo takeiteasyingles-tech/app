@@ -51,7 +51,7 @@ describe('signup → state → profile → logout → login', () => {
     expect(state.plan?.slug).toBe('gratis');
     expect(state.maggie).toMatchObject({ limitSec: 3600, secLeft: 3600, sessions: [] });
     expect(state.tz).toBe('Europe/Lisbon');
-    expect(state.flags).toEqual({ 'dev.free_steps': false });
+    expect(state.flags).toEqual({ 'dev.free_steps': false, 'feedback.steps': false });
     expect(state.settings).toMatchObject({ free: false, phone: false, ts: 1, sound: true });
 
     // Profile: partial wizard update; unknown keys are stripped.

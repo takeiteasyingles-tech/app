@@ -38,6 +38,8 @@ export const PERMISSIONS = [
   // admin (v1, spec 07)
   'certificates.revoke',
   'api_tokens.manage',
+  // admin: database backups (create, download, restore content, schedule)
+  'backups.manage',
   // super_admin
   'roles.grant_admin',
 ] as const;
@@ -69,6 +71,7 @@ const ADMIN_ONLY: readonly Permission[] = [
   'stats.read',
   'certificates.revoke',
   'api_tokens.manage',
+  'backups.manage',
 ];
 const ADMIN: readonly Permission[] = [...new Set([...MODERATOR, ...EDITOR, ...ADMIN_ONLY])];
 

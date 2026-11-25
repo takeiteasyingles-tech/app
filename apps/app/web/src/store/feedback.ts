@@ -2,13 +2,30 @@
 // comment, from the Concluído screen. Optimistic like every store action: state.feedback[ep] changes
 // at once, the server's answer settles it, a refusal rolls it back (and toasts its message). The path
 // is in OUTBOX_PATHS, so `send` gives it an Idempotency-Key and the service worker queues it offline.
-import { feedbackApi } from '@tie/shared/contracts/feedback';
+import { feedbackApi, type StepFeedbackBody } from '@tie/shared/contracts/feedback';
 import type { EpisodeFeedbackState } from '@tie/shared/state';
+import { call, QueuedError } from '../api';
 import { send } from './actions';
 import { state } from './state';
 
 /** 'sent' (the server stored it), 'queued' (offline: kept locally, sent later) or 'failed' (rolled back). */
 export type RateResult = 'sent' | 'queued' | 'failed';
+
+/** Resolves only after saving on the server or durably queuing in the service worker. */
+export async function submitStepFeedback(id: string, body: StepFeedbackBody): Promise<'sent' | 'queued'> {
+  try {
+    await call(feedbackApi.step, {
+      params: { id },
+      body,
+      idempotencyKey: id,
+      outboxUser: state.value.user?.id,
+    });
+    return 'sent';
+  } catch (err) {
+    if (!(err instanceof QueuedError)) throw err;
+    return 'queued';
+  }
+}
 
 /** PUT /api/feedback/episodes/:n. `comment` is the whole comment (null or blank clears it). */
 export async function rateEpisode(ep: number, stars: number, comment: string | null): Promise<RateResult> {

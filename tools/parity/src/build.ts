@@ -18,6 +18,9 @@ export async function buildApp(app: AppName, outDir: string, opts: { tag?: strin
 }
 
 async function child(app: AppName, outDir: string) {
+  // Slot builds (parity, e2e, smoke) keep the Mic on its 3D avatar: the Assistia embed is a live third-party
+  // service with paid voices (apps/app/web/src/screens/maggie/AvatarEmbed.tsx). VITE_MIC_EMBED=on keeps it.
+  process.env.VITE_MIC_EMBED ??= 'off';
   const { build, loadConfigFromFile } = await import('vite');
   const appDir = APP_DIRS[app];
   const loaded = await loadConfigFromFile(

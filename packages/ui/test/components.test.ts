@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { STEP_GROUP_STARTS } from '@tie/shared/constants';
+import { STEP_COUNT, STEP_GROUP_STARTS } from '@tie/shared/constants';
 import { h } from 'preact';
 import { describe, expect, it } from 'vitest';
 import {
@@ -81,13 +81,17 @@ const TIE = loadPrototype({ profile: { avatar: 4, photo: null }, due: 3 });
 const intentional = (tag: string, attr: string) => (tag === 'button' && attr === 'type') || attr === 'aria-hidden';
 const proto = (html: string): Node[] => without(parseHtml(html), intentional);
 
-/** C.segs with production's group gaps (spec 05 "Step order"): before step 3 and 10, not 4 and 10. */
+/**
+ * C.segs as production draws it (spec 05 "Step order"): STEP_COUNT bars (9: no e-book step; a bar's state
+ * depends only on its number, so the prototype's 10th is dropped) with the gaps of STEP_GROUP_STARTS.
+ */
 const regroup = (html: string): string => {
   let n = 0;
-  return html.replace(/<i class="([^"]*)"/g, (_m, c: string) => {
+  return html.replace(/<i class="([^"]*)"><\/i>/g, (_m, c: string) => {
     n++;
+    if (n > STEP_COUNT) return '';
     const base = c.replace(/ ?sep\b/, '');
-    return `<i class="${base}${STEP_GROUP_STARTS.includes(n) ? ' sep' : ''}"`;
+    return `<i class="${base}${STEP_GROUP_STARTS.includes(n) ? ' sep' : ''}"></i>`;
   });
 };
 const mine = (vnode: unknown): Node[] => without(renderVNode(vnode), intentional);
@@ -157,7 +161,7 @@ describe('components match the prototype markup', () => {
     for (const [cur, reached] of [
       [1, 1],
       [3, 6],
-      [10, 10],
+      [STEP_COUNT, STEP_COUNT],
     ] as const) {
       expect(mine(h(Segs, { cur, reached }))).toEqual(proto(regroup(C.segs(cur, reached))));
     }
@@ -197,8 +201,8 @@ describe('components match the prototype markup', () => {
   });
 
   it('tab bar and side nav', () => {
-    // Product rename (spec 05, cross-cutting changes): the prototype's 'Revisão' is labelled 'Flashcards'.
-    const renamed = (html: string) => proto(html.split('Revisão').join('Flashcards'));
+    // Product renames (spec 05): the prototype's 'Revisão' is labelled 'Cards' and 'EXTRA' is 'FLIX'.
+    const renamed = (html: string) => proto(html.split('Revisão').join('Cards').split('EXTRA').join('FLIX'));
     for (const active of ['inicio', 'revisao', 'conquistas', 'perfil']) {
       expect(mine(h(Tabbar, { active, due: 3 }))).toEqual(renamed(C.tabbar(active)));
       expect(mine(h(Side, { active, due: 3, g: G }))).toEqual(renamed(C.side(active)));

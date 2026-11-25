@@ -22,7 +22,7 @@ export const STEPS_FALLBACK: readonly OnbStep[] = [
     s: 'Escolha até 3. O plano da semana é calculado a partir daqui.',
     skip: true,
   },
-  { k: 'gostos', t: 'Gostos', h: 'Do que você gosta?', s: 'É daqui que sai a sua prateleira no EXTRA.', skip: true },
+  { k: 'gostos', t: 'Gostos', h: 'Do que você gosta?', s: 'É daqui que sai a sua prateleira no FLIX.', skip: true },
   {
     k: 'trava',
     t: 'Dificuldades',

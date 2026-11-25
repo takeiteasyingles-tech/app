@@ -95,6 +95,8 @@ interface EpisodeRow {
   status: string;
   ebook_num: number | null;
   scene_media: string | null;
+  /** Questions of the episode test when its e-book row has the test on (Take the Test). */
+  test_count: number;
 }
 interface PhraseRow {
   id: string;
@@ -135,6 +137,7 @@ function fromSnapshot(
       num: e.num,
       ebook: e.ebook,
       sceneVideo: e.sceneVideo,
+      testCount: e.testCount ?? 0,
       mic: mic.map((m) => ({ id: m.id })),
       ex: ex.map((x) => ({ items: x.items.map((it) => ({ id: it.id })) })),
     },
@@ -162,9 +165,10 @@ function fromD1(
   return {
     episode: {
       num: row.num,
-      // need() reads ebooks[ep.ebook]; an episode without an e-book can never pass step 3.
+      // need() reads testDone[ep.ebook] for Take the Test (the episode test lives on its e-book row).
       ebook: row.ebook_num ?? 0,
       sceneVideo: row.scene_media,
+      testCount: row.test_count,
       mic: phrases.map((m) => ({ id: m.id })),
       ex,
     },
@@ -176,56 +180,68 @@ function fromD1(
 /**
  * Everything the player use cases look at for one episode: its published content, the user's
  * reach and state, and the episode lock. null when the episode is missing or not published.
- * `settings.free` ("Etapas livres") is on only when the user turned it on AND the dev.free_steps
- * flag is enabled for them; it skips need() but never the episode lock.
+ * `settings.free` ("Etapas livres") follows the dev.free_steps flag evaluated for this user;
+ * it skips need() but never the episode lock.
  */
 export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<EpisodeContext | null> {
   const { db, userId } = d;
   const src = await contentSource(d);
   const snapshot = src.kind === 'snapshot' ? snapshotFile(() => src.content.episode(ep)) : null;
-  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, settings, earlierD1, doneRows] =
-    await batch(db, [
-      q<EpisodeRow>(db, 'SELECT num, status, ebook_num, scene_media FROM episodes WHERE num = ?', ep),
-      q<PhraseRow>(db, 'SELECT id, demo_result FROM mic_phrases WHERE episode_num = ? ORDER BY sort, id', ep),
-      q<ItemRow>(
-        db,
-        `SELECT i.id, i.exercise_id, i.opts, i.answer_idx, i.fix FROM exercise_items i
+  const [eps, phraseRows, itemRows, progress, oks, ebooks, scores, answers, earlierD1, doneRows, tests] = await batch(db, [
+    q<EpisodeRow>(
+      db,
+      `SELECT e.num, e.status, e.ebook_num, e.scene_media,
+         (SELECT COUNT(*) FROM ebook_test_questions t JOIN ebooks b ON b.num = t.ebook_num
+           WHERE t.ebook_num = e.ebook_num AND b.test_enabled != 0) AS test_count
+       FROM episodes e WHERE e.num = ?`,
+      ep,
+    ),
+    q<PhraseRow>(db, 'SELECT id, demo_result FROM mic_phrases WHERE episode_num = ? ORDER BY sort, id', ep),
+    q<ItemRow>(
+      db,
+      `SELECT i.id, i.exercise_id, i.opts, i.answer_idx, i.fix FROM exercise_items i
          JOIN exercises x ON x.id = i.exercise_id
          WHERE x.episode_num = ? ORDER BY x.sort, x.id, i.sort, i.id`,
-        ep,
-      ),
-      q<ProgressRow>(
-        db,
-        'SELECT furthest_step, done_at FROM episode_progress WHERE user_id = ? AND episode_num = ?',
-        userId,
-        ep,
-      ),
-      q<{ step: number }>(db, 'SELECT step FROM step_completions WHERE user_id = ? AND episode_num = ?', userId, ep),
-      q<{ ebook_num: number }>(db, 'SELECT ebook_num FROM user_ebooks WHERE user_id = ?', userId),
-      q<{ phrase_id: string; last_score: number }>(
-        db,
-        `SELECT s.phrase_id, s.last_score FROM mic_scores s JOIN mic_phrases p ON p.id = s.phrase_id
+      ep,
+    ),
+    q<ProgressRow>(
+      db,
+      'SELECT furthest_step, done_at FROM episode_progress WHERE user_id = ? AND episode_num = ?',
+      userId,
+      ep,
+    ),
+    q<{ step: number }>(db, 'SELECT step FROM step_completions WHERE user_id = ? AND episode_num = ?', userId, ep),
+    q<{ ebook_num: number }>(db, 'SELECT ebook_num FROM user_ebooks WHERE user_id = ?', userId),
+    q<{ phrase_id: string; last_score: number }>(
+      db,
+      `SELECT s.phrase_id, s.last_score FROM mic_scores s JOIN mic_phrases p ON p.id = s.phrase_id
          WHERE s.user_id = ? AND p.episode_num = ?`,
-        userId,
-        ep,
-      ),
-      q<{ item_id: string; choice_idx: number }>(
-        db,
-        `SELECT a.item_id, a.choice_idx FROM exercise_answers a
+      userId,
+      ep,
+    ),
+    q<{ item_id: string; choice_idx: number }>(
+      db,
+      `SELECT a.item_id, a.choice_idx FROM exercise_answers a
          JOIN exercise_items i ON i.id = a.item_id JOIN exercises x ON x.id = i.exercise_id
          WHERE a.user_id = ? AND x.episode_num = ?`,
-        userId,
-        ep,
-      ),
-      q<{ free: number }>(db, 'SELECT free FROM user_settings WHERE user_id = ?', userId),
-      q<{ num: number }>(db, "SELECT num FROM episodes WHERE status = 'published' AND num < ? ORDER BY num", ep),
-      q<{ episode_num: number }>(
-        db,
-        'SELECT episode_num FROM episode_progress WHERE user_id = ? AND done_at IS NOT NULL AND episode_num <= ?',
-        userId,
-        ep,
-      ),
-    ] as const);
+      userId,
+      ep,
+    ),
+    q<{ num: number }>(db, "SELECT num FROM episodes WHERE status = 'published' AND num < ? ORDER BY num", ep),
+    q<{ episode_num: number }>(
+      db,
+      'SELECT episode_num FROM episode_progress WHERE user_id = ? AND done_at IS NOT NULL AND episode_num <= ?',
+      userId,
+      ep,
+    ),
+    // Take the Test: a submitted result of the episode's test (redo in progress = submitted_at 0).
+    q<{ ebook_num: number }>(
+      db,
+      'SELECT r.ebook_num FROM ebook_test_results r JOIN episodes e ON e.ebook_num = r.ebook_num WHERE r.user_id = ? AND e.num = ? AND r.submitted_at > 0',
+      userId,
+      ep,
+    ),
+  ] as const);
 
   let content: Pick<EpisodeContext, 'episode' | 'items' | 'phrases'>;
   let earlier: number[];
@@ -247,7 +263,7 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
   const lockedBy = reach.done ? null : (earlier.sort((a, b) => a - b).find((n) => !doneSet.has(n)) ?? null);
 
   const key = String(ep);
-  const free = settings[0]?.free === 1 && (await isEnabled(db, FLAGS.freeSteps, d.subject));
+  const free = await isEnabled(db, FLAGS.freeSteps, d.subject);
   return {
     ...reach,
     ...content,
@@ -259,6 +275,7 @@ export async function loadEpisodeContext(d: LearningDeps, ep: number): Promise<E
       stepOk: Object.fromEntries(oks.map((o) => [stepKey(ep, o.step), true])),
       scores: Object.fromEntries(scores.map((s) => [s.phrase_id, s.last_score])),
       exAns: Object.fromEntries(answers.map((a) => [a.item_id, a.choice_idx])),
+      testDone: Object.fromEntries(tests.map((t) => [String(t.ebook_num), true])),
       settings: { free },
     },
   };

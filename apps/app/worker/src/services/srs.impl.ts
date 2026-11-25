@@ -20,6 +20,7 @@ import {
   SRS_UNLOCKS,
   type SrsEpisode,
   type SrsQueueRes,
+  STEP,
   type UnlockedCard,
 } from '@tie/shared';
 import {
@@ -53,10 +54,10 @@ export const SRS_MANUAL_ADDS_PER_DAY = 200;
 const DAY_MS = 86_400_000;
 
 /** Rejection copy when a manual add hits either cap. */
-const DECK_FULL_MSG = 'Seus Flashcards já estão cheios por hoje. Revise alguns cartões e tente de novo amanhã.';
+const DECK_FULL_MSG = 'Seus Cards já estão cheios por hoje. Revise alguns cartões e tente de novo amanhã.';
 
 /** Step → source of the cards it unlocks. */
-const UNLOCK_SOURCE: Readonly<Record<number, CardSource>> = { 4: 'ep_visual', 8: 'ep_away' };
+const UNLOCK_SOURCE: Readonly<Record<number, CardSource>> = { [STEP.LOOK]: 'ep_visual', [STEP.AWAY]: 'ep_away' };
 
 interface CardRow {
   id: string;

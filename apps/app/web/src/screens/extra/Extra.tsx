@@ -268,7 +268,7 @@ function Body(props: ShelfProps & { sh: string }) {
 }
 
 export default function Extra(_props: ScreenProps) {
-  useChrome({ title: 'EXTRA' });
+  useChrome({ title: 'FLIX' });
   const { c, failed, retry } = useCatalog();
   const p = state.value.profile;
   const desk = isDesktop();
@@ -291,7 +291,7 @@ export default function Extra(_props: ScreenProps) {
         <div class="ttl">
           <div class="lbl">Séries, novelas, filmes, animes e música</div>
           <div class="h1" style={{ color: '#fff' }}>
-            EXTRA
+            FLIX
           </div>
         </div>
         {desk ? null : <UserAvatarBtn />}

@@ -28,9 +28,11 @@ function pwa() {
     injectManifest: {
       // The shell: HTML, JS/CSS chunks, fonts and icons. Media and content are runtime-cached by the
       // worker (they are cookie-gated and versioned). The sign-in photos (img/, 500 KB for both sizes)
-      // stay out: signing in needs the network anyway, and every install downloaded both.
+      // stay out: signing in needs the network anyway, and every install downloaded both. The 3D avatar
+      // engine (three.js, ~150 KB gzip) loads only for an assistant with a model, so it is not precached
+      // either (immutable /assets/* HTTP caching covers it).
       globPatterns: ['**/*.{html,js,css,woff2,webmanifest}', 'icons/*.{png,svg}'],
-      globIgnores: ['sw.js', 'workbox-*.js', '**/*.map'],
+      globIgnores: ['sw.js', 'workbox-*.js', '**/*.map', 'assets/engine-*.js'],
       maximumFileSizeToCacheInBytes: 1024 * 1024,
     },
     devOptions: { enabled: false },

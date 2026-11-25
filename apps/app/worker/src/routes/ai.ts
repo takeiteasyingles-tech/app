@@ -26,6 +26,7 @@ import {
   aiApi,
   demoReply,
   demoReport,
+  encodeWordSpans,
   FLAGS,
   type Health,
   LIMITS,
@@ -35,6 +36,7 @@ import {
   type ReportResult,
   scorePronunciation,
   script,
+  TTS_WORDS_HEADER,
   type TutorReply,
   type TutorTurnRes,
 } from '@tie/shared';
@@ -56,6 +58,7 @@ import {
   vJson,
 } from '@tie/worker-core';
 import { Hono } from 'hono';
+import { hadAgentConversation } from '../ai/agentUsage';
 import { signAttempt } from '../ai/attempt';
 import { MAGGIE_SEC_PRONOUNCE, MAGGIE_SEC_TURN, MAX_TURN_AWARDS_PER_DAY, recentAwards, tryAward } from '../ai/award';
 import {
@@ -81,7 +84,17 @@ import {
   turnAppend,
 } from '../ai/context';
 import { background, flagSubject } from '../ai/http';
-import { aiEnabled, hasAiBinding, loadModels, runJson, synthesize, transcribe } from '../ai/models';
+import {
+  aiEnabled,
+  elevenForRole,
+  hasAiBinding,
+  lessonVoiceId,
+  loadModels,
+  runJson,
+  synthesize,
+  synthesizeEleven,
+  transcribe,
+} from '../ai/models';
 import { moderateTurn } from '../ai/moderation';
 import {
   buildTutorMessages,
@@ -309,6 +322,10 @@ routes.post(aiApi.tutor.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tut
     );
   }
 
+  // Which model answered and how long it took, visible in the browser's network panel.
+  if (outcome?.model) {
+    c.header('Server-Timing', `ai;desc="${outcome.model.replace(/[^\w.:@/-]/g, '')}";dur=${outcome.latencyMs ?? 0}`);
+  }
   return c.json({ ...reply, award } satisfies TutorTurnRes);
 });
 
@@ -440,7 +457,11 @@ async function buildReport(
 
   const demo: BuiltReport = { report: demoReport({ turns: reportTurns, aThe }), reservation: null, outcome: null };
   const spoke = reportTurns.some((t) => t.who === 'me');
-  const usedServerAi = turns.some((t) => t.source === TURN_SOURCE.tutor || t.source === TURN_SOURCE.pronounce);
+  // An ElevenLabs agent conversation (spec 05 "Mic avatar per assistant") is AI the server reserved and
+  // billed, so its transcript (client turns) earns the AI report too.
+  const usedServerAi =
+    turns.some((t) => t.source === TURN_SOURCE.tutor || t.source === TURN_SOURCE.pronounce) ||
+    (await hadAgentConversation(db, row.id, s.userId));
   if (!spoke || !usedServerAi || !(await aiEnabled(env, flagSubject(s)))) return demo;
 
   let recent = reportTurns.slice(-REPORT_MAX_TURNS);
@@ -623,9 +644,27 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
   const text = cleanText(body.text, LIMITS.ttsTextMax);
   if (!text) throw fail('validation_failed', undefined, { field: 'text' });
 
-  const { speaker } = await resolveSpeaker(db, body.voice, body.gender);
+  const { speaker, assistantKey } = await resolveSpeaker(db, body.voice, body.gender);
   const models = await loadModels(db);
-  const hash = await ttsKey(models.tts, speaker, text);
+  // A line with an ElevenLabs voice (the lesson's for this role, else the course's: the narration's or the
+  // speaker's assistant) speaks through ElevenLabs; everything else through Workers AI. Key, model and
+  // course voices come from Configurações → Vozes (env vars as a fallback), lesson voices from the
+  // published episode (spec 05 "Lesson voices").
+  const lessonVoice =
+    body.ep != null && body.role ? await lessonVoiceId(db, c.get('services').content, body.ep, body.role) : null;
+  const eleven = await elevenForRole(c.env, db, {
+    assistantKey,
+    role: body.role ?? null,
+    lessonVoice,
+    everywhere: !!models.ttsEleven,
+  });
+  const ttsModel = eleven ? eleven.model : models.tts;
+  const voiceTag = eleven ? `eleven:${eleven.voiceId}` : speaker;
+  const hash = await ttsKey(ttsModel, voiceTag, text);
+  // Where a fresh audio is cached and billed: changed when ElevenLabs refuses and Workers AI speaks.
+  let cacheHash = hash;
+  let cacheTag = voiceTag;
+  let usedModel = ttsModel;
   const quota = quotaOf(c.env, c.get('services'));
 
   let source: 'cache' | 'r2' | 'ai' = 'cache';
@@ -637,10 +676,39 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
   }
   if (!audio) {
     if (!(await aiEnabled(c.env, flagSubject(s)))) throw fail('ai_unavailable');
-    const r = await reserveOrThrow(quota, s.userId, ttsSeconds(text), { kind: 'tts', model: models.tts });
+    const r = await reserveOrThrow(quota, s.userId, ttsSeconds(text), { kind: 'tts', model: ttsModel });
     const started = Date.now();
     try {
-      audio = await synthesize(c.env, models.tts, text, speaker);
+      if (eleven) {
+        try {
+          let timed: Awaited<ReturnType<typeof synthesizeEleven>>;
+          try {
+            timed = await synthesizeEleven(eleven, text);
+          } catch (err) {
+            // The default lesson voice stands in for a chosen voice that fails (spec 05 "Default lesson voice").
+            if (!eleven.fallbackId) throw err;
+            logWarn('eleven voice failed, using the default lesson voice', err);
+            const stand = { ...eleven, voiceId: eleven.fallbackId };
+            timed = await synthesizeEleven(stand, text);
+            cacheTag = `eleven:${stand.voiceId}`;
+            cacheHash = await ttsKey(eleven.model, cacheTag, text);
+          }
+          audio = { bytes: timed.audio, words: timed.words ? encodeWordSpans(timed.words) : null };
+        } catch (err) {
+          // PROD (spec 05 "Lesson voices"): a voice ElevenLabs refuses (gone from the account after a key
+          // change, no credits) still speaks with the speaker's own Workers AI voice (a man for Robert),
+          // never the browser's. Cached under that voice, so the ElevenLabs one is tried again next time.
+          logWarn('eleven tts failed, using the workers ai voice', err);
+          usedModel = models.tts;
+          cacheTag = speaker;
+          cacheHash = await ttsKey(models.tts, speaker, text);
+          audio = (await cacheGet(cacheHash)) ??
+            (await r2Get(c.env.MEDIA, cacheHash)) ?? {
+              bytes: await synthesize(c.env, models.tts, text, speaker),
+              words: null,
+            };
+        }
+      } else audio = { bytes: await synthesize(c.env, models.tts, text, speaker), words: null };
     } catch (err) {
       logWarn('tts failed', err);
       // The client falls back to browser TTS: nothing delivered, nothing billed.
@@ -648,24 +716,26 @@ routes.post(aiApi.tts.path, requireUser(), rateLimit('RL_AI'), vJson(aiApi.tts.b
       throw fail('ai_unavailable');
     }
     source = 'ai';
-    background(c, quota.finish(r.eventId, { ok: true, latencyMs: Date.now() - started, model: models.tts }));
+    background(c, quota.finish(r.eventId, { ok: true, latencyMs: Date.now() - started, model: usedModel }));
     // The audio is delivered (and billed) whether or not the caches can be written.
-    const bytes = audio;
-    background(c, r2Put(c.env.MEDIA, hash, bytes, speaker));
-    background(c, cachePut(hash, bytes));
+    const fresh = audio;
+    background(c, r2Put(c.env.MEDIA, cacheHash, fresh, cacheTag));
+    background(c, cachePut(cacheHash, fresh));
   } else {
-    background(c, quota.log(s.userId, 'tts', { ok: true, model: models.tts }));
+    background(c, quota.log(s.userId, 'tts', { ok: true, model: ttsModel }));
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'audio/mpeg',
-    'Content-Length': String(audio.byteLength),
+    'Content-Length': String(audio.bytes.byteLength),
     'Cache-Control': 'private, max-age=86400',
   };
+  // Word timing for the 3D avatar's mouth (voices that report it: the ElevenLabs ones).
+  if (audio.words) headers[TTS_WORDS_HEADER] = audio.words;
   // The cache is shared across users, so where the bytes came from would tell a user whether
   // someone else already synthesized a text. Local development only.
   if (isLocalOrigin(c.env.APP_ORIGIN)) headers['X-TTS-Source'] = source;
-  return new Response(audio, { headers });
+  return new Response(audio.bytes, { headers });
 });
 
 export default routes;

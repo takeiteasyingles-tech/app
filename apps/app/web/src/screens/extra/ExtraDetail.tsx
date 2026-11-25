@@ -18,7 +18,7 @@ import { pts, useCatalog } from './data';
 import { LoadFailed, OnNavy } from './parts';
 
 export default function ExtraDetail({ params }: ScreenProps) {
-  useChrome({ title: 'EXTRA' });
+  useChrome({ title: 'FLIX' });
   const id = params.id ?? '';
   const { c, failed, retry } = useCatalog();
   const p = state.value.profile;
@@ -133,7 +133,7 @@ export default function ExtraDetail({ params }: ScreenProps) {
     <OnNavy cls={`x-det${past ? ' x-past' : ''}`} w={1100}>
       {/* The prototype's bar. Over the hero it names where the back button goes (the hero has the big
           title); once the hero scrolls away it turns solid and shows kind · title. */}
-      <Topbar back="extra" kicker={past ? x.kind : undefined} title={past ? x.title : 'EXTRA'} />
+      <Topbar back="extra" kicker={past ? x.kind : undefined} title={past ? x.title : 'FLIX'} />
       <div
         class="scroll"
         onScroll={(ev) => {

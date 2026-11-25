@@ -1,7 +1,7 @@
 // Voice activity detection (speech.record's onSilence): speech then quiet stops the take; room noise
 // alone or short pauses inside a phrase do not.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { detectSilence } from '../src/core/speech';
+import { detectSilence, MIN_VOICED_MS, voicedMsOf } from '../src/core/speech';
 
 /** A fake analyser whose frames are a sine of the current amplitude (0..1). */
 function analyser() {
@@ -84,5 +84,30 @@ describe('detectSilence', () => {
     f.set(0.005);
     vi.advanceTimersByTime(3000);
     expect(done).not.toHaveBeenCalled();
+  });
+});
+
+// PROD (spec 05 "Take the Mic: real scores"): a take with no voice gets no score.
+describe('voicedMsOf', () => {
+  const RATE = 16000;
+  /** `parts` of [seconds, amplitude]: a 220 Hz sine at that amplitude. */
+  const take = (...parts: [number, number][]) => {
+    const out: number[] = [];
+    for (const [secs, amp] of parts)
+      for (let i = 0; i < secs * RATE; i++) out.push(amp * Math.sin((2 * Math.PI * 220 * out.length) / RATE));
+    return Float32Array.from(out);
+  };
+
+  it('counts the voiced part of a take, not the room', () => {
+    expect(voicedMsOf(take([2, 0]), RATE)).toBe(0);
+    expect(voicedMsOf(take([2, 0.004]), RATE)).toBe(0);
+    const v = voicedMsOf(take([0.5, 0.004], [1, 0.3], [0.5, 0.004]), RATE);
+    expect(v).toBeGreaterThanOrEqual(950);
+    expect(v).toBeLessThanOrEqual(1050);
+    expect(voicedMsOf(take([0.1, 0.3], [2, 0.002]), RATE)).toBeLessThan(MIN_VOICED_MS);
+  });
+
+  it('a take that is voice from end to end still counts', () => {
+    expect(voicedMsOf(take([1.5, 0.3]), RATE)).toBeGreaterThanOrEqual(1400);
   });
 });

@@ -36,6 +36,7 @@ const PERM_LABEL: Record<Permission, string> = {
   'feedback.read': 'Ver as avaliações dos episódios',
   'certificates.revoke': 'Revogar certificados',
   'api_tokens.manage': 'Gerenciar tokens de agentes (MCP)',
+  'backups.manage': 'Fazer, baixar e restaurar backups',
   'roles.grant_admin': 'Dar o papel admin',
 };
 

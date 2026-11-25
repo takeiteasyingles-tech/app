@@ -9,6 +9,7 @@
 // It never shows points, cards or a "concluído" the learner did not get.
 //
 // PROD (spec 07): the celebration carries the episode rating card (Rating.tsx) under the stats.
+import { STEP_COUNT } from '@tie/shared/constants';
 import type { Episode } from '@tie/shared/content/schema';
 import { cardsOf } from '@tie/shared/domain/srs';
 import { Btn, Icon, Segs } from '@tie/ui';
@@ -17,6 +18,7 @@ import './concluido.css';
 import type { ScreenProps } from '../../frame';
 import { replace } from '../../router';
 import { catalog, loadCatalog, loadEpisode, state, useContent } from '../../store';
+import { EpisodeExtras } from './Extras';
 import { Rating } from './Rating';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -94,11 +96,13 @@ export default function Concluido({ params }: ScreenProps) {
           </div>
           <div class="stat">
             <div class="num">{cardsOf(E).length}</div>
-            <div class="sm mt8">cartões nos seus Flashcards</div>
+            <div class="sm mt8">novos nos seus Cards</div>
           </div>
         </div>
         {/* PROD (spec 07, NPS per episode): the learner rates the episode they just finished. */}
         <Rating ep={E.num} />
+        {/* PROD (spec 05 "Take Some Extras at the end of every episode"). */}
+        <EpisodeExtras ebook={E.ebook} />
         <div class="card stack" style={{ '--gap': '12px' }}>
           <div class="lbl">A seguir</div>
           <div class="row" style={{ '--gap': '14px' }}>
@@ -129,7 +133,7 @@ function Todo({ E, avg }: { E: Episode; avg: string }) {
   const s = state.value;
   const cat = catalog.value;
   const steps = cat?.steps ?? [];
-  const total = steps.length || 10;
+  const total = steps.length || STEP_COUNT;
   const at = Math.min(Math.max(s.prog[E.num] || 1, 1), total);
   const doneN = at - 1;
   const left = total - doneN;

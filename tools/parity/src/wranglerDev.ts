@@ -130,6 +130,9 @@ function generate(o: DevServerOpts): { config: string; dir: string } {
   // The `local` environment (npm run dev) is not used here, and its relative paths would not resolve
   // from the generated directory.
   delete out.env;
+  // No production routes: with the custom domain, wrangler dev rewrites every request's host to it and
+  // the config guard refuses them all (500) as non-local traffic (same reason env.local clears them).
+  delete out.routes;
   // Admin shots: every super_admin job shares one staff user, and RL_API is keyed by user (100 per
   // 10 s), so a parallel capture of every screen would hit 429s that no real admin sees. Only RL_API
   // is lifted; the auth / AI / upload limits stay as configured.

@@ -8,7 +8,7 @@
 // Every helper resolves to the server response, or null when the write failed (already toasted)
 // or was queued offline (no award to play yet).
 import { batch } from '@preact/signals';
-import { LIMITS } from '@tie/shared/constants';
+import { LIMITS, STEP } from '@tie/shared/constants';
 import { ebookApi } from '@tie/shared/contracts/ebook';
 import { extrasApi } from '@tie/shared/contracts/extras';
 import { type AwardResult, type GameEventBody, gameApi } from '@tie/shared/contracts/game';
@@ -134,7 +134,7 @@ export const finishEpisode = (ep: number) =>
   send(
     progressApi.episodeDone,
     { body: { ep } },
-    { optimistic: (s) => ({ prog: rec(s.prog, ep, 10), epsDone: rec(s.epsDone, ep, true) }) },
+    { optimistic: (s) => ({ prog: rec<number>(s.prog, ep, STEP.LAST), epsDone: rec(s.epsDone, ep, true) }) },
   );
 
 /**
@@ -165,11 +165,7 @@ export const saveMicScore = (phraseId: string, score: number, source: MicScoreSo
     },
   );
 
-// ---------- E-book ----------
-
-/** ebDownload: unlocks step 3; resolves with the real PDF URL when the e-book has one. */
-export const downloadEbook = (n: number) =>
-  send(ebookApi.download, { params: { n } }, { optimistic: (s) => ({ ebooks: rec(s.ebooks, n, true) }) });
+// ---------- Take the Test (the episode test; PROD step 10) ----------
 
 /** Saves test answers (null clears one); `reset` is testRedo (answers and the done flag cleared). */
 export const saveTestAnswers = (n: number, answers: Readonly<Record<string, TestAnswer | null>>, reset = false) =>

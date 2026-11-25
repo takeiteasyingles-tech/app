@@ -5,7 +5,15 @@
 // answers locally, exactly like the prototype without a server: scripted turns, the regex grammar
 // checker and word-overlap scoring. `ai.online` drives demoBadge ("IA ligada" / "Modo demo").
 import { signal } from '@preact/signals';
-import { aiApi, type PronounceResult, type ReportResult, type TtsBody } from '@tie/shared/contracts/ai';
+import {
+  aiApi,
+  decodeWordSpans,
+  type PronounceResult,
+  type ReportResult,
+  TTS_WORDS_HEADER,
+  type TtsBody,
+  type WordSpan,
+} from '@tie/shared/contracts/ai';
 import type { TutorTurnRes } from '@tie/shared/contracts/mic';
 import type { DemoSession, ReportTurn, ScriptContent } from '@tie/shared/demo/index';
 import { ApiError } from '@tie/shared/errors';
@@ -144,13 +152,42 @@ export async function pronounce(b64: string, target: string, opts: PronounceOpti
     }
   }
   const d = await demo();
+  // PROD (spec 05 "Take the Mic: real scores"): what the browser heard is scored the way the server
+  // scores Whisper's transcript (word alignment, 0 to 10), not by the prototype's word overlap with a
+  // floor of 4. Without a transcript the prototype's rule stays (the caller checks for silence first).
+  const heard = String(opts.heard ?? '').trim();
+  if (heard) return { ...d.scorePronunciation(target, heard), source: 'demo' };
   return d.demoPronounce(target, opts.heard);
 }
 
-/** ai.tts(text, gender, voice): HD voice bytes (mp3), or null so speech falls back to browser TTS. */
-export async function tts(text: string, gender: TtsBody['gender'], voice: string): Promise<ArrayBuffer | null> {
+export interface TtsAudio {
+  audio: ArrayBuffer;
+  /** When each word of the sent text is heard (voices that report timing), else null. */
+  words: WordSpan[] | null;
+}
+
+/** ai.tts(text, gender, voice): HD voice (mp3) and its word timing, or null so speech falls back to browser TTS. */
+export async function tts(
+  text: string,
+  gender: TtsBody['gender'],
+  voice: string,
+  lesson?: { ep: number; role: string },
+): Promise<TtsAudio | null> {
+  let words: WordSpan[] | null = null;
   try {
-    return await call(aiApi.tts, { body: { text: text.slice(0, 400), gender, voice } });
+    const audio = await call(aiApi.tts, {
+      // PROD (spec 05 "Lesson voices"): inside a lesson the server reads with that lesson's voice for the role.
+      body: {
+        text: text.slice(0, 400),
+        gender,
+        voice,
+        ...(lesson ? { ep: lesson.ep, role: lesson.role.slice(0, 40) } : {}),
+      },
+      onResponse: (res) => {
+        words = decodeWordSpans(res.headers.get(TTS_WORDS_HEADER));
+      },
+    });
+    return { audio, words };
   } catch (err) {
     noteFailure(err, 'tts');
     return null;

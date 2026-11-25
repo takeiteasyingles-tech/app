@@ -152,13 +152,13 @@ export function draftFromRow(r: ProfileRow | null, email: string): Draft {
 
 const TEXT_SIZES = [1, 1.12, 1.25] as const;
 
-/** `free` is passed in already evaluated (stored opt-in AND the dev.free_steps flag). */
+/** `free` is the evaluated dev.free_steps flag, controlled by the admin. */
 export function settingsFromRow(r: SettingsRow | null | undefined, free: boolean): Settings {
   const ts = TEXT_SIZES.find((t) => Math.abs(t - (r?.ts ?? 1)) < 0.001) ?? 1;
   return {
     ts,
     sound: r ? bool(r.sound) : true,
-    hd: r ? bool(r.hd) : false,
+    hd: r ? bool(r.hd) : true,
     trans: r ? bool(r.trans) : true,
     slow: r ? bool(r.slow) : false,
     remind: r ? bool(r.remind) : true,

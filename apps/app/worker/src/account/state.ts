@@ -442,7 +442,7 @@ export async function buildState(db: D1Database, s: SessionInfo, now: number): P
       badges: badges.map((b) => b.badge_id),
       log,
     },
-    settings: settingsFromRow(settings[0], freeOn && bool(settings[0]?.free)),
+    settings: settingsFromRow(settings[0], freeOn),
     plan: s.plan,
     flags: flagValues,
     contentVersion,

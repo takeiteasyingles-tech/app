@@ -22,7 +22,7 @@ const ORDER: Readonly<Record<ClipState, readonly ClipState[]>> = {
 };
 const CLIPS: readonly ClipState[] = ['idle', 'talk', 'talk-happy', 'talk-soft'];
 
-export type AvatarAssistant = Pick<AssistantPublic, 'k' | 'name' | 'full' | 'clips' | 'poster'>;
+export type AvatarAssistant = Pick<AssistantPublic, 'k' | 'name' | 'full' | 'clips' | 'poster' | 'avatar'>;
 
 /** Clipe que deve aparecer para o estado (pickClip do protótipo). */
 export function clipFor(available: readonly string[], talking: boolean, mood: string): string {

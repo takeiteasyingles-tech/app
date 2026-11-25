@@ -284,11 +284,10 @@ function Index({
 const more = (EB: number): readonly { go: string; name: string; meta: string; icon: string }[] => [
   { go: `ebook/${EB}/lead`, name: 'Take the Lead', meta: 'Conversa com a Margaret', icon: 'chat' },
   { go: `ebook/${EB}/real`, name: 'Take it for Real', meta: 'O livro × a rua', icon: 'bulb' },
-  { go: `ebook/${EB}/teste`, name: 'Take the episode test', meta: '20 questões', icon: 'pen' },
 ];
 
 function More({ desk }: { desk: boolean }) {
-  // Desktop: three cards in a row. Phone: one card, the three parts as rows split by hairlines.
+  // Desktop: two cards in a row. Phone: one card, the three parts as rows split by hairlines.
   return (
     <nav class="stack mt8" aria-label="Depois daqui" style={{ '--gap': '8px' }}>
       <div class="lbl">Depois daqui</div>
@@ -296,7 +295,7 @@ function More({ desk }: { desk: boolean }) {
         class={desk ? undefined : 'card'}
         style={
           desk
-            ? { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }
+            ? { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }
             : { padding: '4px 16px' }
         }
       >

@@ -43,6 +43,22 @@ export const ClientTurn = z.object({
 export type ClientTurn = z.infer<typeof ClientTurn>;
 
 /**
+ * PROD (spec 05 "Mic avatar per assistant"): the session's conversation moves to the assistant's
+ * ElevenLabs agent. The server reserves up to `maxSecs` of the month's quota and answers a one-time
+ * signed URL (wss, valid for a few minutes) plus the agent's dynamic variables; the agent id and its
+ * prompt never reach the client. The URL's conversation id stays on the reservation, which /end (and
+ * the daily cron) settle with the length ElevenLabs measured.
+ */
+export const AgentStartRes = z.object({
+  signedUrl: z.string().url(),
+  dynamicVariables: z.record(z.string(), z.string()),
+  /** The client hangs up at this point (the reservation is this long). */
+  maxSecs: z.int().positive(),
+  quotaLeftS: z.int().min(0),
+});
+export type AgentStartRes = z.infer<typeof AgentStartRes>;
+
+/**
  * finish(): the server computes secs from its clock, bills the remainder, keeps the newest
  * LIMITS.micSessionsKept sessions and awards maggie_session when the user spoke 2+ times.
  */
@@ -77,6 +93,15 @@ export const micApi = {
     access: 'user',
     body: StartSessionBody,
     res: StartSessionRes,
+    rateLimit: 'RL_AI',
+    quota: true,
+  }),
+  agent: endpoint({
+    method: 'POST',
+    path: '/api/mic/sessions/:id/agent',
+    access: 'owner',
+    params: IdParams,
+    res: AgentStartRes,
     rateLimit: 'RL_AI',
     quota: true,
   }),
