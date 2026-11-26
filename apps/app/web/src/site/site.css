@@ -452,6 +452,7 @@ section {
 }
 .video-slot.phone {
   aspect-ratio: 9 / 19;
+  width: 100%;
   max-width: 320px;
   margin: 0 auto;
   border-radius: 38px;
@@ -466,38 +467,44 @@ section {
   height: 100%;
   object-fit: cover;
 }
-.video-slot .slot-label {
-  padding: 20px;
-}
-.video-slot .slot-label b {
-  display: block;
-  color: var(--branco);
-  font-size: 15px;
-  margin-top: 10px;
-}
-.video-slot .slot-label span {
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #ff9a73;
-  font-weight: 700;
-}
-.play {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: var(--laranja);
-  margin: 0 auto;
-  position: relative;
-}
-.play::after {
-  content: "";
+/* App screenshots fill the phone's screen, anchored at the top (the status bar end of the app). */
+.video-slot.phone img {
   position: absolute;
-  left: 23px;
-  top: 18px;
-  border-left: 18px solid #fff;
-  border-top: 11px solid transparent;
-  border-bottom: 11px solid transparent;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+/* "O app por dentro": Hoje, FLIX and Cards take turns, 4 s each with a short crossfade. */
+.phone-tour img {
+  opacity: 0;
+  animation: phone-tour 12s infinite backwards;
+}
+.phone-tour img:nth-child(2) {
+  animation-delay: 4s;
+}
+.phone-tour img:nth-child(3) {
+  animation-delay: 8s;
+}
+@keyframes phone-tour {
+  0% {
+    opacity: 0;
+  }
+  5%,
+  33% {
+    opacity: 1;
+  }
+  38%,
+  100% {
+    opacity: 0;
+  }
+}
+/* Without motion the tour holds on FLIX (the hero already shows Hoje). */
+@media (prefers-reduced-motion: reduce) {
+  .phone-tour img:nth-child(2) {
+    opacity: 1;
+  }
 }
 
 /* ---------- Block 2: no lack of talent ---------- */
@@ -1221,14 +1228,19 @@ section {
   border-color: var(--laranja);
 }
 @media (max-width: 640px) {
+  /* minmax(0, 1fr) and a wrapping status: the long "Ep. 1 a 4 grátis…" chip once widened every card
+     past the phone's width. */
   .temp {
-    grid-template-columns: 44px 1fr;
+    grid-template-columns: 44px minmax(0, 1fr);
     row-gap: 6px;
   }
   .temp .cefr,
   .temp .status {
     grid-column: 2;
     justify-self: start;
+  }
+  .temp .status {
+    white-space: normal;
   }
 }
 

@@ -98,8 +98,10 @@ test('phone: the header fits at 360px and the page never scrolls sideways', asyn
   await page.goto('/');
   await expect(page.locator('.nav-entrar')).toBeVisible();
   await expect(page.locator('.nav .btn-cta')).toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
+  // Against the 360 px viewport, not innerWidth: with isMobile the layout viewport grows to fit wider
+  // content, so scrollWidth - innerWidth stays 0 even when the page scrolls sideways.
+  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidth).toBeLessThanOrEqual(360);
   const header = await page.evaluate(() => {
     const r = (s: string) => document.querySelector(s)?.getBoundingClientRect();
     return {
@@ -110,4 +112,17 @@ test('phone: the header fits at 360px and the page never scrolls sideways', asyn
   });
   expect(header.cta).toBeLessThanOrEqual(360);
   expect(header.entrar).toBeGreaterThan(header.logo);
+});
+
+test('the phone mockups show the app screenshots', async ({ page }) => {
+  await page.goto('/');
+  const shots = page.locator('.video-slot.phone img');
+  await expect(shots).toHaveCount(6);
+  for (const img of await shots.all()) {
+    await img.scrollIntoViewIfNeeded();
+    await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBe(600);
+    expect((await img.getAttribute('alt'))?.length).toBeGreaterThan(5);
+  }
+  const box = await page.locator('.video-slot.phone').first().boundingBox();
+  expect(box?.width).toBeGreaterThan(200);
 });
