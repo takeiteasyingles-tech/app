@@ -1,4 +1,5 @@
-// tie-app Worker. Static Assets serve the PWA; this runs only for /api/* and /m/* (run_worker_first).
+// tie-app Worker. Static Assets serve the PWA; this runs only for /api/*, /m/* and / (run_worker_first),
+// where routes/home.ts picks the course home (visitors) or the app shell (learners).
 import { appApi, isOutboxPath } from '@tie/shared';
 import { type AppEnv, createApp, type Env, fail, idempotency, type ServiceFactories } from '@tie/worker-core';
 import type { Hono } from 'hono';
@@ -14,6 +15,7 @@ import ebook from './routes/ebook';
 import extras from './routes/extras';
 import feedback from './routes/feedback';
 import game from './routes/game';
+import home from './routes/home';
 import me from './routes/me';
 import media from './routes/media';
 import mic from './routes/mic';
@@ -44,6 +46,7 @@ app.use('/api/*', idempotency({ applies: (path) => isOutboxPath(path) }));
 
 // GET /api/health is answered by routes/ai (S7).
 const slices: Hono<AppEnv>[] = [
+  home,
   auth,
   me,
   uploads,

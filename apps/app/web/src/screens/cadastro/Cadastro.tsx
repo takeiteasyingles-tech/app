@@ -12,6 +12,7 @@ import { activator, Btn, confetti, Icon, toast } from '@tie/ui';
 import { useEffect, useLayoutEffect, useState } from 'preact/hooks';
 import { call, errorMessage } from '../../api';
 import { refreshState } from '../../core/outbox';
+import { takeSignupHandoff } from '../../core/signupHandoff';
 import { type ScreenProps, useChrome } from '../../frame';
 import { replace } from '../../router';
 import { layoutOf } from '../../shell';
@@ -666,14 +667,23 @@ export default function Cadastro({ params, q }: ScreenProps) {
   const ok = stepValid(k, d);
   const desk = layoutOf(s) === 'desktop';
 
+  // PROD: the fields the course home's form filled in (core/signupHandoff.ts), read once; signed out only.
+  const [handoff] = useState(() => {
+    const h = takeSignupHandoff({ fullName: LIMITS.fullNameMax, name: LIMITS.nameMax, email: LIMITS.emailMax });
+    return s.user ? null : h;
+  });
   // Signed in (account already created): the step shows what the account holds, not empty fields.
   const [form, setForm] = useState<AccountForm>(() => ({
-    fullName: d.fullName || s.user?.fullName || '',
-    name: d.name || s.user?.name || '',
-    birth: d.birth,
-    email: s.user?.email ?? d.email,
+    fullName: handoff?.fullName || d.fullName || s.user?.fullName || '',
+    name: handoff?.name || d.name || s.user?.name || '',
+    birth: handoff?.birth || d.birth,
+    email: s.user?.email ?? (handoff?.email || d.email),
     pass: '',
   }));
+  // Arriving from the course home, only the password is left to type.
+  useEffect(() => {
+    if (handoff) document.getElementById('onb-pass')?.focus();
+  }, []);
   const u = s.user;
   useEffect(() => {
     if (!u) return;

@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 // tie-app service worker (vite-plugin-pwa injectManifest, spec 04 §5 "Service worker").
-// - Shell: precached (self.__WB_MANIFEST); navigations fall back to the precached index.html.
+// - Shell: precached (self.__WB_MANIFEST); navigations fall back to the precached index.html, except /
+//   (the course home) when no learner is signed in on this device: that one goes to the network.
 // - /api/content/v/*: CacheFirst (versioned, immutable snapshots).
 // - /api/content/manifest and GET /api/me*: NetworkFirst with a 3 s timeout (offline start);
 //   /api/me/export is never cached.
@@ -37,10 +38,40 @@ declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: (string | { url:
 
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+
+const appShell = createHandlerBoundToURL('/index.html');
+
+/**
+ * True when this browser has a signed-in learner: GET /api/me* answers are only cached for a session,
+ * and logout deletes the cache (MSG.logout).
+ */
+async function hasLearner(): Promise<boolean> {
+  if (!(await caches.has(CACHE_NAMES.me))) return false;
+  return (await (await caches.open(CACHE_NAMES.me)).keys()).length > 0;
+}
+
+/**
+ * Navigations get the precached shell, except `/`: it is the course home, which the Worker answers with
+ * the landing page for visitors and the shell for learners (worker/src/routes/home.ts). A learner on this
+ * device still opens the shell at once (offline too); anyone else asks the network, so a visitor who
+ * once opened the app here sees the home again, and gets the shell when offline.
+ */
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/api\//, /^\/m\//, /^\/sw\.js$/, /^\/manifest\.webmanifest$/],
-  }),
+  new NavigationRoute(
+    async (options) => {
+      if (options.url.pathname === '/' && !(await hasLearner())) {
+        try {
+          return await fetch(options.request);
+        } catch {
+          // Offline: the shell below.
+        }
+      }
+      return appShell(options);
+    },
+    {
+      denylist: [/^\/api\//, /^\/m\//, /^\/sw\.js$/, /^\/manifest\.webmanifest$/, /^\/home(\.html)?$/, /^\/site\//],
+    },
+  ),
 );
 
 // ---------- Runtime caches ----------
