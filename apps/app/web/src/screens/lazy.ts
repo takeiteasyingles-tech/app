@@ -2,6 +2,46 @@ import { signal } from '@preact/signals';
 import { type ComponentType, h } from 'preact';
 import { useEffect } from 'preact/hooks';
 
+/** sessionStorage key: when this tab last reloaded for a screen chunk that was gone. */
+export const CHUNK_RELOAD_KEY = 'tie.chunkReload';
+/** One such reload per tab in this window, so a chunk that is really broken shows the error card. */
+const CHUNK_RELOAD_MS = 60_000;
+
+interface ReloadEnv {
+  online: boolean;
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null;
+  reload: () => void;
+  now: number;
+}
+
+function browserEnv(): ReloadEnv {
+  let storage: Storage | null = null;
+  try {
+    storage = sessionStorage;
+  } catch {
+    // Storage blocked: no reload loop guard, so no reload.
+  }
+  return { online: navigator.onLine, storage, reload: () => location.reload(), now: Date.now() };
+}
+
+/**
+ * A screen chunk that failed while online is most likely a build that a deploy replaced: the page still
+ * runs the old build, whose chunk names the server no longer has (it answers the SPA's HTML). Reloading
+ * once loads the new build. Returns true when the page is reloading.
+ */
+export function reloadForNewBuild(env: ReloadEnv = browserEnv()): boolean {
+  if (!env.online || !env.storage) return false;
+  try {
+    const last = Number(env.storage.getItem(CHUNK_RELOAD_KEY) || 0);
+    if (env.now - last < CHUNK_RELOAD_MS) return false;
+    env.storage.setItem(CHUNK_RELOAD_KEY, String(env.now));
+  } catch {
+    return false;
+  }
+  env.reload();
+  return true;
+}
+
 export type LazyComponent<P> = ComponentType<P> & {
   /** Starts (or reuses) the chunk download; resolves when the component is ready. */
   preload(): Promise<void>;
@@ -32,6 +72,8 @@ export function lazy<P extends object>(load: () => Promise<{ default: ComponentT
         settled.value++;
       },
       (err: unknown) => {
+        // A deploy replaced the build: the page reloads (and keeps rendering nothing until then).
+        if (reloadForNewBuild()) return;
         failure = err;
         pending = null;
         settled.value++;
@@ -48,7 +90,8 @@ export function lazy<P extends object>(load: () => Promise<{ default: ComponentT
     useEffect(() => {
       if (!comp) void preload();
     }, []);
-    // A failed chunk (deploy rolled, offline) surfaces to the shell's error boundary.
+    // A failed chunk that the reload could not fix (offline, or it failed again) surfaces to the shell's
+    // error boundary.
     if (failure && !comp) throw failure;
     return comp ? h(comp, props) : null;
   }
