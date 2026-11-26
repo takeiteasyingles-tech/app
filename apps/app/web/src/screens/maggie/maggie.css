@@ -611,3 +611,54 @@
   border-top: 0;
   padding: 0 22px 18px;
 }
+
+/* ---------- Lobby: the modes (desktop) ----------
+   PROD (spec 05 "Mic lobby: modes on top"): the four modes as one compact segmented row at the top of the
+   right column, above the scene picker (they were four tall cards under the assistant). It wraps on a
+   narrow right column. The phone keeps the full-width rows. */
+.mg-modebar {
+  margin: 0;
+  min-inline-size: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--navy2);
+  border: 1.5px solid var(--navy3);
+}
+.mg-modeb {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.86rem;
+  white-space: nowrap;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.mg-modeb svg {
+  flex: none;
+  color: #ffd27a;
+}
+.mg-modeb:hover {
+  background: var(--navy3);
+}
+.mg-modeb.on {
+  background: #fff;
+  color: var(--navy);
+}
+.mg-modeb.on svg {
+  color: var(--orange);
+}
+.mg-modeb:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}

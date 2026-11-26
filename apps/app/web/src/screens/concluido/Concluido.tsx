@@ -18,6 +18,7 @@ import './concluido.css';
 import type { ScreenProps } from '../../frame';
 import { replace } from '../../router';
 import { catalog, loadCatalog, loadEpisode, state, useContent } from '../../store';
+import { doneCta } from './cta';
 import { EpisodeExtras } from './Extras';
 import { Rating } from './Rating';
 
@@ -58,6 +59,7 @@ export default function Concluido({ params }: ScreenProps) {
   const avg = sc.length ? (sc.reduce((a, b) => a + b, 0) / sc.length).toFixed(1).replace('.', ',') : '—';
 
   if (!done) return <Todo E={E} avg={avg} />;
+  const cta = doneCta(dn, num, catalog.value?.episodes);
 
   return (
     <div class="scroll cc-scr">
@@ -118,7 +120,7 @@ export default function Concluido({ params }: ScreenProps) {
             {dn.nextNote}
           </p>
         </div>
-        <Btn label={dn.cta} go={dn.go || 'inicio'} cls="block" />
+        {cta ? <Btn label={cta.label} go={cta.go} cls="block" /> : null}
         <Btn label="Voltar para Hoje" kind="ghost" go="inicio" cls="block" />
       </div>
     </div>

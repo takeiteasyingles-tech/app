@@ -1277,26 +1277,20 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
           </span>
         </div>
       </div>
-      {/* Desktop: a grade 2 × 2 do protótipo. Celular: a frase de cada modo não cabe numa meia
-          largura sem quebrar em três linhas estreitas; os quatro viram linhas da largura toda, o ícone
-          num círculo à esquerda, o nome sobre a frase (numa linha só). */}
-      <div class="modes" style={desk ? undefined : { gridTemplateColumns: 'minmax(0, 1fr)', gap: '8px' }}>
-        {c.mic.modes.map((x) => (
-          <button
-            type="button"
-            key={x.k}
-            class={`mode${m.mode === x.k ? ' on' : ''}`}
-            aria-pressed={m.mode === x.k ? 'true' : 'false'}
-            style={
-              desk
-                ? undefined
-                : { minHeight: '0', padding: '12px 14px', gap: '12px', flexDirection: 'row', alignItems: 'center' }
-            }
-            onClick={activator(undefined, () => setMode(x.k))}
-          >
-            {desk ? (
-              <Icon name={x.icon} size={22} extra={{ style: { color: '#FFD27A', flex: 'none' } }} />
-            ) : (
+      {/* Celular: a frase de cada modo não cabe numa meia largura sem quebrar em três linhas estreitas;
+          os quatro viram linhas da largura toda, o ícone num círculo à esquerda, o nome sobre a frase.
+          Desktop: os modos vão para o topo da coluna da direita, numa faixa compacta (modeBar). */}
+      {desk ? null : (
+        <div class="modes" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gap: '8px' }}>
+          {c.mic.modes.map((x) => (
+            <button
+              type="button"
+              key={x.k}
+              class={`mode${m.mode === x.k ? ' on' : ''}`}
+              aria-pressed={m.mode === x.k ? 'true' : 'false'}
+              style={{ minHeight: '0', padding: '12px 14px', gap: '12px', flexDirection: 'row', alignItems: 'center' }}
+              onClick={activator(undefined, () => setMode(x.k))}
+            >
               <span
                 aria-hidden="true"
                 style={{
@@ -1313,19 +1307,41 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
               >
                 <Icon name={x.icon} size={20} />
               </span>
-            )}
-            <span class="stack" style={{ '--gap': desk ? '4px' : '2px', minWidth: '0' }}>
-              <span class="h3" style={desk ? undefined : { fontSize: '1.02rem', lineHeight: '1.25' }}>
-                {x.t}
+              <span class="stack" style={{ '--gap': '2px', minWidth: '0' }}>
+                <span class="h3" style={{ fontSize: '1.02rem', lineHeight: '1.25' }}>
+                  {x.t}
+                </span>
+                <span class="xs" style={{ ...READ, textWrap: 'balance', lineHeight: '1.4' }}>
+                  {x.s}
+                </span>
               </span>
-              <span class="xs" style={{ ...READ, textWrap: 'balance', ...(desk ? {} : { lineHeight: '1.4' }) }}>
-                {x.s}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
+            </button>
+          ))}
+        </div>
+      )}
     </>
+  );
+  // PROD (spec 05 "Mic lobby: modes on top"): no desktop, os quatro modos numa faixa compacta no topo da
+  // coluna da direita (eram quatro cartões altos sob o assistente). A frase de cada modo fica no title e
+  // no nome acessível.
+  const modeBar = (
+    <fieldset class="mg-modebar">
+      <legend style={srOnly}>Modo da conversa</legend>
+      {c.mic.modes.map((x) => (
+        <button
+          type="button"
+          key={x.k}
+          class={`mg-modeb${m.mode === x.k ? ' on' : ''}`}
+          aria-pressed={m.mode === x.k ? 'true' : 'false'}
+          title={x.s}
+          onClick={activator(undefined, () => setMode(x.k))}
+        >
+          <Icon name={x.icon} size={16} />
+          <span>{x.t}</span>
+          <span style={srOnly}>{`: ${x.s}`}</span>
+        </button>
+      ))}
+    </fieldset>
   );
   // No desktop a cena e o botão de começar vão para o topo da coluna da direita (à vista sem rolar),
   // e as frases de socorro ficam sob os modos, para as duas colunas terem a mesma altura.
@@ -1338,6 +1354,7 @@ function Lobby(c: Catalog, m: Session, desk: boolean) {
     ),
     start: desk ? (
       <div class="stack" style={{ '--gap': '16px', padding: '18px 16px 4px' }}>
+        {modeBar}
         {start}
       </div>
     ) : null,
