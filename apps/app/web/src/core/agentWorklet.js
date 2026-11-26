@@ -1,14 +1,17 @@
 // AudioWorklet of the Mic's ElevenLabs agent (core/elevenAgent.ts): microphone samples → 16-bit PCM at
-// the agent's input rate (16 kHz), posted to the page every ~100 ms. Plain JS loaded by URL (an
-// AudioWorklet module must be a same-origin file: the CSP has no blob: scripts). Downsampling averages
-// the input samples that fall into each output sample, which keeps speech clean from 44.1/48 kHz.
+// the agent's input rate (16 kHz), posted to the page every 25 ms (the official SDK's chunk: the agent
+// hears the end of a sentence at most one chunk late). Plain JS loaded by URL (an AudioWorklet module
+// must be a same-origin file: the CSP has no blob: scripts). Downsampling averages the input samples
+// that fall into each output sample, which keeps speech clean from 44.1/48 kHz.
 class TiePcmCapture extends AudioWorkletProcessor {
   constructor(options) {
     super();
     const rate = (options && options.processorOptions && options.processorOptions.rate) || 16000;
     // sampleRate: the AudioContext's rate (AudioWorkletGlobalScope).
     this.step = sampleRate / rate;
-    this.out = new Int16Array(Math.max(160, Math.round(rate / 10)));
+    // Kept apart from the buffer: once posted (transferred), a buffer's length reads 0.
+    this.size = Math.max(80, Math.round(rate / 40));
+    this.out = new Int16Array(this.size);
     this.n = 0;
     this.acc = 0;
     this.cnt = 0;
@@ -18,9 +21,9 @@ class TiePcmCapture extends AudioWorkletProcessor {
   push(v) {
     const s = v > 1 ? 1 : v < -1 ? -1 : v;
     this.out[this.n++] = s < 0 ? s * 0x8000 : s * 0x7fff;
-    if (this.n === this.out.length) {
+    if (this.n === this.size) {
       this.port.postMessage(this.out.buffer, [this.out.buffer]);
-      this.out = new Int16Array(this.out.length);
+      this.out = new Int16Array(this.size);
       this.n = 0;
     }
   }
