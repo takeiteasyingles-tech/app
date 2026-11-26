@@ -6,7 +6,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { slimSchemas } from './scripts/slimSchemas.ts';
 
 // Student PWA: web/ → dist/web (Workers Static Assets). Screens are lazy chunks (screens/registry.ts);
-// preact + signals get their own long-lived vendor chunk.
+// preact + signals get their own long-lived vendor chunk. A second page, home.html (src/site/), is the
+// course home: the Worker serves it at / to visitors without a session (worker/src/routes/home.ts).
 // Service worker: vite-plugin-pwa injectManifest builds web/sw/sw.ts into dist/web/sw.js with the
 // precache list; the manifest stays the hand-written web/public/manifest.webmanifest, and the shell
 // registers the worker itself (web/sw/register.ts), so no register script is injected.
@@ -31,8 +32,17 @@ function pwa() {
       // stay out: signing in needs the network anyway, and every install downloaded both. The 3D avatar
       // engine (three.js, ~150 KB gzip) loads only for an assistant with a model, so it is not precached
       // either (immutable /assets/* HTTP caching covers it).
+      // The course home (home.html, its chunk and site/hop.js) is a page for visitors, not app shell.
       globPatterns: ['**/*.{html,js,css,woff2,webmanifest}', 'icons/*.{png,svg}'],
-      globIgnores: ['sw.js', 'workbox-*.js', '**/*.map', 'assets/engine-*.js'],
+      globIgnores: [
+        'sw.js',
+        'workbox-*.js',
+        '**/*.map',
+        'assets/engine-*.js',
+        'home.html',
+        'site/**',
+        'assets/home-*.{js,css}',
+      ],
       maximumFileSizeToCacheInBytes: 1024 * 1024,
     },
     devOptions: { enabled: false },
@@ -60,6 +70,9 @@ function preloadFonts(): Plugin {
   };
 }
 
+/** transformIndexHtml runs for both pages: true for the app shell (index.html), false for home.html. */
+const isShellHtml = (path: string): boolean => path === '/index.html';
+
 /**
  * The screens worth fetching with the shell. #/entrar (a first visit) paints nothing before its chunk;
  * #/inicio is not here: its first paint is the shell's chrome and its largest one waits for
@@ -80,6 +93,8 @@ function preloadLandingScreens(): Plugin {
     transformIndexHtml: {
       order: 'post',
       handler(html, ctx) {
+        // Only the app shell; the course home (home.html) loads none of the app's screens.
+        if (!isShellHtml(ctx.path)) return [];
         const bundle = ctx.bundle ?? {};
         const chunks = Object.values(bundle).filter((c) => c.type === 'chunk');
         const already = new Set([...html.matchAll(/(?:src|href)="\/([^"]+)"/g)].map((m) => m[1]));
@@ -162,6 +177,9 @@ export default defineConfig({
     target: 'es2022',
     assetsInlineLimit: 0,
     rolldownOptions: {
+      // Two pages: the app shell, and the course home the Worker serves at / to visitors (home.html,
+      // src/site/; worker/src/routes/home.ts).
+      input: { index: resolve(APP_DIR, 'web/index.html'), home: resolve(APP_DIR, 'web/home.html') },
       output: {
         codeSplitting: {
           // zod is not bundled at all (slimSchemas); scripts/budgets.ts fails if it comes back.

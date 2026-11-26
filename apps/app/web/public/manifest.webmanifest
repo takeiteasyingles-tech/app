@@ -4,7 +4,7 @@
   "short_name": "Take It Easy",
   "description": "Inglês para quem fala português: do zero à fluência com avatares da família Woods para conversar.",
   "categories": ["education"],
-  "start_url": "/#/inicio",
+  "start_url": "/app#/inicio",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
@@ -21,18 +21,18 @@
   "shortcuts": [
     {
       "name": "Hoje",
-      "url": "/#/inicio",
+      "url": "/app#/inicio",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Conversar com a Maggie",
       "short_name": "Mic",
-      "url": "/#/maggie",
+      "url": "/app#/maggie",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Revisão",
-      "url": "/#/revisao",
+      "url": "/app#/revisao",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],

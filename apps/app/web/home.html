@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- App links (/#/entrar, /#/certificado/…) carry their route in the hash, which the server never
+         sees: this sends them on to the app before anything renders (CSP: no inline scripts). -->
+    <script src="/site/hop.js"></script>
+    <title>Take It Easy · Inglês para quem fala português</title>
+    <meta name="description" content="Uma série em oito temporadas, do zero ao B2. Você assiste, canta, fala e conversa com os personagens. Os 4 primeiros episódios são grátis." />
+    <meta name="theme-color" content="#F8F5EB" />
+    <link rel="canonical" href="https://takeiteasyingles.com.br/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:url" content="https://takeiteasyingles.com.br/" />
+    <meta property="og:title" content="Take It Easy · Inglês para quem fala português" />
+    <meta property="og:description" content="Uma série em oito temporadas, do zero ao B2. Os 4 primeiros episódios são grátis." />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
+    <script type="module" src="/src/site/main.ts"></script>
+  </head>
+  <body>
+    <!-- ============ HEADER ============ -->
+    <header class="site-header">
+      <div class="wrap">
+        <a class="logo" href="#topo" aria-label="Take It Easy, início"><img src="/src/site/media/tie-logo-principal.svg" alt="Take It Easy · Inglês para quem fala português" width="190" height="41" /></a>
+        <nav class="nav" aria-label="Principal">
+          <a class="nav-link" href="#metodo">Método</a>
+          <a class="nav-link" href="#serie">A série</a>
+          <a class="nav-link" href="#converse-agora">Teste seu inglês</a>
+          <a class="nav-link" href="#planos">Planos</a>
+          <a class="nav-link" href="#faq">Dúvidas</a>
+          <a class="nav-entrar" href="/app#/entrar">Entrar</a>
+          <a class="btn btn-cta btn-small" href="#cadastro">Começar grátis</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="topo">
+      <!-- ============ 1. HERO ============ -->
+      <section class="hero">
+        <img class="hero-element" src="/src/site/media/tie-elemento.svg" alt="" aria-hidden="true" />
+        <div class="wrap split">
+          <div>
+            <div class="badge-estreia" data-fase="pre"><span class="dot"></span>Estreia 1º de dezembro</div>
+            <h1>Inglês para quem fala português.</h1>
+            <p class="lead">Uma série em oito temporadas, do zero ao B2. Você assiste, canta, fala e conversa com os personagens.</p>
+            <div class="hero-ctas">
+              <a class="btn btn-cta" href="#cadastro">
+                <span data-fase="pre">Garantir meu acesso ao Episódio 1</span>
+                <span data-fase="live">Assistir ao Episódio 1 grátis</span>
+              </a>
+              <a class="btn btn-ghost" href="#metodo">Veja como funciona</a>
+            </div>
+            <p class="cta-note"><strong>Os 4 primeiros episódios são grátis.</strong> Sem cartão de crédito.</p>
+            <div class="countdown" data-fase="pre" role="timer" aria-label="Contagem para a estreia">
+              <div><b data-cd="d">--</b><span>dias</span></div>
+              <div><b data-cd="h">--</b><span>horas</span></div>
+              <div><b data-cd="m">--</b><span>min</span></div>
+            </div>
+          </div>
+          <!-- App screen 1 · Hoje. The phone slots show real app screenshots (600 px wide, 9:19.5). To
+               swap one for a video: replace its img with
+               <video src="…" poster="…" autoplay muted loop playsinline></video> -->
+          <div class="video-slot phone">
+            <img src="/src/site/media/app-hoje.webp" alt="Tela Hoje do app: o próximo passo do episódio, com pontos, sequência e meta do dia" width="600" height="1299" />
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 2. VOCÊ NÃO TRAVA POR FALTA DE DOM ============ -->
+      <section class="sec-white" id="dom">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="eyebrow">Se você já começou e parou</p>
+            <h2>Você não trava por falta de dom.</h2>
+            <p class="lead">O inglês trava quando o método ignora que você fala português.</p>
+            <p>Quem desiste costuma achar que o problema é a memória, a falta de tempo ou de jeito para idioma. Não é. Quem fala português erra inglês de um jeito previsível. E erro previsível tem conserto, desde que alguém tenha montado o curso sabendo quais são.</p>
+          </div>
+          <div class="grid g4">
+            <div class="card trava">
+              <div class="problema">É chato.<small>Frase solta, lista de palavras, nenhum motivo para voltar amanhã.</small></div>
+              <div class="resposta">Uma série. Você volta para saber o que acontece com o Lucas.</div>
+            </div>
+            <div class="card trava">
+              <div class="problema">Dá vergonha.<small>Falar errado na frente da turma.</small></div>
+              <div class="resposta">O Mic: você conversa com os personagens, sem ninguém assistindo.</div>
+            </div>
+            <div class="card trava">
+              <div class="problema">Não tem fim à vista.<small>"Estudo há anos e continuo no mesmo lugar."</small></div>
+              <div class="resposta">Cada episódio diz no começo o que você vai conseguir falar no final.</div>
+            </div>
+            <div class="card trava">
+              <div class="problema">Ignora o português.<small>Curso feito para o mundo inteiro, igual para todo mundo.</small></div>
+              <div class="resposta">O português é o ponto de partida, não o obstáculo.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 3. SEU PORTUGUÊS É O MAPA ============ -->
+      <section class="sec-navy" id="mapa">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="eyebrow">Feito para a nossa língua</p>
+            <h2>Seu português não é o problema. É o mapa.</h2>
+            <p class="lead">Sabemos onde você vai tropeçar, porque é onde todo mundo que fala português tropeça.</p>
+          </div>
+          <div class="grid g4">
+            <div class="card erro-card">
+              <div class="palavra">hat</div>
+              <div class="vira">soando como <s>"rat"</s></div>
+              <p>O H do começo da palavra vira R.</p>
+            </div>
+            <div class="card erro-card">
+              <div class="palavra">school</div>
+              <div class="vira">virando <s>"iscool"</s></div>
+              <p>Entra uma vogal antes do S.</p>
+            </div>
+            <div class="card erro-card">
+              <div class="palavra">hot dog</div>
+              <div class="vira">virando <s>"hot-chi dog-ui"</s></div>
+              <p>Sobra uma vogal no fim da palavra.</p>
+            </div>
+            <div class="card erro-card">
+              <div class="palavra">ship × sheep</div>
+              <div class="vira">soando <s>iguais</s></div>
+              <p>Duas vogais que o português junta numa só.</p>
+            </div>
+          </div>
+          <div class="nota-box">
+            <div class="card"><strong>No Take the Mic você fala e recebe nota de 0 a 10, com uma dica de boca.</strong> A nota mede quanto da sua fala foi entendida, não quanto você soa americano.</div>
+            <div class="card"><strong>Uma boa notícia:</strong> o R americano de <em>car</em> e <em>morning</em> costuma ser mais fácil para quem fala português do que o britânico. Muitos sotaques do Brasil já têm esse som.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 4. ASSISTA ============ -->
+      <section id="serie">
+        <div class="wrap">
+          <div class="split" id="metodo">
+            <div>
+              <p class="verbo-num">01 · ASSISTA</p>
+              <h2>E pra não ser chato, é uma série.</h2>
+              <p class="lead">Você não faz lições. Você acompanha uma história.</p>
+              <p>Lucas Costa, brasileiro, 24 anos, agrônomo de uma família de produtores de café da Alta Mogiana, chega a Beacon, Nova York, para a pós-graduação. Vai morar com os Woods, que estão abrindo uma cafeteria na Main Street. O que acontece com a loja, e com o Lucas, você descobre episódio a episódio.</p>
+              <ul class="bullets">
+                <li>Vídeo de cada cena, com legenda bilíngue opcional.</li>
+                <li>Diálogo fala a fala, inglês e português lado a lado, em três velocidades.</li>
+                <li>Gramática explicada em português, com as armadilhas de quem fala a nossa língua.</li>
+              </ul>
+            </div>
+            <!-- VIDEO 2 · Series trailer (16:9). Shows the opening titles for now. -->
+            <div>
+              <div class="video-slot wide">
+                <!-- biome-ignore lint/a11y/useMediaCaption: the opening titles have music and no dialogue -->
+                <video src="/src/site/media/vinheta.mp4" poster="/src/site/media/main-street.jpg" controls playsinline preload="none"></video>
+              </div>
+              <p class="small muted mt10">Main Street, Beacon. A Woods &amp; Beans fica à direita.</p>
+            </div>
+          </div>
+
+          <div class="elenco">
+            <div class="pessoa destaque"><img src="/src/site/media/lucas.jpg" alt="Lucas Costa" loading="lazy" /><h3>Lucas</h3><p>O único que erra, como você.</p></div>
+            <div class="pessoa"><img src="/src/site/media/margaret.jpg" alt="Margaret Woods" loading="lazy" /><h3>Maggie</h3><p>O inglês do dia a dia.</p></div>
+            <div class="pessoa"><img src="/src/site/media/robert.jpg" alt="Robert Woods" loading="lazy" /><h3>Robert</h3><p>Frases completas, inglês de trabalho.</p></div>
+            <div class="pessoa"><img src="/src/site/media/becky.jpg" alt="Rebecca Woods" loading="lazy" /><h3>Becky</h3><p>Jovem, direta, mensagem de texto.</p></div>
+            <div class="pessoa"><img src="/src/site/media/zach.jpg" alt="Zachary Woods" loading="lazy" /><h3>Zach</h3><p>Frases curtas, fácil de imitar.</p></div>
+            <div class="pessoa"><img src="/src/site/media/barbara.jpg" alt="Barbara Baker" loading="lazy" /><h3>Barbara</h3><p>Expressões e phrasal verbs.</p></div>
+          </div>
+          <p class="quote-line">O Lucas erra em cena do jeito que brasileiro erra de verdade, e alguém corrige. Você aprende com o erro dele antes de cometer o seu.</p>
+        </div>
+      </section>
+
+      <!-- ============ 5. CANTE ============ -->
+      <section class="sec-white">
+        <div class="wrap split reverse">
+          <div>
+            <p class="verbo-num">02 · CANTE</p>
+            <h2>O inglês tem outro ritmo.</h2>
+            <p class="lead">O português dá o mesmo tempo a cada sílaba. O inglês corre e marca só as fortes.</p>
+            <p>Cada episódio tem uma música feita para encaixar as frases dele nesse ritmo. Você ouve na abertura, pratica no meio do episódio e canta junto no final. Refrão que gruda é frase que fica.</p>
+            <ul class="bullets">
+              <li>Músicas autorais, compostas para quem fala português.</li>
+              <li>Letra em karaokê, com tradução.</li>
+              <li>No FLIX, as músicas voltam em karaokê com lacunas.</li>
+            </ul>
+          </div>
+          <!-- App screen 2 · the episode's song, karaoke with translation -->
+          <div class="video-slot phone">
+            <img src="/src/site/media/app-musica.webp" alt="A música do episódio tocando no app, em karaokê com a tradução de cada verso" width="600" height="1299" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 6. FALE ============ -->
+      <div class="faixa">
+        <div class="wrap">
+          <div>
+            <p class="verbo-num">03 · FALE</p>
+            <div class="display">Falar não é fase avançada. É o exercício.</div>
+          </div>
+          <p>Take the Mic três vezes por episódio: você grava, recebe nota de 0 a 10 e uma dica de como posicionar a boca. Desde o primeiro dia.</p>
+        </div>
+      </div>
+
+      <!-- ============ 7. CONVERSE ============ -->
+      <section>
+        <div class="wrap split">
+          <div>
+            <p class="verbo-num">04 · CONVERSE</p>
+            <h2>Disponível sempre. Julga nunca.</h2>
+            <p class="lead">Converse com a Maggie, o Robert, a Becky, o Zach e a Barbara, no seu nível, sem qualquer julgamento humano.</p>
+            <p>Às onze da noite de um domingo. Repita a mesma pergunta cinco vezes: ninguém suspira. Se travar, é só pedir: <em>Sorry? Again, please.</em></p>
+            <ul class="bullets">
+              <li>Você responde falando ou digitando.</li>
+              <li>Cada fala recebe um retorno: certo, ajuste ou mais natural.</li>
+              <li>Missões com cenas do seu objetivo: aeroporto, entrevista de emprego, alugar um quarto.</li>
+              <li>No fim, um relatório com o que foi bem, o que ajustar e as palavras novas.</li>
+            </ul>
+            <p class="small muted">Conversa com limite mensal de minutos, sempre visível no app.</p>
+          </div>
+          <!-- App screen 3 · a Mic conversation with Maggie -->
+          <div class="video-slot phone">
+            <img src="/src/site/media/app-mic.webp" alt="Conversa livre com a Maggie no Mic: a resposta da aluna recebe “Certo” e uma dica de pronúncia" width="600" height="1299" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 8. TESTE ============ -->
+      <section class="sec-white">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="verbo-num">05 · TESTE</p>
+            <h2>Um teste que trabalha a seu favor.</h2>
+            <p class="lead">Todo episódio fecha com o Take the Test. Ele não serve para reprovar ninguém: funciona como um mapa.</p>
+          </div>
+          <div class="grid g3">
+            <div class="card"><h3>Acertou a maioria?</h3><p>Siga para o próximo episódio.</p></div>
+            <div class="card"><h3>Ficou com dúvida?</h3><p>O teste mostra exatamente o que revisar. A nota recomenda, não bloqueia.</p></div>
+            <div class="card"><h3>A cada 20 episódios</h3><p>O Progress Check fecha a temporada. Passou, recebe o certificado de conclusão da temporada.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 9. O EPISÓDIO EM 10 ETAPAS ============ -->
+      <section>
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="eyebrow">Tudo isso em 10 etapas, sempre na mesma ordem</p>
+            <h2>Um episódio, uma coisa nova que você consegue falar.</h2>
+          </div>
+          <div class="card">
+            <div class="episodio-head"><span class="ep-num">01</span><span class="ep-title">Meet the Woods</span></div>
+            <p class="ep-goal">Ao terminar, você cumprimenta, se apresenta, diz sua profissão e usa Mr., Mrs., Ms. e Miss do jeito certo.</p>
+            <div class="barra" aria-hidden="true"><i class="feito"></i><i class="feito"></i><i class="feito"></i><i class="atual"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="blocos">
+              <div class="bloco">
+                <h3>Abertura</h3>
+                <ul class="etapas">
+                  <li><em>1</em><b>In this episode</b><span>conheça o episódio</span></li>
+                  <li><em>2</em><b>Take the Mic</b><span>música, 1ª passada</span></li>
+                </ul>
+              </div>
+              <div class="bloco meio">
+                <h3>O episódio</h3>
+                <ul class="etapas">
+                  <li><em>3</em><b>Take a Look</b><span>vídeo da cena e vocabulário</span></li>
+                  <li><em>4</em><b>Take It In</b><span>diálogo bilíngue em 3 velocidades</span></li>
+                  <li><em>5</em><b>Take the Mic</b><span>você fala e recebe nota</span></li>
+                  <li><em>6</em><b>Take a Lesson</b><span>gramática em português</span></li>
+                  <li><em>7</em><b>Take Away</b><span>expressões que vão para os Cards</span></li>
+                  <li><em>8</em><b>Take Action</b><span>exercícios e a música</span></li>
+                </ul>
+              </div>
+              <div class="bloco">
+                <h3>Fechamento</h3>
+                <ul class="etapas">
+                  <li><em>9</em><b>Take the Mic</b><span>cante junto</span></li>
+                  <li><em>10</em><b>Take the Test</b><span>teste do episódio</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="extras">
+            <h3 class="extras-title">E cada episódio ainda traz 4 extras, todos opcionais.</h3>
+            <div class="grid g4">
+              <div class="extra"><b>Take Five</b><span class="trad">dê uma pausa</span><p>Páginas culturais bilíngues sobre a vida americana.</p></div>
+              <div class="extra"><b>Take the Lead</b><span class="trad">assuma o comando</span><p>Você conduz uma conversa falada com um personagem, sobre o tema do episódio.</p></div>
+              <div class="extra"><b>Take it for Real</b><span class="trad">leve para a vida real</span><p>Como as expressões do episódio aparecem de verdade na rua.</p></div>
+              <div class="extra"><b>Take It Out</b><span class="trad">saia por aí</span><p>Uma história em quadrinhos, com tema novo a cada dez episódios.</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 10. CONVERSE AGORA COM OS WOODS ============ -->
+      <section class="sec-navy" id="converse-agora">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="eyebrow">Teste seu inglês em 3 minutos</p>
+            <h2>Converse agora com os Woods.</h2>
+            <p class="lead">Escolha com quem quer conversar. São 7 falas, do mais simples ao mais difícil. No fim, você vê de onde começar.</p>
+          </div>
+
+          <div id="woods-pick" class="woods-pick">
+            <button class="pick" type="button" data-personagem="margaret">
+              <img src="/src/site/media/margaret.jpg" alt="" />
+              <div><b>Margaret Woods</b><span>Maggie. Recebe você na Woods &amp; Beans. Inglês do dia a dia, tom acolhedor.</span><span class="go">Conversar com a Maggie →</span></div>
+            </button>
+            <button class="pick" type="button" data-personagem="robert">
+              <img src="/src/site/media/robert.jpg" alt="" />
+              <div><b>Robert Woods</b><span>Diretor de engenharia e sócio da loja. Frases completas, inglês de trabalho.</span><span class="go">Conversar com o Robert →</span></div>
+            </button>
+          </div>
+
+          <!-- Demo conversation with canned answers (src/site/conversa.ts). -->
+          <div id="chat" class="chat" aria-live="polite">
+            <div class="chat-top">
+              <img id="chat-foto" src="/src/site/media/margaret.jpg" alt="" />
+              <div><b id="chat-nome">Margaret Woods</b><span id="chat-onde">Woods &amp; Beans · Beacon, NY</span></div>
+              <div class="spacer"></div>
+              <label><input type="checkbox" id="legenda" checked /> Legenda em português</label>
+              <button type="button" id="chat-trocar">Trocar</button>
+            </div>
+            <div class="progresso"><i id="chat-progresso"></i></div>
+            <div class="chat-body" id="chat-body"></div>
+            <div class="opcoes" id="chat-opcoes"></div>
+            <div class="resultado" id="chat-resultado" hidden></div>
+          </div>
+          <p class="small demo-note">Esta é uma amostra com respostas prontas, para você sentir o jeito de cada personagem. No app, a conversa é por voz ou texto, livre. O resultado é uma estimativa, não um teste de proficiência.</p>
+        </div>
+      </section>
+
+      <!-- ============ 11. POR QUE ESSE MÉTODO ============ -->
+      <section class="sec-white" id="por-que">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="eyebrow">Por que chegamos nesse método</p>
+            <h2>Cada peça tem um porquê.</h2>
+            <p class="lead">Antes de escrever o primeiro episódio, olhamos para o que faz as pessoas desistirem do inglês e para o que a pesquisa sobre aprendizagem já sabe há décadas. O método é a soma dessas respostas.</p>
+          </div>
+          <div class="porque">
+            <div class="principio"><b>A língua materna deixa marcas previsíveis</b><span>Desde os anos 1950, a linguística contrastiva estuda como quem aprende uma segunda língua transfere hábitos da primeira.</span></div>
+            <div class="aplicacao">O curso foi montado em cima dos erros típicos de quem fala português, e a correção de pronúncia é calibrada para eles.</div>
+
+            <div class="principio"><b>A gente lembra do que vem dentro de uma história</b><span>Contexto e emoção ajudam a memória. Frase solta, sem situação, é esquecida rápido.</span></div>
+            <div class="aplicacao">Uma série com elenco fixo. Toda palavra nova aparece numa cena, dita por alguém, por um motivo.</div>
+
+            <div class="principio"><b>Lembrar é mais forte do que reler</b><span>Puxar da memória, em intervalos que vão aumentando, fixa mais do que revisar o mesmo conteúdo várias vezes seguidas.</span></div>
+            <div class="aplicacao">Os Cards fazem a revisão espaçada, e o Take the Test fecha cada episódio puxando o que você aprendeu.</div>
+
+            <div class="principio"><b>Melodia carrega frase</b><span>Música ajuda a guardar sequências de palavras e treina o ritmo, que é diferente no português e no inglês.</span></div>
+            <div class="aplicacao">Uma música autoral por episódio, que abre, volta no exercício e fecha o episódio.</div>
+
+            <div class="principio"><b>Medo trava a fala</b><span>Ansiedade e exposição atrapalham quem está aprendendo a falar.</span></div>
+            <div class="aplicacao">O Mic é privado e paciente. A nota mede se a fala foi entendida, não o sotaque. Não existe ranking público.</div>
+
+            <div class="principio"><b>Só aprende a falar quem fala</b><span>Entender não basta. A fala precisa ser praticada desde cedo.</span></div>
+            <div class="aplicacao">Take the Mic três vezes por episódio, desde o Episódio 1.</div>
+
+            <div class="principio"><b>Uma tradição que gerações usaram</b><span>Os cursos de inglês em fascículos ensinaram muita gente com lição curta, diálogo bilíngue lado a lado e elenco recorrente.</span></div>
+            <div class="aplicacao">Mantivemos essa estrutura e trocamos o suporte: vídeo, áudio em três velocidades, conversa com os personagens e revisão no celular.</div>
+          </div>
+          <div class="honestidade">
+            <strong>O que ainda não temos são os resultados dos nossos próprios alunos.</strong> O curso estreia agora. Quando tivermos números reais, eles vão estar aqui, com dados e com autorização de quem estudou.
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 12. O APP POR DENTRO ============ -->
+      <section>
+        <div class="wrap split">
+          <!-- App screen 4 · Hoje, FLIX and Cards, crossfading (site.css .phone-tour) -->
+          <div class="video-slot phone phone-tour">
+            <img src="/src/site/media/app-hoje.webp" alt="Tela Hoje do app" width="600" height="1299" loading="lazy" />
+            <img src="/src/site/media/app-flix.webp" alt="Tela FLIX do app: séries, filmes, animes e música no seu nível" width="600" height="1299" loading="lazy" />
+            <img src="/src/site/media/app-cards.webp" alt="Tela Cards do app: a revisão do dia com as palavras dos episódios" width="600" height="1299" loading="lazy" />
+          </div>
+          <div>
+            <p class="eyebrow">O app por dentro</p>
+            <h2>Uma ação por vez.</h2>
+            <p class="lead">Você abre o app e ele responde uma pergunta: o que eu faço agora?</p>
+            <div class="grid areas">
+              <div class="area"><span class="tag">Hoje</span><p>O próximo passo do episódio, o plano do dia com minutos estimados e a missão de conversa ligada ao seu objetivo.</p></div>
+              <div class="area"><span class="tag">FLIX</span><p>Séries, filmes, animes e música em inglês, no seu nível e no seu gosto. Cada episódio que você conclui fica guardado lá.</p></div>
+              <div class="area"><span class="tag">Cards</span><p>As palavras e expressões dos episódios viram cartões de revisão, que voltam no momento certo.</p></div>
+              <div class="area"><span class="tag">Mic</span><p>Conversa com os personagens, quando você quiser.</p></div>
+            </div>
+            <p class="small muted mt22">Pontos e medalhas premiam quem volta. Ninguém perde nada por ter parado.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 13. OITO TEMPORADAS ============ -->
+      <section class="sec-white" id="temporadas">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="eyebrow">Peça inteira, com começo, meio e fim</p>
+            <h2>Oito temporadas. Do zero ao B2.</h2>
+            <p class="lead">Cada temporada tem 20 episódios e fecha com o Progress Check. Você vê o curso inteiro desde o primeiro dia.</p>
+          </div>
+          <ul class="temporadas">
+            <li class="temp atual">
+              <span class="n">1</span>
+              <div><b>Seeds of a Dream</b><span>A família Woods, a chegada do Lucas e a abertura da Woods &amp; Beans</span></div>
+              <span class="cefr">A1</span>
+              <span class="status on" data-fase="ate-oficial">Ep. 1 a 4 grátis em 1º/12 · completa em fev/2027</span>
+              <span class="status on" data-fase="oficial">Disponível</span>
+            </li>
+            <li class="temp"><span class="n">2</span><div><b>Settling In</b><span>O mestrado, a loja e o primeiro apartamento</span></div><span class="cefr">A1+</span><span class="status">Em produção</span></li>
+            <li class="temp"><span class="n">3</span><div><b>Behind the Counter</b><span>A rotina da loja, a primeira inspeção, o primeiro inverno</span></div><span class="cefr">A2</span><span class="status">Em produção</span></li>
+            <li class="temp"><span class="n">4</span><div><b>First Customers</b><span>As primeiras viagens a Nova York para vender café</span></div><span class="cefr">A2+ / B1</span><span class="status">Em produção</span></li>
+            <li class="temp"><span class="n">5</span><div><b>The Deal</b><span>Negociação e primeiro contrato</span></div><span class="cefr">B1</span><span class="status">Em produção</span></li>
+            <li class="temp"><span class="n">6</span><div><b>Under Pressure</b><span>Crise, reclamação e uma equipe para treinar</span></div><span class="cefr">B1+</span><span class="status">Em produção</span></li>
+            <li class="temp"><span class="n">7</span><div><b>Going Big</b><span>Feira de negócios, investidor e segundo ponto de venda</span></div><span class="cefr">B2</span><span class="status">Em produção</span></li>
+            <li class="temp"><span class="n">8</span><div><b>Full Circle</b><span>Importação, exportação e a volta ao Brasil</span></div><span class="cefr">B2+</span><span class="status">Em produção</span></li>
+          </ul>
+          <p class="small muted mt16">A partir da Temporada 4, a série entra no inglês de negociação, preço, prazo e e-mail comercial.</p>
+        </div>
+      </section>
+
+      <!-- ============ 14. PLANOS ============ -->
+      <section id="planos">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="eyebrow">Planos</p>
+            <h2>Quatro episódios por nossa conta. Depois, você decide.</h2>
+            <p class="lead">Comece agora pelos 4 primeiros episódios, sem cartão. <span data-fase="ate-oficial">A Temporada 1 completa estreia em fevereiro de 2027, e aí você escolhe se quer continuar.</span></p>
+          </div>
+          <div class="aviso-planos" data-fase="ate-oficial">Planos pagos a partir de fevereiro de 2027</div>
+          <div class="planos">
+            <div class="plano">
+              <h3>Grátis</h3>
+              <div class="preco">R$ 0</div>
+              <ul>
+                <li>Os 4 primeiros episódios completos</li>
+                <li>10 minutos de conversa no Mic por mês</li>
+                <li>Sem cartão de crédito</li>
+              </ul>
+              <a class="btn btn-ghost" href="#cadastro">Começar grátis</a>
+            </div>
+            <div class="plano">
+              <h3>Mensal</h3>
+              <div class="preco">R$ 249,90 <small>/mês</small></div>
+              <ul>
+                <li>Todos os episódios lançados</li>
+                <li>240 minutos de conversa no Mic por mês, cerca de 1 hora por semana</li>
+                <li>Cancele quando quiser, sem multa</li>
+              </ul>
+              <a class="btn btn-ghost" href="#cadastro">Começar grátis</a>
+            </div>
+            <div class="plano destaque">
+              <span class="selo">60% mais barato</span>
+              <h3>Anual</h3>
+              <div class="preco">12x R$ 99,92 <small>sem juros</small></div>
+              <p class="small muted m0">R$ 1.199 por 12 meses</p>
+              <ul>
+                <li>Todos os episódios lançados</li>
+                <li>240 minutos de conversa no Mic por mês, cerca de 1 hora por semana</li>
+                <li>Menos de R$ 100 por mês</li>
+              </ul>
+              <a class="btn btn-cta" href="#cadastro">Começar grátis</a>
+            </div>
+          </div>
+          <div class="garantia"><b>7 dias</b><span>de garantia. Assinou e não gostou? Devolvemos o valor integral.</span></div>
+        </div>
+      </section>
+
+      <!-- ============ 15. EMPRESAS ============ -->
+      <section class="sec-navy" id="empresas">
+        <div class="wrap split">
+          <div>
+            <p class="eyebrow">TIE Business</p>
+            <h2>Inglês para a sua equipe.</h2>
+            <p class="lead">O orçamento sai, a adesão começa alta e, em poucos meses, o engajamento cai. O problema costuma ser o método, não o colaborador.</p>
+            <ul class="bullets">
+              <li>Feito para profissionais que falam português, com a série entrando no inglês de negociação a partir da Temporada 4.</li>
+              <li>Cada pessoa estuda no próprio ritmo, no horário que tem, de qualquer lugar.</li>
+              <li>Conversa privada com os personagens para treinar reunião e negociação, sem a exposição na frente dos colegas.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Quer levar o Take It Easy para a sua empresa?</h3>
+            <p>Conte quantas pessoas e o que elas precisam fazer em inglês. A gente responde com uma proposta.</p>
+            <p>Escreva para <span class="email-visivel">empresas@takeiteasyingles.com.br</span></p>
+            <a class="btn btn-cta empresas-cta" href="mailto:empresas@takeiteasyingles.com.br?subject=Take%20It%20Easy%20para%20empresas">Falar com a gente</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 16. MANIFESTO ============ -->
+      <section class="manifesto">
+        <div class="wrap">
+          <p class="eyebrow">Por que o Take It Easy existe</p>
+          <h2>Falar inglês pode ser leve.</h2>
+          <p class="mt24">Aprender uma língua nunca foi só decorar regras. É coragem: abrir a boca sabendo que vai errar.</p>
+          <p>Por décadas, professores e cursos provaram que comunicação se constrói com paciência e respeito ao tempo de cada um. O Take It Easy nasce dessa tradição, com uma diferença: foi pensado do começo ao fim para quem fala português.</p>
+          <p>Aqui você não decora. Você acompanha uma história, guarda as palavras pelas cenas e solta a voz como quem canta uma música.</p>
+          <p class="assinatura">Respire fundo. Take it easy.</p>
+        </div>
+      </section>
+
+      <!-- ============ 17. FAQ ============ -->
+      <section class="sec-white faq" id="faq">
+        <div class="wrap">
+          <div class="sec-head"><p class="eyebrow">Dúvidas</p><h2>Perguntas frequentes.</h2></div>
+          <details><summary>Preciso de cartão de crédito para começar?</summary><p>Não. Os 4 primeiros episódios são grátis e o cadastro pede só seus dados básicos e o e-mail.</p></details>
+          <details><summary>O que tem nos episódios grátis?</summary><p>Os episódios 1 a 4 completos, com as 10 etapas, a música, o Take the Mic e o teste, mais 10 minutos de conversa no Mic por mês.</p></details>
+          <details><summary>Quando posso assinar?</summary><p>Os planos pagos abrem no lançamento oficial, previsto para fevereiro de 2027, junto com a Temporada 1 completa.</p></details>
+          <details><summary>Serve para quem nunca estudou inglês?</summary><p>Sim. A Temporada 1 começa do zero, e toda explicação é em português.</p></details>
+          <details><summary>Já sei um pouco de inglês. Vale a pena?</summary><p>Faça a conversa com a Maggie ou com o Robert nesta página para ter uma ideia do seu ponto de partida. Os episódios iniciais tendem a ser rápidos para quem já tem base, e a correção de pronúncia ajuda em qualquer nível.</p></details>
+          <details><summary>Quanto tempo leva cada episódio?</summary><p>Você escolhe a sua meta, de 20 a 50 minutos por dia, e o app monta o plano do dia a partir dela.</p></details>
+          <details><summary>Como funciona a garantia de 7 dias?</summary><p>Se assinar e não gostar, peça o cancelamento em até 7 dias da contratação e devolvemos o valor integral.</p></details>
+          <details><summary>Posso cancelar o plano mensal quando quiser?</summary><p>Sim, sem multa. O acesso continua até o fim do mês já pago.</p></details>
+          <details><summary>O certificado vale como prova de proficiência?</summary><p>Não. Ao passar no Progress Check, você recebe o certificado de conclusão da temporada. Ele mostra o que você completou no curso, mas não substitui exames como TOEFL ou TOEIC.</p></details>
+          <details><summary>Menores de idade podem usar?</summary><p>Sim, com a autorização e o acompanhamento de um responsável.</p></details>
+          <details><summary>Funciona no celular?</summary><p>Sim. O Take It Easy foi feito para o celular, e você estuda onde e quando puder.</p></details>
+        </div>
+      </section>
+
+      <!-- ============ 18. CADASTRO ============ -->
+      <!-- Hands the fields to the app's own sign-up (#/cadastro/1), where the visitor creates a password. -->
+      <section class="cadastro sec-navy" id="cadastro">
+        <div class="wrap split">
+          <div>
+            <p class="eyebrow" data-fase="pre">Estreia 1º de dezembro</p>
+            <h2>Comece pelo Episódio 1.</h2>
+            <p class="lead">Os 4 primeiros episódios são grátis. Sem cartão de crédito.</p>
+            <p data-fase="pre">Crie sua conta agora. No dia da estreia, o Episódio 1 já vai estar esperando por você no app.</p>
+            <p data-fase="live">Crie sua conta e comece agora pelo Episódio 1.</p>
+          </div>
+
+          <div class="form-card">
+            <form id="form-cadastro" novalidate>
+              <h3>Crie seu acesso</h3>
+              <div class="campo">
+                <label for="f-nome">Nome e sobrenome</label>
+                <input type="text" id="f-nome" name="nome" autocomplete="name" maxlength="120" required />
+                <span class="msg-erro">Escreva seu nome e sobrenome.</span>
+              </div>
+              <div class="campo">
+                <label for="f-apelido">Como você quer ser chamado?</label>
+                <span class="hint">É assim que o app vai te chamar.</span>
+                <input type="text" id="f-apelido" name="apelido" placeholder="Ex.: Gui" autocomplete="nickname" maxlength="40" required />
+                <span class="msg-erro">Conte como prefere ser chamado.</span>
+              </div>
+              <div class="campo">
+                <label for="f-nasc">Data de nascimento</label>
+                <input type="text" id="f-nasc" name="nascimento" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" autocomplete="bday" required />
+                <span class="msg-erro">Use o formato dd/mm/aaaa.</span>
+              </div>
+              <div class="campo">
+                <label for="f-email">E-mail</label>
+                <input type="email" id="f-email" name="email" autocomplete="email" maxlength="254" required />
+                <span class="msg-erro">Confira o seu e-mail.</span>
+              </div>
+
+              <label class="check" id="check-termos"><input type="checkbox" name="aceite" id="f-termos" /> <span>Li e aceito os <a href="/app#/entrar?doc=termos" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="/app#/entrar?doc=privacidade" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
+
+              <button class="btn btn-cta" type="submit">
+                <span data-fase="pre">Garantir meu acesso ao Episódio 1</span>
+                <span data-fase="live">Assistir ao Episódio 1 grátis</span>
+              </button>
+              <p class="cta-note center">Sem cartão de crédito. No próximo passo, você cria sua senha.</p>
+              <p class="cta-note center">Já tem conta? <a href="/app#/entrar">Entrar</a></p>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ============ FOOTER ============ -->
+    <footer class="site-footer">
+      <div class="wrap">
+        <div>
+          <img src="/src/site/media/tie-logo-negativo.svg" alt="Take It Easy · Inglês para quem fala português" loading="lazy" />
+          <p class="mt14">takeiteasyingles.com.br</p>
+        </div>
+        <nav aria-label="Rodapé">
+          <a href="#metodo">Método</a>
+          <a href="#planos">Planos</a>
+          <a href="#empresas">Para empresas</a>
+          <a href="#faq">Dúvidas</a>
+        </nav>
+        <nav aria-label="Documentos">
+          <a href="/app#/entrar">Entrar</a>
+          <a href="/app#/entrar?doc=termos">Termos de Uso</a>
+          <a href="/app#/entrar?doc=privacidade">Política de Privacidade</a>
+          <a href="mailto:contato@takeiteasyingles.com.br">Contato</a>
+        </nav>
+      </div>
+      <div class="wrap footer-bottom"><p class="small">© 2026 Take It Easy. Os personagens, empresas e instituições da série são fictícios.</p></div>
+    </footer>
+  </body>
+</html>

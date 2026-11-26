@@ -468,7 +468,7 @@ TTS speaker per assistant: Maggie→asteria, Robert→orion, Becky→luna, Zach�
   - `/api/me` GET: NetworkFirst with a 3s timeout.
   - `/m/*`: CacheFirst with RangeRequestsPlugin and Expiration (60 entries / 30 days).
   - Offline writes go to an IndexedDB outbox with `Idempotency-Key`, replayed by Background Sync.
-- **Icons:** `genIcons.ts` renders `icon.svg` to 192, 512, maskable 512, apple-touch 180 and favicon 32. Manifest `start_url` is `/#/inicio`.
+- **Icons:** `genIcons.ts` renders `icon.svg` to 192, 512, maskable 512, apple-touch 180 and favicon 32. Manifest `start_url` is `/app#/inicio` (`/` is the course home, spec 05; the `id` stays `/`).
 
 ## 6. Build order
 **F0 (foundation).**

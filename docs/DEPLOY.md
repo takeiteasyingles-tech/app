@@ -4,7 +4,7 @@ Production is two Workers on `*.workers.dev` that share one D1 database, one R2 
 
 | Worker | Directory | Serves | Origin (example) |
 |---|---|---|---|
-| `tie-app` | `apps/app` | student PWA (static assets) + `/api/*` + `/m/*` media + the daily retention cron | `https://tie-app.<subdomain>.workers.dev` |
+| `tie-app` | `apps/app` | course home at `/` (the landing, for everyone) + student PWA at `/app` (static assets) + `/api/*` + `/m/*` media + the daily retention cron | `https://tie-app.<subdomain>.workers.dev` |
 | `tie-admin` | `apps/admin` | admin SPA (static assets) + `/admin-api/*` + `/m/*` | `https://tie-admin.<subdomain>.workers.dev` |
 
 Shared resources: D1 `tie-db` (binding `DB`), R2 `tie-media` (binding `MEDIA`), Workers AI (binding `AI`), and four rate-limit bindings per Worker (`RL_AUTH`, `RL_AI`, `RL_API`, `RL_UPLOAD`).
@@ -226,6 +226,7 @@ Invite the rest of the team from the admin panel (Usuários → Gerar convite).
 
 1. `https://tie-app.<subdomain>.workers.dev/api/health` returns `{"ai":true,"model":"…"}`. `ai:false` means the AI binding is missing, and the app falls back to demo mode.
 2. Check the response headers of the app shell: a CSP, HSTS, `X-Content-Type-Options: nosniff`, and `Set-Cookie` with `__Host-` after you log in.
+2a. The course home (spec 05 "Course home at /"): `/` shows the landing page ("Inglês para quem fala português", `Cache-Control: no-cache`), in a clean browser profile, signed in, and on a second visit (with the service worker); `/#/entrar` lands on `/app#/entrar` (the login, or `#/inicio` signed in); the landing's sign-up form opens `/app#/cadastro/1` with its fields filled in.
 3. On a phone or in a clean browser profile, create an account (Turnstile passes invisibly), finish the onboarding, open episode 1 and play the intro, open Revisão, open an EXTRA, and run a short Mic conversation. You should see real AI replies, not the "demo" badge. Then open the report.
 4. Upload a profile photo under Você.
 5. In the admin panel, log in and open the Painel; the numbers should load. Edit a harmless field (for example an episode synopsis), then publish it under Publicações. Reload the app: the change shows up, and `/api/content/manifest` has the new version. Revert the change and publish again, or use Publicações → rollback.
