@@ -61,8 +61,9 @@ export function patchSettings(p: Partial<Omit<Settings, 'phone' | 'free'>>): Pro
 
 /**
  * Signed out (or session expired): back to the fresh state; the shell guard routes to #/entrar. The
- * cached GET /api/me* answers go too: the service worker reads them as "a learner uses this device"
- * (sw.ts hasLearner). Queued writes stay, for the next login (core/outbox.ts).
+ * service worker's cached GET /api/me* answers go too: a learner's data must not outlive the session
+ * on a shared device (a logout clears every user cache; an expired session ends up here). Queued
+ * writes stay, for the next login (core/outbox.ts).
  */
 export function signedOut(): void {
   state.value = freshState();

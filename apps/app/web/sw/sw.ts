@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 // tie-app service worker (vite-plugin-pwa injectManifest, spec 04 §5 "Service worker").
 // - Shell: precached (self.__WB_MANIFEST); navigations fall back to the precached index.html, except /
-//   (the course home) when no learner is signed in on this device: that one goes to the network.
+//   (the course home, the landing page for everyone): that one goes to the network, the shell offline.
 // - /api/content/v/*: CacheFirst (versioned, immutable snapshots).
 // - /api/content/manifest and GET /api/me*: NetworkFirst with a 3 s timeout (offline start);
 //   /api/me/export is never cached.
@@ -45,36 +45,19 @@ precacheAndRoute(self.__WB_MANIFEST, { directoryIndex: '' });
 const appShell = createHandlerBoundToURL('/index.html');
 
 /**
- * True when this browser has a signed-in learner: GET /api/me* answers are only cached for a session,
- * and logout deletes the cache (MSG.logout).
- */
-async function hasLearner(): Promise<boolean> {
-  if (!(await caches.has(CACHE_NAMES.me))) return false;
-  return (await (await caches.open(CACHE_NAMES.me)).keys()).length > 0;
-}
-
-/** `promise`, or a rejection after `ms`. */
-function within<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
-}
-
-/**
- * Navigations get the precached shell, except `/`: it is the course home, which the Worker answers with
- * the landing page for visitors and the shell for a valid session (worker/src/routes/home.ts), so it
- * always asks the network. Only the Worker knows whether the session is still valid: the cached learner
- * data (hasLearner) outlives an expired one, and trusting it opened the shell, which sent a visitor to
- * #/entrar. The precached shell answers offline, and after 3 s on a device with a learner's data, so a
- * learner on a slow connection still gets in.
+ * Navigations get the precached shell, except `/`: it is the course home, the landing page for
+ * everyone (worker/src/routes/home.ts), which is not precached, so it comes from the network. Offline,
+ * the shell answers there instead: an app installed with the old start URL (/#/inicio) still opens.
  */
 registerRoute(
   new NavigationRoute(
     async (options) => {
       if (options.url.pathname === '/') {
         try {
-          const res = await ((await hasLearner()) ? within(fetch(options.request), 3000) : fetch(options.request));
+          const res = await fetch(options.request);
           if (res.ok) return res;
         } catch {
-          // Offline or slow: the shell below.
+          // Offline: the shell below.
         }
       }
       return appShell(options);

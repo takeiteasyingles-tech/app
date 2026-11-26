@@ -105,7 +105,7 @@ Notes:
 ## Architecture (big picture)
 
 **Requests.** Each Worker serves its SPA through Workers Static Assets (SPA fallback). The Worker code only runs for `run_worker_first` paths:
-- tie-app: `/api/*`, `/m/*` and `/` (the course home: the landing `web/home.html` for visitors, the app shell for learners with a session cookie; the shell also answers at `/app`, and `site/hop.js` sends `/#/…` links there);
+- tie-app: `/api/*`, `/m/*` and `/` (the course home: the landing `web/home.html` for every page load, signed in or not; the app is at `/app`, and `site/hop.js` sends `/#/…` links there);
 - tie-admin: `/admin-api/*` and `/m/*`.
 
 `createApp()` (worker-core) applies, in order: request id, security headers and CSP, the config guard, CSRF, a JSON body limit, and the services. Errors map to `ApiError` codes with pt-BR messages. Routes declare their contract from `@tie/shared/contracts` and validate with `vJson` / `vParam`.

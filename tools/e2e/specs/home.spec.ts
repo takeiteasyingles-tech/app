@@ -1,5 +1,5 @@
-// Course home: `/` serves the landing page (web/home.html) to visitors and the app shell to learners
-// with a session (worker/src/routes/home.ts); app hash links hop to /app (public/site/hop.js); the
+// Course home: `/` serves the landing page (web/home.html) to every page load, signed in or not, and the
+// app lives at /app (worker/src/routes/home.ts); app hash links hop to /app (public/site/hop.js); the
 // landing's sign-up form hands its fields to the app's #/cadastro/1 (core/signupHandoff.ts).
 import { randomBytes } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
@@ -26,7 +26,7 @@ test('a visitor at / gets the course home, with no console or CSP errors', async
   const errors = collectErrors(page);
   const res = await page.goto('/');
   expect(res?.headers()['cache-control']).toBe('no-cache');
-  expect(res?.headers().vary ?? '').toMatch(/cookie/i);
+  expect(res?.headers().vary ?? '').toMatch(/sec-fetch-mode/i);
   await expect(page).toHaveTitle(/Inglês para quem fala português/);
   await expect(page.getByRole('heading', { level: 1, name: /Inglês para quem fala português/i })).toBeVisible();
   await expect(page.locator('#stage')).toHaveCount(0);
@@ -58,9 +58,12 @@ test('the shell the service worker precaches is never the landing', async ({ req
     Accept: 'text/html,application/xhtml+xml',
   };
   expect(await (await request.get('/', { headers: viaWorker })).text()).toContain('form-cadastro');
-  // A session cookie that no longer opens a session: the landing too.
-  const stale = { ...pageLoad, Cookie: `tie_s=${'A'.repeat(43)}; __Host-tie_s=${'A'.repeat(43)}` };
-  expect(await (await request.get('/', { headers: stale })).text()).toContain('form-cadastro');
+  // A session cookie changes neither (the signed-in case with a real session is the sign-up test).
+  const cookie = `tie_s=${'A'.repeat(43)}; __Host-tie_s=${'A'.repeat(43)}`;
+  expect(await (await request.get('/', { headers: { ...pageLoad, Cookie: cookie } })).text()).toContain(
+    'form-cadastro',
+  );
+  expect(await (await request.get('/', { headers: { ...precache, Cookie: cookie } })).text()).toContain('id="stage"');
 });
 
 test('app hash links on / open the app at /app', async ({ page }) => {
@@ -110,11 +113,14 @@ test('the landing form hands its fields to #/cadastro/1, which creates the accou
     .click();
   await expect(page).toHaveURL(/#\/cadastro\/2$/, { timeout: 20_000 });
 
-  // With the session cookie, / is the app again.
+  // Signed in, / is still the course home; the app goes on at /app, and so does its Entrar link.
   expect((await context.cookies()).some((c) => /tie_s$/.test(c.name))).toBe(true);
   await page.goto('/');
+  await expect(page.locator('#form-cadastro')).toBeVisible();
+  await expect(page.locator('#stage')).toHaveCount(0);
+  await page.locator('.nav-entrar').click();
   await expect(page.locator('#stage')).toHaveCount(1);
-  await expect(page).toHaveURL(/\/#\/cadastro\/\d$/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/app#\/cadastro\/\d$/, { timeout: 20_000 });
 });
 
 test('phone: the header fits at 360px and the page never scrolls sideways', async ({ page }) => {
