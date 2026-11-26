@@ -50,6 +50,17 @@ test('the shell the service worker precaches is never the landing', async ({ req
   }
   const pageLoad = { 'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', Accept: 'text/html' };
   expect(await (await request.get('/', { headers: pageLoad })).text()).toContain('form-cadastro');
+  // The same page load passed on by the service worker (Chromium): still the landing, not the shell
+  // (which sent visitors to #/entrar).
+  const viaWorker = {
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'navigate',
+    Accept: 'text/html,application/xhtml+xml',
+  };
+  expect(await (await request.get('/', { headers: viaWorker })).text()).toContain('form-cadastro');
+  // A session cookie that no longer opens a session: the landing too.
+  const stale = { ...pageLoad, Cookie: `tie_s=${'A'.repeat(43)}; __Host-tie_s=${'A'.repeat(43)}` };
+  expect(await (await request.get('/', { headers: stale })).text()).toContain('form-cadastro');
 });
 
 test('app hash links on / open the app at /app', async ({ page }) => {

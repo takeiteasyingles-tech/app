@@ -53,20 +53,28 @@ async function hasLearner(): Promise<boolean> {
   return (await (await caches.open(CACHE_NAMES.me)).keys()).length > 0;
 }
 
+/** `promise`, or a rejection after `ms`. */
+function within<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+}
+
 /**
  * Navigations get the precached shell, except `/`: it is the course home, which the Worker answers with
- * the landing page for visitors and the shell for learners (worker/src/routes/home.ts). A learner on this
- * device still opens the shell at once (offline too); anyone else asks the network, so a visitor who
- * once opened the app here sees the home again, and gets the shell when offline.
+ * the landing page for visitors and the shell for a valid session (worker/src/routes/home.ts), so it
+ * always asks the network. Only the Worker knows whether the session is still valid: the cached learner
+ * data (hasLearner) outlives an expired one, and trusting it opened the shell, which sent a visitor to
+ * #/entrar. The precached shell answers offline, and after 3 s on a device with a learner's data, so a
+ * learner on a slow connection still gets in.
  */
 registerRoute(
   new NavigationRoute(
     async (options) => {
-      if (options.url.pathname === '/' && !(await hasLearner())) {
+      if (options.url.pathname === '/') {
         try {
-          return await fetch(options.request);
+          const res = await ((await hasLearner()) ? within(fetch(options.request), 3000) : fetch(options.request));
+          if (res.ok) return res;
         } catch {
-          // Offline: the shell below.
+          // Offline or slow: the shell below.
         }
       }
       return appShell(options);

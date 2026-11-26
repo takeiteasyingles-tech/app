@@ -6,6 +6,7 @@ import { meApi } from '@tie/shared/contracts/me';
 import { ApiError } from '@tie/shared/errors';
 import { freshState, type Settings, type TieState } from '@tie/shared/state';
 import { toast } from '@tie/ui';
+import { CACHE_NAMES } from '../../sw/protocol';
 import { call, errorMessage, NetworkError, onUnauthorized } from '../api';
 
 export const state = signal<TieState>(freshState());
@@ -58,9 +59,14 @@ export function patchSettings(p: Partial<Omit<Settings, 'phone' | 'free'>>): Pro
   return optimistic({ settings: { ...state.value.settings, ...p } }, () => call(meApi.settings, { body: p }));
 }
 
-/** Signed out (or session expired): back to the fresh state; the shell guard routes to #/entrar. */
+/**
+ * Signed out (or session expired): back to the fresh state; the shell guard routes to #/entrar. The
+ * cached GET /api/me* answers go too: the service worker reads them as "a learner uses this device"
+ * (sw.ts hasLearner). Queued writes stay, for the next login (core/outbox.ts).
+ */
 export function signedOut(): void {
   state.value = freshState();
+  if (typeof caches !== 'undefined') void caches.delete(CACHE_NAMES.me).catch(() => {});
 }
 
 const isSignedOutError = (err: unknown): boolean =>
