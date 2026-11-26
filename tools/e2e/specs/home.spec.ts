@@ -39,6 +39,19 @@ test('a visitor at / gets the course home, with no console or CSP errors', async
   expect(errors).toEqual([]);
 });
 
+test('the shell the service worker precaches is never the landing', async ({ request }) => {
+  // Its precache fetch of /index.html is redirected to /, carries no session and is not a page load.
+  // Getting the landing there made /app#/entrar show the landing (routes/home.ts isPageLoad).
+  const precache = { 'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Mode': 'same-origin', Accept: '*/*' };
+  for (const path of ['/index.html', '/']) {
+    const html = await (await request.get(path, { headers: precache })).text();
+    expect(html, path).toContain('id="stage"');
+    expect(html, path).not.toContain('form-cadastro');
+  }
+  const pageLoad = { 'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', Accept: 'text/html' };
+  expect(await (await request.get('/', { headers: pageLoad })).text()).toContain('form-cadastro');
+});
+
 test('app hash links on / open the app at /app', async ({ page }) => {
   await page.goto('/#/entrar');
   await expect(page).toHaveURL(/\/app#\/entrar$/);

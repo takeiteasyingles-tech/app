@@ -17,6 +17,8 @@
     <link rel="preload" href="/api/me/state?probe=1" as="fetch" crossorigin />
   </head>
   <body>
+    <!-- The app shell. The service worker precaches it as /index.html and answers every app navigation
+         with it (/app#/entrar, /app#/cadastro/…); the course home at / is web/home.html. -->
     <div class="stage" id="stage"><noscript><p class="noscript">O Take It Easy precisa de JavaScript ligado.</p></noscript></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

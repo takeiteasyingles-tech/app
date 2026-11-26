@@ -12,7 +12,8 @@
 //   stored in IndexedDB (workbox-background-sync) and replayed by Background Sync (or on the next SW
 //   start / an explicit flush), with the same Idempotency-Key, so the server applies them once.
 //   The page gets 202 {queued:true} with X-Tie-Outbox: queued.
-// - Updates wait for the page: the shell shows a prompt and posts SKIP_WAITING (see register.ts).
+// - Updates wait for the page: the shell shows a prompt and posts SKIP_WAITING (see register.ts). The
+//   one exception repairs a precache that holds the landing page as the shell (see "Repair" below).
 import { Queue } from 'workbox-background-sync';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { ExpirationPlugin } from 'workbox-expiration';
@@ -37,7 +38,9 @@ declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: (string | { url:
 // ---------- Shell ----------
 
 cleanupOutdatedCaches();
-precacheAndRoute(self.__WB_MANIFEST);
+// No directoryIndex: by default the precache route answers `/` with the precached /index.html before
+// the NavigationRoute below runs, so a visitor with this worker got the shell instead of the course home.
+precacheAndRoute(self.__WB_MANIFEST, { directoryIndex: '' });
 
 const appShell = createHandlerBoundToURL('/index.html');
 
@@ -260,6 +263,50 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
   }
 });
 
+// ---------- Repair: the landing precached as the shell ----------
+
+/**
+ * On 2026-11-26 the Worker answered this worker's precache fetch of /index.html (redirected to `/`)
+ * with the landing page whenever no learner was signed in (worker/src/routes/home.ts isPageLoad), so
+ * the precache kept the landing as the shell and /app#/entrar showed the landing. Such a browser only
+ * shows the landing, which has no update prompt, so a worker that finds that copy takes over at once
+ * and reloads the open tabs once its own shell is in (the old copy is dropped as outdated).
+ */
+const LANDING_MARK = 'id="form-cadastro"';
+let repairing = false;
+
+async function precachedShellIsLanding(): Promise<boolean> {
+  for (const name of await caches.keys()) {
+    if (!name.startsWith('workbox-precache')) continue;
+    const cache = await caches.open(name);
+    for (const req of await cache.keys()) {
+      if (new URL(req.url).pathname !== '/index.html') continue;
+      const res = await cache.match(req);
+      if (res && (await res.text()).includes(LANDING_MARK)) return true;
+    }
+  }
+  return false;
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      if (await precachedShellIsLanding()) {
+        repairing = true;
+        await self.skipWaiting();
+      }
+    })(),
+  );
+});
+
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      await self.clients.claim();
+      if (!repairing) return;
+      for (const client of await self.clients.matchAll({ type: 'window' })) {
+        await client.navigate(client.url).catch(() => null);
+      }
+    })(),
+  );
 });
