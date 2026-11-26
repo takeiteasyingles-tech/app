@@ -59,6 +59,15 @@ export const AgentStartRes = z.object({
 export type AgentStartRes = z.infer<typeof AgentStartRes>;
 
 /**
+ * The agent client's version, sent by the web app when it starts an agent conversation. The first client
+ * (2026-11-25) streamed the microphone for 100 ms and went quiet, so its calls sat mute until the 10
+ * minute cap: a start without this version is refused (400), and that tab goes on with our tutor.
+ */
+export const AGENT_CLIENT_VERSION = 2;
+export const AgentStartBody = z.object({ client: z.literal(AGENT_CLIENT_VERSION) });
+export type AgentStartBody = z.infer<typeof AgentStartBody>;
+
+/**
  * finish(): the server computes secs from its clock, bills the remainder, keeps the newest
  * LIMITS.micSessionsKept sessions and awards maggie_session when the user spoke 2+ times.
  */
@@ -101,6 +110,7 @@ export const micApi = {
     path: '/api/mic/sessions/:id/agent',
     access: 'owner',
     params: IdParams,
+    body: AgentStartBody,
     res: AgentStartRes,
     rateLimit: 'RL_AI',
     quota: true,

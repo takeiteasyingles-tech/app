@@ -6,7 +6,13 @@
 import type { Bilingual, Catalog } from '@tie/shared/content/schema';
 import type { Feedback, PronounceResult, PronTip } from '@tie/shared/contracts/ai';
 import { meApi } from '@tie/shared/contracts/me';
-import { type AgentStartRes, type ClientTurn, micApi, type StartSessionRes } from '@tie/shared/contracts/mic';
+import {
+  AGENT_CLIENT_VERSION,
+  type AgentStartRes,
+  type ClientTurn,
+  micApi,
+  type StartSessionRes,
+} from '@tie/shared/contracts/mic';
 import { norm } from '@tie/shared/domain/norm';
 import { defaults, missions, tutorContext } from '@tie/shared/domain/personalize';
 import { ApiError } from '@tie/shared/errors';
@@ -232,7 +238,7 @@ async function startAgent(m: Session): Promise<boolean> {
   }
   let res: AgentStartRes;
   try {
-    res = await call(micApi.agent, { params: { id: m.id } });
+    res = await call(micApi.agent, { params: { id: m.id }, body: { client: AGENT_CLIENT_VERSION } });
   } catch (err) {
     closeMicrophone(stream);
     releaseAgentAudio();

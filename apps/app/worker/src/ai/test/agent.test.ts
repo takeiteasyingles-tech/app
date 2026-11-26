@@ -2,7 +2,7 @@
 // route reserves quota and hands out a signed URL whose conversation id stays on the reservation; /end
 // and the daily reconcile bill what ElevenLabs measured. ElevenLabs is a mocked fetch.
 import { env as baseEnv } from 'cloudflare:workers';
-import { AgentStartRes, EndSessionRes, ErrorEnvelope, ReportResult } from '@tie/shared';
+import { AGENT_CLIENT_VERSION, AgentStartRes, EndSessionRes, ErrorEnvelope, ReportResult } from '@tie/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   AGENT_MAX_SECS,
@@ -63,7 +63,8 @@ afterEach(() => {
 
 const env = (over: Parameters<typeof testEnv>[0] = {}) => testEnv({ ELEVENLABS_API_KEY: 'test-key', ...over });
 const code = async (res: Response) => ErrorEnvelope.parse(await res.json()).error.code;
-const startAgent = (id: string, e = env()) => call(e, 'POST', `/api/mic/sessions/${id}/agent`, { who: u1 });
+const startAgent = (id: string, e = env()) =>
+  call(e, 'POST', `/api/mic/sessions/${id}/agent`, { who: u1, body: { client: AGENT_CLIENT_VERSION } });
 const used = async () =>
   (await first<{ s: number }>('SELECT SUM(seconds_used) AS s FROM ai_usage_monthly WHERE user_id = ?', 'U1'))?.s ?? 0;
 const agentEvent = () =>
@@ -157,9 +158,24 @@ describe('POST /api/mic/sessions/:id/agent', () => {
     expect(fake.calls).toEqual([]);
   });
 
+  it('refuses the first, mute client (no version in the body) before reserving anything', async () => {
+    const id = await startSession(env(), u1);
+    for (const body of [undefined, {}, { client: 1 }]) {
+      const res = await call(env(), 'POST', `/api/mic/sessions/${id}/agent`, { who: u1, body });
+      expect(res.status).toBe(400);
+    }
+    expect(fake.calls).toEqual([]);
+    expect(await used()).toBe(0);
+    // The same session still starts an agent conversation from an updated tab.
+    expect((await startAgent(id)).status).toBe(200);
+  });
+
   it('is the owner’s only: someone else’s session answers 404 and reserves nothing', async () => {
     const id = await startSession(env(), u1);
-    const res = await call(env(), 'POST', `/api/mic/sessions/${id}/agent`, { who: u2 });
+    const res = await call(env(), 'POST', `/api/mic/sessions/${id}/agent`, {
+      who: u2,
+      body: { client: AGENT_CLIENT_VERSION },
+    });
     expect(await code(res)).toBe('not_found');
     expect(fake.calls).toEqual([]);
   });

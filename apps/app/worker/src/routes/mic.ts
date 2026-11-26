@@ -162,67 +162,76 @@ routes.post(micApi.start.path, requireUser(), rateLimit('RL_AI'), vJson(micApi.s
 // PROD (spec 05 "Mic avatar per assistant", ai/agentUsage.ts): the session's conversation moves to the
 // assistant's ElevenLabs agent. Reserves the quota, then hands out a one-time signed URL whose
 // conversation id the reservation keeps, so /end and the daily cron bill what ElevenLabs measured.
-routes.post(micApi.agent.path, requireUser(), rateLimit('RL_AI'), vParam(IdParams), async (c) => {
-  const s = sessionOf(c);
-  const { id } = c.req.valid('param');
-  const db = c.env.DB;
-  const services = c.get('services');
-  const row = await ownedSession(db, id, s.userId);
-  if (row.status !== 'open') throw fail('conflict');
-  const [avatar, profile, catalog, prior] = await Promise.all([
-    one<{ avatar: string | null }>(db, 'SELECT avatar FROM assistants WHERE key = ?', row.assistant_key),
-    learnerProfile(db, s.userId),
-    catalogOf(services),
-    one<{ n: number }>(
-      db,
-      "SELECT COUNT(*) AS n FROM ai_usage_events WHERE session_id = ? AND user_id = ? AND kind = 'agent' AND seconds > 0",
-      id,
-      s.userId,
-    ),
-  ]);
-  const agent = agentFor(avatar?.avatar, row.mode);
-  if (!agent) throw fail('not_found', 'Esta assistente não conversa por agente neste modo.');
-  // One agent conversation per session: a second start would reserve (and bill) a second one.
-  if ((prior?.n ?? 0) > 0) throw fail('conflict');
-  if (!(await aiEnabled(c.env, flagSubject(s)))) throw fail('ai_unavailable');
-  const cfg = await readElevenConfig(db, c.env);
-  if (!cfg.apiKey) throw fail('ai_unavailable');
+// The body carries the client's version (AgentStartBody): a tab still on the first, mute client gets a
+// 400 here before anything is reserved, and goes on with our tutor.
+routes.post(
+  micApi.agent.path,
+  requireUser(),
+  rateLimit('RL_AI'),
+  vParam(IdParams),
+  vJson(micApi.agent.body),
+  async (c) => {
+    const s = sessionOf(c);
+    const { id } = c.req.valid('param');
+    const db = c.env.DB;
+    const services = c.get('services');
+    const row = await ownedSession(db, id, s.userId);
+    if (row.status !== 'open') throw fail('conflict');
+    const [avatar, profile, catalog, prior] = await Promise.all([
+      one<{ avatar: string | null }>(db, 'SELECT avatar FROM assistants WHERE key = ?', row.assistant_key),
+      learnerProfile(db, s.userId),
+      catalogOf(services),
+      one<{ n: number }>(
+        db,
+        "SELECT COUNT(*) AS n FROM ai_usage_events WHERE session_id = ? AND user_id = ? AND kind = 'agent' AND seconds > 0",
+        id,
+        s.userId,
+      ),
+    ]);
+    const agent = agentFor(avatar?.avatar, row.mode);
+    if (!agent) throw fail('not_found', 'Esta assistente não conversa por agente neste modo.');
+    // One agent conversation per session: a second start would reserve (and bill) a second one.
+    if ((prior?.n ?? 0) > 0) throw fail('conflict');
+    if (!(await aiEnabled(c.env, flagSubject(s)))) throw fail('ai_unavailable');
+    const cfg = await readElevenConfig(db, c.env);
+    if (!cfg.apiKey) throw fail('ai_unavailable');
 
-  const quota = quotaOf(c.env, services);
-  const left = await quota.remaining(s.userId);
-  const reserved = await reserveOrThrow(quota, s.userId, Math.min(AGENT_MAX_SECS, left.leftS), {
-    kind: 'agent',
-    sessionId: id,
-    model: agent.agentId,
-  });
-  const t0 = Date.now();
-  let signedUrl: string;
-  let conversationId: string | null;
-  try {
-    signedUrl = await elevenAgentSignedUrl(cfg.apiKey, agent.agentId);
-    conversationId = conversationIdOf(signedUrl);
-    if (!conversationId) throw new Error('signed URL without conversation_id');
-  } catch (err) {
-    await quota.refund(s.userId, reserved, { latencyMs: Date.now() - t0 });
-    console.warn(JSON.stringify({ level: 'warn', msg: 'agent signed URL failed', err: String(err) }));
-    throw fail('ai_unavailable');
-  }
-  await quota.finish(reserved.eventId, {
-    ok: true,
-    latencyMs: Date.now() - t0,
-    model: agentModel(agent.agentId, conversationId),
-  });
-  // The agent greets with its own first message: the start's scripted opener leaves the transcript.
-  await run(db, 'DELETE FROM mic_turns WHERE session_id = ? AND source = ?', id, TURN_SOURCE.script);
-  const level = profile?.level ? (catalog.onboarding.levels.find((l) => l.k === profile.level)?.cefr ?? '') : '';
-  return c.json({
-    signedUrl,
-    // The agent's prompt reads these (both may be empty: it then places the learner itself).
-    dynamicVariables: { student_name: profile?.name ?? '', student_level: level },
-    maxSecs: reserved.reservedS,
-    quotaLeftS: reserved.quota.leftS,
-  } satisfies AgentStartRes);
-});
+    const quota = quotaOf(c.env, services);
+    const left = await quota.remaining(s.userId);
+    const reserved = await reserveOrThrow(quota, s.userId, Math.min(AGENT_MAX_SECS, left.leftS), {
+      kind: 'agent',
+      sessionId: id,
+      model: agent.agentId,
+    });
+    const t0 = Date.now();
+    let signedUrl: string;
+    let conversationId: string | null;
+    try {
+      signedUrl = await elevenAgentSignedUrl(cfg.apiKey, agent.agentId);
+      conversationId = conversationIdOf(signedUrl);
+      if (!conversationId) throw new Error('signed URL without conversation_id');
+    } catch (err) {
+      await quota.refund(s.userId, reserved, { latencyMs: Date.now() - t0 });
+      console.warn(JSON.stringify({ level: 'warn', msg: 'agent signed URL failed', err: String(err) }));
+      throw fail('ai_unavailable');
+    }
+    await quota.finish(reserved.eventId, {
+      ok: true,
+      latencyMs: Date.now() - t0,
+      model: agentModel(agent.agentId, conversationId),
+    });
+    // The agent greets with its own first message: the start's scripted opener leaves the transcript.
+    await run(db, 'DELETE FROM mic_turns WHERE session_id = ? AND source = ?', id, TURN_SOURCE.script);
+    const level = profile?.level ? (catalog.onboarding.levels.find((l) => l.k === profile.level)?.cefr ?? '') : '';
+    return c.json({
+      signedUrl,
+      // The agent's prompt reads these (both may be empty: it then places the learner itself).
+      dynamicVariables: { student_name: profile?.name ?? '', student_level: level },
+      maxSecs: reserved.reservedS,
+      quotaLeftS: reserved.quota.leftS,
+    } satisfies AgentStartRes);
+  },
+);
 
 routes.post(
   micApi.end.path,
