@@ -174,7 +174,7 @@ function AvatarField({ value, set, id, err }: CustomProps) {
       <Field
         id={id}
         label="Avatar no Mic"
-        hint="O que o aluno vê e ouve na conversa do Mic. Os vídeos abaixo seguem valendo quando o embed não carrega e como rosto do agente."
+        hint="O que o aluno vê e ouve na conversa do Mic. Com o agente ElevenLabs, o Mic mostra a orbe da ElevenLabs. Os vídeos abaixo seguem valendo quando o embed não carrega."
         err={kind === 'none' ? err : null}
       >
         <Sel id={id} value={kind} options={AVATAR_KINDS} onValue={pick} />
@@ -436,7 +436,8 @@ function AvatarPreview({ a, name }: { a: MicAvatar | null | undefined; name: str
       ) : a?.kind === 'elevenlabs' ? (
         <p class="xs">
           Em {a.modes.map((m) => MODE_LABEL[m]).join(', ')}, o aluno conversa por voz, ao vivo, com o agente da
-          ElevenLabs: o microfone fica aberto e o avatar 3D (ou os vídeos) acompanha a voz do agente.
+          ElevenLabs: o microfone fica aberto e, no lugar do rosto, aparece a orbe da ElevenLabs, que pulsa com a voz.
+          Nos outros modos a orbe acompanha a voz da IA do curso.
         </p>
       ) : (
         <p class="xs">O Mic mostra o avatar 3D da assistente, se houver, senão os vídeos desta aba.</p>

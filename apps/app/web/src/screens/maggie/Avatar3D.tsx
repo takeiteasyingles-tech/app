@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { onSpeech } from '../../core/speech';
 import { type AvatarAssistant, AvatarVideo } from './Avatar';
 import { AvatarEmbed, embedSlug, micEmbedOn } from './AvatarEmbed';
+import { AvatarOrb } from './AvatarOrb';
 import type { AvatarEngine } from './avatar3d/engine';
 
 /**
@@ -31,13 +32,13 @@ function hasWebGL(): boolean {
 }
 
 /**
- * The Mic stage's avatar: the Assistia embed when the assistant's avatar is one (AvatarEmbed.tsx), else
- * the 3D model, else the video clips. An embed that never gets ready hands the stage to the 3D/video
- * avatar. An ElevenLabs agent has no face of its own: the 3D/video avatar moves with its voice
- * (speech.emitMouth).
+ * The Mic stage's avatar: the ElevenLabs orb when the assistant's avatar is an ElevenLabs agent
+ * (AvatarOrb.tsx), the Assistia embed when it is one (AvatarEmbed.tsx), else the 3D model, else the
+ * video clips. An embed that never gets ready hands the stage to the 3D/video avatar.
  */
 export function MicAvatar(props: { a: AvatarAssistant; talking: boolean; mood: string }) {
   const [embedFailed, setEmbedFailed] = useState(false);
+  if (props.a.avatar?.kind === 'elevenlabs') return <AvatarOrb a={props.a} talking={props.talking} />;
   const slug = micEmbedOn && !embedFailed ? embedSlug(props.a) : undefined;
   if (slug) return <AvatarEmbed a={props.a} talking={props.talking} slug={slug} onFail={() => setEmbedFailed(true)} />;
   const model = MODELS[props.a.k];
