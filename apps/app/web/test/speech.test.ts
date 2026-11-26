@@ -101,6 +101,129 @@ describe('assistant speech', () => {
     expect(f.state.value.settings.hd).toBe(false);
   });
 
+  describe('speed keeps the voice (spec 05 "Speed keeps the voice")', () => {
+    /** A media element stub: play() starts it (or rejects), end() finishes the line. */
+    class FakeAudio {
+      static made: FakeAudio[] = [];
+      static refuse = false;
+      src = '';
+      preservesPitch = false;
+      playbackRate = 1;
+      defaultPlaybackRate = 1;
+      paused = true;
+      private on: Record<string, (() => void)[]> = {};
+      constructor() {
+        FakeAudio.made.push(this);
+      }
+      addEventListener(type: string, fn: () => void) {
+        this.on[type] = [...(this.on[type] ?? []), fn];
+      }
+      fire(type: string) {
+        for (const fn of this.on[type] ?? []) fn();
+      }
+      play() {
+        if (FakeAudio.refuse) return Promise.reject(new Error('NotAllowedError'));
+        this.paused = false;
+        queueMicrotask(() => this.fire('playing'));
+        return Promise.resolve();
+      }
+      pause() {
+        this.paused = true;
+      }
+    }
+    /** Buffer source starts, with their playbackRate. */
+    const started = vi.fn((_rate: number) => {});
+
+    beforeEach(() => {
+      FakeAudio.made = [];
+      FakeAudio.refuse = false;
+      vi.stubGlobal('Audio', FakeAudio);
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:line');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+      started.mockClear();
+      const source = {
+        buffer: null,
+        playbackRate: { value: 1 },
+        connect: vi.fn(),
+        onended: null as (() => void) | null,
+        start: () => {
+          started(source.playbackRate.value);
+          queueMicrotask(() => source.onended?.());
+        },
+        stop: vi.fn(),
+      };
+      f.ac.mockReturnValue({
+        currentTime: 1,
+        destination: {},
+        decodeAudioData: async () => ({ duration: 1 }),
+        createBufferSource: () => source,
+        createMediaElementSource: () => ({ connect: vi.fn(), disconnect: vi.fn() }),
+        createAnalyser: () => ({
+          fftSize: 512,
+          connect: vi.fn(),
+          getByteTimeDomainData: (b: Uint8Array) => b.fill(128),
+        }),
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('plays 1,25× through a pitch-keeping media element, not a resampled buffer', async () => {
+      const speech = await import('../src/core/speech');
+      const events: import('../src/core/speech').SpeechEvent[] = [];
+      const off = speech.onSpeech((e) => events.push(e));
+      const saying = speech.say('Nice to meet you.', { who: 'Maggie', hd: true, rate: 1.25 });
+      await vi.runAllTimersAsync();
+      const el = FakeAudio.made[0];
+      expect(el).toBeDefined();
+      expect(el?.src).toBe('blob:line');
+      expect(el?.preservesPitch).toBe(true);
+      expect(el?.playbackRate).toBe(1.25);
+      expect(el?.defaultPlaybackRate).toBe(1.25);
+      expect(started).not.toHaveBeenCalled();
+      expect(events[0]).toEqual(expect.objectContaining({ type: 'audio', rate: 1.25 }));
+      el?.fire('ended');
+      await saying;
+      off();
+      expect(events.at(-1)).toEqual({ type: 'end' });
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:line');
+    });
+
+    it('keeps the decoded buffer at 1×', async () => {
+      const speech = await import('../src/core/speech');
+      const saying = speech.say('Hello.', { who: 'Maggie', hd: true });
+      await vi.runAllTimersAsync();
+      await saying;
+      expect(FakeAudio.made).toHaveLength(0);
+      expect(started).toHaveBeenCalledWith(1);
+    });
+
+    it('still plays the line from the buffer when the element is refused', async () => {
+      FakeAudio.refuse = true;
+      const speech = await import('../src/core/speech');
+      const saying = speech.say('Hello.', { who: 'Maggie', hd: true, rate: 0.75 });
+      await vi.runAllTimersAsync();
+      await saying;
+      expect(FakeAudio.made).toHaveLength(1);
+      expect(started).toHaveBeenCalledOnce();
+      expect(started).toHaveBeenCalledWith(0.75);
+    });
+
+    it('stop() pauses the element and frees it', async () => {
+      const speech = await import('../src/core/speech');
+      const saying = speech.say('A long line.', { who: 'Maggie', hd: true, rate: 0.75 });
+      await vi.runAllTimersAsync();
+      const el = FakeAudio.made[0];
+      expect(el?.paused).toBe(false);
+      speech.stop();
+      await saying;
+      expect(el?.paused).toBe(true);
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:line');
+    });
+  });
+
   it('inside a lesson asks for its voice: the narration, or the character by name (spec 05 "Lesson voices")', async () => {
     const speech = await import('../src/core/speech');
     speech.setLesson(7, 3);

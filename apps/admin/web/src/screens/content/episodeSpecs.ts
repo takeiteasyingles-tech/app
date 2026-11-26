@@ -292,7 +292,7 @@ const AWAY: Spec[] = [
     of: [
       { t: 'text', k: 'en', label: 'Inglês' },
       { t: 'text', k: 'pt', label: 'Tradução' },
-      { t: 'text', k: 'note', label: 'Quando usar', opt: 'undef' },
+      { t: 'text', k: 'note', label: 'Pronúncia', opt: 'undef' },
     ],
   },
   { t: 'strings', k: 'awayWords', label: 'Palavras-chave', wide: true },

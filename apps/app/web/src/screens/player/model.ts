@@ -6,7 +6,7 @@
 import { STEP } from '@tie/shared/constants';
 import type { Catalog, Episode } from '@tie/shared/content/schema';
 import type { PronounceIssue } from '@tie/shared/contracts/ai';
-import type { TieState } from '@tie/shared/state';
+import { stepKey, type TieState } from '@tie/shared/state';
 import type { VNode } from 'preact';
 
 export type MicStatus = 'idle' | 'rec' | 'busy' | 'done';
@@ -109,6 +109,23 @@ export function remember(P: PState, stillPlayer: boolean): void {
 /** sayMark's "already heard" marks: ephemeral, until the page reloads (TIE.ui.heard). */
 export const heard = new Set<string>();
 
+/** Episodes whose Take a Look context audio played to the end (until the page reloads). */
+export const lookHeard = new Set<number>();
+
+/**
+ * PROD (spec 05 "Take a Look"): with a context audio, the scene opens once that audio was heard to the
+ * end, or once the step is behind the learner (done before, or the episode is).
+ */
+export function lookOpen(Ep: Episode, s: TieState): boolean {
+  return (
+    !Ep.lookAudio ||
+    lookHeard.has(Ep.num) ||
+    !!s.epsDone[Ep.num] ||
+    (s.prog[Ep.num] || 1) > STEP.LOOK ||
+    !!s.stepOk[stepKey(Ep.num, STEP.LOOK)]
+  );
+}
+
 export const pad2 = (n: number | string): string => String(n).padStart(2, '0');
 
 /** m:ss (TIE.u.fmt). */
@@ -141,7 +158,9 @@ export const isSong = (step: number): boolean => step === STEP.SONG || step === 
 
 /** Media of the steps that play a recording: In this episode (1), the song (2, 9) and Take a Look's context audio. */
 export function stepAudio(Ep: Episode, step: number): string {
-  return (step === STEP.INTRO ? Ep.introAudio : isSong(step) ? Ep.songAudio : step === STEP.LOOK ? Ep.lookAudio : '') || '';
+  return (
+    (step === STEP.INTRO ? Ep.introAudio : isSong(step) ? Ep.songAudio : step === STEP.LOOK ? Ep.lookAudio : '') || ''
+  );
 }
 
 /** Click handler: preventDefault + tick sfx + action (the prototype's delegated data-act click). */

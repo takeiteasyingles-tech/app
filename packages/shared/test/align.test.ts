@@ -78,6 +78,14 @@ describe('scorePronunciation', () => {
     expect(r).toMatchObject({ score: 10, issues: [], praise_pt: 'Entendi tudo de primeira.' });
   });
 
+  it('a word heard as its Portuguese-style misreading costs the point and says how it sounded', () => {
+    const r = scorePronunciation('I’m fine, thanks.', 'I’m fine, tanks.');
+    expect(r.score).toBe(7);
+    expect(r.issues).toEqual([
+      { word: 'thanks', issue_pt: 'Soou como “tanks”.', tip_pt: 'Th: língua entre os dentes e sopro.' },
+    ]);
+  });
+
   it('nothing heard scores 0', () => {
     const r = scorePronunciation('Sheep and ship.', '');
     expect(r.score).toBe(0);

@@ -1,6 +1,7 @@
 import type { PronounceIssue, PronounceResult } from '../contracts/ai';
 import { norm } from '../domain/norm';
 import { praiseFor } from './demoPronounce';
+import { misreadingsOf } from './misreadings';
 import { pronWatch } from './pronWatch';
 
 // Deterministic pronunciation score for /api/pronounce: word-level Levenshtein between the
@@ -110,15 +111,25 @@ export function align(target: string, heard: string): Alignment {
 export function scorePronunciation(target: string, heard: string): PronounceResult {
   const a = align(target, heard);
   const unique = (list: string[]) => [...new Set(list)];
+  // A word heard as one of its typical misreadings (thanks → tanks): the issue says what it sounded like.
+  const soundedLike = new Map<string, string>();
+  for (const o of a.ops) {
+    if (o.op === 'sub' && !soundedLike.has(o.target) && misreadingsOf(o.target).includes(o.heard)) {
+      soundedLike.set(o.target, o.heard);
+    }
+  }
   const issues: PronounceIssue[] = unique(a.missed.length ? a.missed : a.target)
     .slice(0, 2)
     .map((w) => {
       const p = pronWatch(w)[0];
+      const like = soundedLike.get(w);
       return {
         word: w,
-        issue_pt: a.missed.includes(w)
-          ? 'Não deu para entender esta palavra.'
-          : 'Ponto de atenção para quem fala português.',
+        issue_pt: like
+          ? `Soou como “${like}”.`
+          : a.missed.includes(w)
+            ? 'Não deu para entender esta palavra.'
+            : 'Ponto de atenção para quem fala português.',
         tip_pt: p ? p.tip_pt : 'Fale mais devagar e marque a sílaba forte.',
       };
     });

@@ -16,7 +16,7 @@ const WAVE = [
 
 function Headphones() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M4 14v-2a8 8 0 0 1 16 0v2"
         stroke="currentColor"
@@ -129,7 +129,7 @@ export function AudioPill({
           onClick={onPlay}
           aria-label={playing ? `Pausar ${what}` : `Ouvir ${what}`}
         >
-          <Icon name={playing ? 'pause' : 'play'} size={22} />
+          <Icon name={playing ? 'pause' : 'play'} size={18} />
         </button>
         <span class={`pr-wavebars${playing ? ' on' : ''}`} aria-hidden="true">
           {WAVE.map((h, i) => (

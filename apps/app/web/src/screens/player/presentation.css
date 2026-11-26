@@ -19,13 +19,14 @@
   margin: 0;
 }
 
-/* ---------- Pill player ---------- */
+/* ---------- Pill player ----------
+   Compact (2026-11-26): it is a control, not the hero; the orb and the text are. */
 .pr-pill {
   display: flex;
   align-items: center;
-  gap: 14px;
-  width: min(100%, 440px);
-  padding: 10px 12px 10px 10px;
+  gap: 10px;
+  width: min(100%, 300px);
+  padding: 6px 8px 6px 6px;
   border-radius: 999px;
   background: #fff;
   box-shadow:
@@ -34,15 +35,15 @@
 }
 .pr-play {
   flex: none;
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--navy);
   color: #fff;
-  box-shadow: 0 8px 18px -8px rgba(15, 42, 85, 0.7);
+  box-shadow: 0 6px 14px -7px rgba(15, 42, 85, 0.7);
   transition: transform 0.15s;
 }
 .pr-play:active {
@@ -55,7 +56,7 @@
 .pr-wavebars {
   flex: 1;
   min-width: 0;
-  height: 40px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -63,8 +64,8 @@
 }
 .pr-wavebars i {
   display: block;
-  width: 4px;
-  border-radius: 4px;
+  width: 3px;
+  border-radius: 3px;
   height: calc(var(--h) * 100%);
   background: #b9c6dd;
   transform-origin: center;
@@ -86,19 +87,19 @@
 }
 .pr-phones {
   flex: none;
-  width: 46px;
-  height: 46px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--navy);
   background: radial-gradient(circle at 35% 30%, #e9f0ff, #c4d6ff);
-  box-shadow: 0 0 0 4px rgba(42, 111, 245, 0.08);
+  box-shadow: 0 0 0 3px rgba(42, 111, 245, 0.08);
 }
 .pr-clock {
   min-height: 1em;
-  margin-top: -6px;
+  margin-top: -8px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
