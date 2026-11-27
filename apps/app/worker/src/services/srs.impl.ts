@@ -3,8 +3,9 @@
 // the student saves (Extras, Mic, report). Cards dedupe by norm(en) per user through the
 // UNIQUE(user_id, norm_key) index, so every insert is INSERT OR IGNORE and replays are harmless.
 // Grading uses the fixed GRADES intervals: De novo → due now (back of the queue), Difícil 10 min,
-// Bom 2 days, Fácil 5 days; reps++ and `card` points once per card per local day, only when the card
-// was due. Manual adds are capped (SRS_DECK_MAX, SRS_MANUAL_ADDS_PER_DAY).
+// Bom 2 days, Fácil 5 days; or KNOWN ("Já sei", spec 05 "Cards: Já sei / Não sei"): due at KNOWN_AT, out of
+// the reviews for good. reps++ and `card` points once per card per local day, only when the card was due.
+// Manual adds are capped (SRS_DECK_MAX, SRS_MANUAL_ADDS_PER_DAY).
 import {
   type AddCardsRes,
   type AwardResult,
@@ -12,6 +13,7 @@ import {
   type DeckCard,
   type GradeRes,
   gradeCard,
+  KNOWN_AT,
   type NewCard,
   newId,
   nextIn as nextInText,
@@ -118,9 +120,12 @@ export async function srsQueue(db: D1Database, userId: string, now: number): Pro
     ),
     q<{ due: number; total: number; next_at: number | null }>(
       db,
-      `SELECT COALESCE(SUM(due_at <= ?), 0) AS due, COUNT(*) AS total, MIN(due_at) AS next_at
+      // next_at leaves out the known cards ("Já sei"): they never come back.
+      `SELECT COALESCE(SUM(due_at <= ?), 0) AS due, COUNT(*) AS total,
+         MIN(CASE WHEN due_at < ? THEN due_at END) AS next_at
        FROM srs_cards WHERE user_id = ?`,
       now,
+      KNOWN_AT,
       userId,
     ),
   ]);

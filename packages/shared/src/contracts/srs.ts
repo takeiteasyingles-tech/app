@@ -44,8 +44,11 @@ export const AddCardsRes = z.object({
 });
 export type AddCardsRes = z.infer<typeof AddCardsRes>;
 
-/** Index into catalog.srs.grades: 0 De novo, 1 Difícil, 2 Bom, 3 Fácil. Awards `card`. */
-export const GradeBody = z.object({ grade: z.int().min(0).max(3) });
+/**
+ * Index into catalog.srs.grades: 0 De novo, 1 Difícil, 2 Bom, 3 Fácil; or 4 = "Já sei" (domain/srs KNOWN:
+ * the card leaves the reviews for good). The Cards screen sends only 0 ("Não sei") and 4. Awards `card`.
+ */
+export const GradeBody = z.object({ grade: z.int().min(0).max(4) });
 export type GradeBody = z.infer<typeof GradeBody>;
 
 export const GradeRes = z.object({ card: DeckCard, due: z.int().min(0), award: AwardResult.nullable() });
