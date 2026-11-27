@@ -484,6 +484,41 @@
 .pl-vplay:hover .pl-vbtn {
   transform: scale(1.06);
 }
+/* PROD (spec 05 "Take a Look"): the scene is shut until the context audio was heard to the end: a dim
+   veil with a lock and the reason, over the poster (or the still). */
+.pl-vlock {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(8, 20, 45, 0.62);
+}
+.pl-vlockb {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: var(--navy);
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.6);
+}
+.pl-vlockt {
+  max-width: 280px;
+  text-wrap: balance;
+  font-weight: 800;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
 .pl-vdur {
   display: inline-flex;
   align-items: center;

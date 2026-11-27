@@ -100,7 +100,8 @@ interface Job {
   cancelled: boolean;
   timer?: ReturnType<typeof setInterval>;
   raf?: number;
-  src?: AudioBufferSourceNode;
+  /** Stops the HD audio (buffer source or media element) and frees what it holds. */
+  halt?: () => void;
   resolve?: () => void;
 }
 
@@ -176,7 +177,7 @@ export function stop(): void {
     clearInterval(job.timer);
     cancelAnimationFrame(job.raf || 0);
     try {
-      job.src?.stop();
+      job.halt?.();
     } catch {
       // Not started yet.
     }
@@ -349,6 +350,35 @@ export function loudnessGain(audio: { sampleRate: number; getChannelData(ch: num
   return Math.min(4, Math.max(0.25, SPEECH_RMS_TARGET / rms));
 }
 
+/**
+ * PROD (spec 05 "Speed keeps the voice"): a media element for an HD line played slower or faster. An
+ * AudioBufferSourceNode's playbackRate resamples, so 0,75× sounded deeper and 1,25× higher, like another
+ * voice; a media element time-stretches the audio and keeps its pitch. Null where Web Audio cannot take it.
+ */
+function stretchedSource(
+  c: AudioContext,
+  arrayBuf: ArrayBuffer,
+  rate: number,
+): { node: AudioNode; el: HTMLAudioElement; url: string } | null {
+  if (typeof Audio === 'undefined' || typeof c.createMediaElementSource !== 'function') return null;
+  const url = URL.createObjectURL(new Blob([arrayBuf], { type: 'audio/mpeg' }));
+  const el = new Audio();
+  const keep = el as HTMLAudioElement & { webkitPreservesPitch?: boolean; mozPreservesPitch?: boolean };
+  keep.preservesPitch = true;
+  keep.webkitPreservesPitch = true;
+  keep.mozPreservesPitch = true;
+  el.src = url;
+  // Loading resets playbackRate to defaultPlaybackRate, so both carry the speed.
+  el.defaultPlaybackRate = rate;
+  el.playbackRate = rate;
+  try {
+    return { node: c.createMediaElementSource(el), el, url };
+  } catch {
+    URL.revokeObjectURL(url);
+    return null;
+  }
+}
+
 /** HD voice through the shared AudioContext; the mouth follows the RMS level. */
 function playBuffer(
   arrayBuf: ArrayBuffer,
@@ -363,13 +393,11 @@ function playBuffer(
     c.decodeAudioData(arrayBuf.slice(0)).then(
       (audio) => {
         if (job.cancelled) return resolve();
-        const src = c.createBufferSource();
-        src.buffer = audio;
-        src.playbackRate.value = o.rate;
         const an = c.createAnalyser();
         an.fftSize = 512;
         // PROD (spec 05 "Even voice loudness"): every line plays at the same speech level, whatever voice
         // (ElevenLabs clone, library voice, Workers AI) recorded it; a limiter keeps the boosted ones clean.
+        let entry: AudioNode = an;
         if (typeof c.createGain === 'function' && typeof c.createDynamicsCompressor === 'function') {
           const gain = c.createGain();
           gain.gain.value = loudnessGain(audio);
@@ -379,12 +407,24 @@ function playBuffer(
           limit.ratio.value = 20;
           limit.attack.value = 0.002;
           limit.release.value = 0.08;
-          src.connect(gain);
           gain.connect(limit);
           limit.connect(an);
-        } else src.connect(an);
+          entry = gain;
+        }
         an.connect(c.destination);
-        job.src = src;
+        let src: AudioBufferSourceNode | null = null;
+        let stretched = o.rate !== 1 ? stretchedSource(c, arrayBuf, o.rate) : null;
+        const release = () => {
+          if (!stretched) return;
+          stretched.el.pause();
+          stretched.node.disconnect();
+          URL.revokeObjectURL(stretched.url);
+          stretched = null;
+        };
+        job.halt = () => {
+          src?.stop();
+          release();
+        };
         job.resolve = resolve;
         const data = new Uint8Array(an.fftSize);
         const loop = () => {
@@ -398,8 +438,12 @@ function playBuffer(
           o.mouth?.(rms < 0.02 ? 'rest' : rms < 0.06 ? 'e' : rms < 0.11 ? 'o' : 'a');
           job.raf = requestAnimationFrame(loop);
         };
-        src.onended = () => {
+        let over = false;
+        const ended = () => {
+          if (over) return;
+          over = true;
           cancelAnimationFrame(job.raf || 0);
+          release();
           o.mouth?.('rest');
           if (current === job) {
             emit({ type: 'end' });
@@ -407,11 +451,51 @@ function playBuffer(
           }
           resolve();
         };
-        o.onStart?.();
-        const startAt = c.currentTime;
-        emit({ type: 'audio', text, buffer: audio, ctx: c, startAt, rate: o.rate, words });
-        src.start(startAt);
-        loop();
+        const begin = () => {
+          o.onStart?.();
+          emit({ type: 'audio', text, buffer: audio, ctx: c, startAt: c.currentTime, rate: o.rate, words });
+          loop();
+        };
+        /** The decoded buffer itself (normal speed, or where the media element cannot play). */
+        const viaBuffer = () => {
+          if (job.cancelled || over || src) return;
+          src = c.createBufferSource();
+          src.buffer = audio;
+          src.playbackRate.value = o.rate;
+          src.connect(entry);
+          src.onended = ended;
+          begin();
+          src.start(c.currentTime);
+        };
+        const el = stretched?.el;
+        if (stretched && el) {
+          stretched.node.connect(entry);
+          let started = false;
+          el.addEventListener('ended', ended);
+          el.addEventListener(
+            'playing',
+            () => {
+              if (started || job.cancelled || over) return;
+              started = true;
+              begin();
+            },
+            { once: true },
+          );
+          // Refused (autoplay rules) or unplayable: the line still plays, from the buffer. Once: releasing
+          // the element can make it report an error too.
+          let failed = false;
+          const fallback = () => {
+            if (failed) return;
+            failed = true;
+            if (started) return ended();
+            release();
+            viaBuffer();
+          };
+          el.addEventListener('error', fallback);
+          el.play().catch(fallback);
+          return;
+        }
+        viaBuffer();
       },
       () => resolve(),
     );

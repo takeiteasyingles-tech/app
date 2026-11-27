@@ -57,16 +57,33 @@ export function queue<C extends Due>(deck: readonly C[], now: number): C[] {
   return deck.filter((c) => (c.at || 0) <= now).sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 
-/** New schedule after grading with GRADES[i]; null for an unknown grade. */
+/**
+ * PROD (spec 05 "Cards: Já sei / Não sei"): the Cards screen asks only "Não sei" (NOT_KNOWN, GRADES[0]
+ * "De novo": back of the queue now) or "Já sei" (KNOWN: the card leaves the reviews for good). A known
+ * card keeps its row and is due at KNOWN_AT, past any real schedule (year 2286), so no queue, due count
+ * or "próxima volta" ever reaches it.
+ */
+export const NOT_KNOWN = 0;
+export const KNOWN = 4;
+export const KNOWN_AT = 9_999_999_999_999;
+
+/** A card answered "Já sei". */
+export const isKnown = (c: Due): boolean => (c.at || 0) >= KNOWN_AT;
+
+/** New schedule after grading with GRADES[i] (or KNOWN); null for an unknown grade. */
 export function gradeCard(card: { reps?: number | null }, i: number, now: number): { at: number; reps: number } | null {
+  if (i === KNOWN) return { at: KNOWN_AT, reps: (card.reps || 0) + 1 };
   const g = GRADES[i];
   if (!g) return null;
   return { at: now + g[2], reps: (card.reps || 0) + 1 };
 }
 
-/** When the next card comes back, as text: "em 10 min", "em 3 h", "amanhã", "em 2 dias". */
+/**
+ * When the next card comes back, as text: "em 10 min", "em 3 h", "amanhã", "em 2 dias"; '' when none
+ * will (no cards, or every card is known).
+ */
 export function nextIn(deck: readonly Due[], now: number): string {
-  const at = deck.reduce((m, c) => Math.min(m, c.at || 0), Number.POSITIVE_INFINITY);
+  const at = deck.reduce((m, c) => (isKnown(c) ? m : Math.min(m, c.at || 0)), Number.POSITIVE_INFINITY);
   const d = at - now;
   if (!Number.isFinite(at)) return '';
   if (d < 60 * MIN) return `em ${Math.max(1, Math.ceil(d / MIN))} min`;

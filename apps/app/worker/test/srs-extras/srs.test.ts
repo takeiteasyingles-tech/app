@@ -1,5 +1,5 @@
 import type { AddCardsRes, GradeRes, SrsQueueRes } from '@tie/shared';
-import { STEP } from '@tie/shared';
+import { KNOWN, KNOWN_AT, STEP } from '@tie/shared';
 import { localDate } from '@tie/worker-core';
 import { describe, expect, it } from 'vitest';
 import { SRS_DECK_MAX, SRS_MANUAL_ADDS_PER_DAY } from '../../src/services/srs.impl';
@@ -153,6 +153,28 @@ describe('SrsService.grade', () => {
     expect(h.db.sql('SELECT reps FROM srs_cards WHERE id = ?', id)).toEqual([{ reps: 5 }]);
   });
 
+  it('"Já sei" (KNOWN) takes the card out of the reviews for good, with the award (spec 05 "Cards: Já sei / Não sei")', async () => {
+    const h = await harness();
+    const cards = await h.srs.unlock('u1', 1, STEP.AWAY);
+    const [a, b] = cards as [(typeof cards)[0], (typeof cards)[0]];
+    const known = await h.srs.grade('u1', a.id, KNOWN);
+    expect(known.card).toMatchObject({ at: KNOWN_AT, reps: 1 });
+    expect(known.award?.awarded).toBe(true);
+    expect(known.due).toBe(cards.length - 1);
+    // Years later it is still not due, and it never counts as the next one back.
+    h.clock.t += 50 * 365 * DAY;
+    const q = await h.srs.queue('u1');
+    expect(q.cards.map((c) => c.id)).not.toContain(a.id);
+    expect(q.total).toBe(cards.length);
+    for (const c of cards.slice(2)) await h.srs.grade('u1', c.id, KNOWN);
+    await h.srs.grade('u1', b.id, 2);
+    expect((await h.srs.queue('u1')).nextAt).toBe(h.clock.t + 2 * DAY);
+    expect(await h.srs.nextIn('u1')).toBe('em 2 dias');
+    await h.srs.grade('u1', b.id, KNOWN);
+    expect(await h.srs.queue('u1')).toMatchObject({ due: 0, nextAt: null });
+    expect(await h.srs.nextIn('u1')).toBe('');
+  });
+
   it("rejects another user's card as not found and leaves it untouched (IDOR)", async () => {
     const h = await harness();
     const [c] = await h.srs.unlock('u1', 1, STEP.LOOK);
@@ -208,7 +230,7 @@ describe('/api/srs routes', () => {
     const denied = await h.call('u2', 'POST', `/api/srs/cards/${id}/grade`, { grade: 3 });
     expect(denied.status).toBe(404);
     expect(h.db.sql('SELECT reps FROM srs_cards WHERE id = ?', id)).toEqual([{ reps: 0 }]);
-    expect((await h.call('u1', 'POST', `/api/srs/cards/${id}/grade`, { grade: 4 })).status).toBe(400);
+    expect((await h.call('u1', 'POST', `/api/srs/cards/${id}/grade`, { grade: 5 })).status).toBe(400);
     const ok = await h.call('u1', 'POST', `/api/srs/cards/${id}/grade`, { grade: 2 });
     expect(ok.status).toBe(200);
     const body = (await ok.json()) as GradeRes;

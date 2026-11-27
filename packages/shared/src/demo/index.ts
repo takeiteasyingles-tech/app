@@ -4,6 +4,7 @@ export * from './demoPronounce';
 export * from './demoReply';
 export * from './demoReport';
 export * from './hints';
+export * from './misreadings';
 export * from './pronWatch';
 export * from './rng';
 export * from './rules';

@@ -41,6 +41,7 @@ import {
   fresh,
   heard,
   isSong,
+  lookHeard,
   lyricRows,
   type MicFeedback,
   type PState,
@@ -417,8 +418,9 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         if (P.dead || P.audio !== a) return;
         P.playing = false;
         P.audio = null;
-        // Take a Look's context audio is optional: the scene video is what completes that step.
-        if (step !== STEP.LOOK) mark(step);
+        // Take a Look's context audio opens the scene (lookOpen); the scene video completes that step.
+        if (step === STEP.LOOK) lookHeard.add(Ep.num);
+        else mark(step);
         re();
       });
       // Resume where the pause left it; from the start once it played to the end.
@@ -431,6 +433,12 @@ function PlayerView({ Ep, cat, step }: { Ep: Episode; cat: Catalog; step: number
         if (P.dead || P.audio !== a) return;
         P.audio = null;
         P.playing = false;
+        // A context audio that cannot play at all (missing or broken file) never keeps the scene shut.
+        if (step === STEP.LOOK && a.error) {
+          lookHeard.add(Ep.num);
+          re();
+          return;
+        }
         re();
         toast('O navegador bloqueou o áudio. Toque de novo.');
       });

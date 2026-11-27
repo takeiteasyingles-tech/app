@@ -1,11 +1,13 @@
 // Revisão (prototipo/js/screens/conta.js, TIE.screens.revisao): one flashcard at a time from the due
-// queue. Tap flips it (PT + note), the speaker reads the EN, and a grade reschedules the card through
-// POST /api/srs/cards/:id/grade (applied at once, +2 pontos from the server's award). Empty states:
+// queue. Tap flips it (PT + note), the speaker reads the EN, and the answer reschedules the card through
+// POST /api/srs/cards/:id/grade (applied at once, +2 pontos from the server's award). PROD (spec 05
+// "Cards: Já sei / Não sei"): two answers instead of the prototype's four grades: "Não sei" comes back
+// at the end of the queue, "Já sei" never comes back. Empty states:
 // "Revisão em dia" with when the next card comes back, or "Seus cartões começam no episódio".
 import type { Catalog } from '@tie/shared/content/schema';
 import { srsApi } from '@tie/shared/contracts/srs';
 import { current } from '@tie/shared/domain/guide';
-import { GRADES, gradeCard, nextIn, queue } from '@tie/shared/domain/srs';
+import { gradeCard, isKnown, KNOWN, NOT_KNOWN, nextIn, queue } from '@tie/shared/domain/srs';
 import type { DeckCard } from '@tie/shared/state';
 import { activator, Btn, Icon, Topbar } from '@tie/ui';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
@@ -19,7 +21,7 @@ import { isDesktop, publishedEpisodes, summary, WithCatalog } from '../inicio/to
  * review.grade(en, i) + game.award('card'): the card is rescheduled at once from this device's clock
  * and the server records the grade and plays the award. The server's card is kept except for its due
  * time, which stays the one computed here: the queue is checked against this device's clock, so a
- * "De novo" card (due now) must not drop out of the queue when the server clock runs a little ahead.
+ * "Não sei" card (due now) must not drop out of the queue when the server clock runs a little ahead.
  */
 function gradeNow(cardId: string, grade: number) {
   let at: number | null = null;
@@ -78,27 +80,34 @@ const KEYCAP_INLINE = {
 /** One line of the keys note: text and keycaps on a shared centre line. */
 const NOTE_LINE = { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } as const;
 
-/** The four grades with their keys (desktop): a compact 2 × 2 legend. */
-function GradeLegend({ grades }: { grades: readonly (readonly [string, string])[] }) {
+/** The two answers, their keys and what each does. */
+const ANSWERS = [
+  { key: '1', label: 'Não sei', hint: 'volta daqui a pouco', grade: NOT_KNOWN, icon: 'repeat' },
+  { key: '2', label: 'Já sei', hint: 'não volta mais', grade: KNOWN, icon: 'check' },
+] as const;
+
+/** Desktop: the two answers with their keys. */
+function AnswerLegend() {
   return (
     <div class="card stack" style={{ '--gap': '10px', flex: '1 1 auto' }}>
-      <div class="lbl">Como avaliar</div>
+      <div class="lbl">Como responder</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px' }}>
-        {grades.map(([l, t], i) => (
-          <div key={l} class="row" style={{ '--gap': '10px', flexWrap: 'nowrap' }}>
+        {ANSWERS.map((a) => (
+          <div key={a.key} class="row" style={{ '--gap': '10px', flexWrap: 'nowrap' }}>
             <span class="pill" style={KEYCAP}>
-              {i + 1}
+              {a.key}
             </span>
             <span style={{ minWidth: '0', lineHeight: '1.25' }}>
-              <b style={{ display: 'block', color: 'var(--navy)' }}>{l}</b>
-              <span class="xs" style={{ color: 'var(--navy3)', fontWeight: 600 }}>{`volta em ${t}`}</span>
+              <b style={{ display: 'block', color: 'var(--navy)' }}>{a.label}</b>
+              <span class="xs" style={{ color: 'var(--navy3)', fontWeight: 600 }}>
+                {a.hint}
+              </span>
             </span>
           </div>
         ))}
       </div>
       {/* A plain note under a rule (grey, not blue, so it never reads as a link), as two set lines
-          (one per key group) with the keycaps centred on the text, never a ragged wrap. Same text
-          content: the space between the two lines stays in the DOM. */}
+          (one per key group) with the keycaps centred on the text, never a ragged wrap. */}
       <div
         class="xs stack"
         style={{
@@ -118,9 +127,9 @@ function GradeLegend({ grades }: { grades: readonly (readonly [string, string])[
         <span style={NOTE_LINE}>
           <span>{'as teclas '}</span>
           <span style={KEYCAP_INLINE}>1</span>
-          <span>{' a '}</span>
-          <span style={KEYCAP_INLINE}>4</span>
-          <span>{' escolhem a nota.'}</span>
+          <span>{' e '}</span>
+          <span style={KEYCAP_INLINE}>2</span>
+          <span>{' respondem.'}</span>
         </span>
       </div>
     </div>
@@ -202,7 +211,8 @@ function DeckStats({
  * given away). The deck at a glance under the review, instead of a blank lower half.
  */
 function ComingBack({ deck, now, desk }: { deck: readonly DeckCard[]; now: number; desk: boolean }) {
-  const later = deck.filter((x) => (x.at || 0) > now).sort((a, b) => (a.at || 0) - (b.at || 0));
+  // Known cards ("Já sei") never come back: they are not listed.
+  const later = deck.filter((x) => (x.at || 0) > now && !isKnown(x)).sort((a, b) => (a.at || 0) - (b.at || 0));
   if (!later.length) return null;
   // Always full rows: desktop up to six in one row, or eight in two rows of four; a phone shows two
   // rows of two.
@@ -317,10 +327,6 @@ function Review({ c }: { c: Catalog }) {
   const pct = n ? Math.round((done / (done + n)) * 100) : s.deck.length ? 100 : 0;
   const taken = s.deck.filter((x) => !/^Ep\. /.test(x.scene)).length;
   const deckLine = s.deck.length ? ' Seu baralho tem ' : '';
-  const grades: (readonly [string, string])[] = c.srs?.grades?.length
-    ? c.srs.grades.map((g) => [g.label, g.hint] as const)
-    : GRADES.map(([l, t]) => [l, t] as const);
-
   const grade = (i: number) => {
     if (!card) return;
     flipRef.current = false;
@@ -330,7 +336,7 @@ function Review({ c }: { c: Catalog }) {
   const gradeRef = useRef(grade);
   gradeRef.current = grade;
 
-  // Desktop nicety on top of the prototype: Space flips, 1-4 grade the flipped card. Registered once
+  // Desktop nicety on top of the prototype: Space flips, 1 (Não sei) and 2 (Já sei) answer the flipped card. Registered once
   // per card; the flip state is read from a ref, so a key pressed right after the flip still counts.
   const cardId = card?.id;
   useEffect(() => {
@@ -344,9 +350,9 @@ function Review({ c }: { c: Catalog }) {
         ev.preventDefault();
         flipRef.current = !flipRef.current;
         setFlip(flipRef.current);
-      } else if (flipRef.current && /^[1-4]$/.test(ev.key)) {
+      } else if (flipRef.current && (ev.key === '1' || ev.key === '2')) {
         ev.preventDefault();
-        gradeRef.current(Number(ev.key) - 1);
+        gradeRef.current(ev.key === '1' ? NOT_KNOWN : KNOWN);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -360,7 +366,10 @@ function Review({ c }: { c: Catalog }) {
   // The queue is worked out at render time; re-render when the next reviewed card falls due, so it
   // shows up (and the title's count follows) even while the learner sits on this screen.
   const [, setTick] = useState(0);
-  const nextAt = s.deck.reduce((m, x) => ((x.at || 0) > now ? Math.min(m, x.at || 0) : m), Number.POSITIVE_INFINITY);
+  const nextAt = s.deck.reduce(
+    (m, x) => ((x.at || 0) > now && !isKnown(x) ? Math.min(m, x.at || 0) : m),
+    Number.POSITIVE_INFINITY,
+  );
   useEffect(() => {
     if (!Number.isFinite(nextAt)) return;
     const wait = nextAt - Date.now();
@@ -389,11 +398,16 @@ function Review({ c }: { c: Catalog }) {
   }, [desk, flip, cardId]);
 
   const cur = current(s, publishedEpisodes(c));
+  const comeBack = nextIn(s.deck, now);
   const empty = s.deck.length ? (
     <div class="card gr stack tc pop" style={{ '--gap': '10px', alignItems: 'center' }}>
       <Icon name="check" size={40} extra={{ style: { color: 'var(--green)' } }} />
       <div class="h2">Cards em dia.</div>
-      <p class="p">{`Nenhum cartão para agora. O próximo volta ${nextIn(s.deck, now)}.`}</p>
+      <p class="p">
+        {comeBack
+          ? `Nenhum cartão para agora. O próximo volta ${comeBack}.`
+          : 'Você já sabe todos os cartões do seu baralho. Os novos chegam com os episódios e os Extras.'}
+      </p>
       <Btn label="Ver um Extra" go="extra" icon="tv" />
     </div>
   ) : (
@@ -490,7 +504,7 @@ function Review({ c }: { c: Catalog }) {
             </span>
             {flip ? (
               <span class="sm" style={{ fontWeight: 800, color: 'var(--blue)', fontSize: desk ? '1rem' : undefined }}>
-                Como foi? Escolha abaixo · +2 pontos
+                Você sabia? Responda abaixo · +2 pontos
               </span>
             ) : (
               // Phone: the card's own action, drawn as a button. Desktop: the room for the real
@@ -543,24 +557,32 @@ function Review({ c }: { c: Catalog }) {
         ) : null}
       </div>
       {flip ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '8px' }}>
-          {grades.map(([l, t], i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+          {ANSWERS.map((a) => (
             <button
-              key={l}
+              key={a.key}
               type="button"
               class="card stack tc"
               style={{
                 '--gap': '2px',
-                padding: '10px 4px',
+                padding: desk ? '14px 8px' : '12px 6px',
                 alignItems: 'center',
-                border: '2px solid var(--navy)',
+                // "Já sei" is the solid green one (the card is done); "Não sei" the outlined one.
+                ...(a.grade === KNOWN
+                  ? { background: 'var(--green)', border: '2px solid var(--green)', color: '#fff' }
+                  : { border: '2px solid var(--navy)', color: 'var(--navy)' }),
               }}
-              onClick={activator(undefined, () => grade(i))}
+              onClick={activator(undefined, () => grade(a.grade))}
             >
-              <span class="h3" style={{ fontSize: '.95rem' }}>
-                {l}
+              <span class="row" style={{ '--gap': '6px', justifyContent: 'center' }}>
+                <Icon name={a.icon} size={18} />
+                <span class="h3" style={{ fontSize: '1.02rem', color: 'inherit' }}>
+                  {a.label}
+                </span>
               </span>
-              <span class="xs">{t}</span>
+              <span class="xs" style={{ color: 'inherit', opacity: 0.85 }}>
+                {a.hint}
+              </span>
             </button>
           ))}
         </div>
@@ -610,7 +632,7 @@ function Review({ c }: { c: Catalog }) {
   );
 
   // "em 2 dias" → "2 dias", "amanhã" stays (the tile's label says what it is).
-  const later = s.deck.filter((x) => (x.at || 0) > now);
+  const later = s.deck.filter((x) => (x.at || 0) > now && !isKnown(x));
   const next = later.length ? nextIn(later, now).replace(/^em /, '') : '';
   const stats = s.deck.length ? <DeckStats due={n} next={next} done={done} total={s.deck.length} desk={desk} /> : null;
 
@@ -643,7 +665,7 @@ function Review({ c }: { c: Catalog }) {
                 <div class="stack" style={{ '--gap': '16px' }}>
                   {stats}
                   {info}
-                  {card ? <GradeLegend grades={grades} /> : null}
+                  {card ? <AnswerLegend /> : null}
                 </div>
               </div>
               <ComingBack deck={s.deck} now={now} desk />

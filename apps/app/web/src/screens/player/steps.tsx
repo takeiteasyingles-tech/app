@@ -6,7 +6,7 @@ import { Btn, Icon } from '@tie/ui';
 import { Fragment } from 'preact';
 import { enterVideoFullscreen, exitVideoFullscreen } from '../../core/screen';
 import { Blocks } from '../../ui-blocks/Blocks';
-import { fmt, heard, lyricRows, type MicFeedback, pad2, type StepCtx, type StepOut } from './model';
+import { fmt, heard, lookOpen, lyricRows, type MicFeedback, pad2, type StepCtx, type StepOut } from './model';
 import { AudioPill, Presentation } from './Presentation';
 import { TestStep } from './TestStep';
 
@@ -165,9 +165,19 @@ function Song({ Ep, P, step, a, tap }: StepCtx): StepOut {
 
 // ---------- 3 · Take a Look ----------
 
-function Look({ Ep, P, a, tap, homeBg }: StepCtx, onVideoEnd: () => void): StepOut {
+function Look({ Ep, s, P, a, tap, homeBg }: StepCtx, onVideoEnd: () => void): StepOut {
   const still = Ep.sceneImage || homeBg;
   const ctx = !!Ep.lookAudio;
+  // PROD (spec 05 "Take a Look"): the scene stays shut until the context audio was heard to the end.
+  const shut = !lookOpen(Ep, s);
+  const lock = shut ? (
+    <div class="pl-vlock" role="note">
+      <span class="pl-vlockb" aria-hidden="true">
+        <Icon name="lock" size={22} />
+      </span>
+      <span class="pl-vlockt">Ouça o contexto até o fim para liberar a cena.</span>
+    </div>
+  ) : null;
   return {
     body: (
       <>
@@ -203,7 +213,9 @@ function Look({ Ep, P, a, tap, homeBg }: StepCtx, onVideoEnd: () => void): StepO
               }}
               onLoadedMetadata={(ev) => a.vidMeta(ev.currentTarget.duration)}
             />
-            {P.vid ? null : (
+            {P.vid ? null : shut ? (
+              lock
+            ) : (
               <button
                 type="button"
                 class="pl-vplay"
@@ -228,6 +240,7 @@ function Look({ Ep, P, a, tap, homeBg }: StepCtx, onVideoEnd: () => void): StepO
             <div class="sub">
               <span class="ptl">{Ep.sceneNote}</span>
             </div>
+            {lock}
           </div>
         )}
         <div class="lbl mt8">Vocabulário visual · toque para ouvir</div>
@@ -763,7 +776,8 @@ function Away({ Ep, desk, a, tap }: StepCtx): StepOut {
               <div class="pl-exphead" aria-hidden="true">
                 <span>Inglês</span>
                 <span>Tradução</span>
-                <span>Quando usar</span>
+                {/* PROD (spec 05 "Take Away"): the note column holds the IPA, so it says so. */}
+                <span>Pronúncia</span>
               </div>
               {Ep.awayExp.map(row)}
             </div>

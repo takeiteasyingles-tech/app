@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { STEP } from '../src/constants';
-import { cardsOf, GRADES, gradeCard, nextIn, queue, reached } from '../src/domain/srs';
+import {
+  cardsOf,
+  GRADES,
+  gradeCard,
+  isKnown,
+  KNOWN,
+  KNOWN_AT,
+  NOT_KNOWN,
+  nextIn,
+  queue,
+  reached,
+} from '../src/domain/srs';
 import { tsEpisode } from './helpers/catalog';
 import { declSource, loadPrototypeCore, plain } from './helpers/core';
 import { type Any, extractConst } from './helpers/prototype';
@@ -96,5 +107,16 @@ describe('srs parity with review.js', () => {
       expect(gradeCard(deck[0] as { reps?: number }, i, now)).toEqual({ at: after.at, reps: after.reps });
     }
     expect(gradeCard({}, 9, now)).toBeNull();
+  });
+
+  it('"Já sei" (KNOWN) leaves the reviews for good; nextIn ignores it (spec 05 "Cards: Já sei / Não sei")', () => {
+    expect(gradeCard({ reps: 2 }, KNOWN, now)).toEqual({ at: KNOWN_AT, reps: 3 });
+    expect(gradeCard({}, NOT_KNOWN, now)).toEqual({ at: now, reps: 1 });
+    const known = { at: KNOWN_AT };
+    expect(isKnown(known)).toBe(true);
+    expect(isKnown({ at: now + 5 * 86_400_000 })).toBe(false);
+    expect(queue([known], now + 100 * 365 * 86_400_000)).toEqual([]);
+    expect(nextIn([known], now)).toBe('');
+    expect(nextIn([known, { at: now + 2 * 86_400_000 }], now)).toBe('em 2 dias');
   });
 });
