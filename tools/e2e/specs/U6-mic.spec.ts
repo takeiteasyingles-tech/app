@@ -1410,8 +1410,10 @@ test.describe('round 4 · mobile', () => {
   test('browser Back mid-call saves the session; reload mid-call returns to a clean lobby', async ({ page }) => {
     test.setTimeout(120_000);
     await signup(page);
-    await page.goto('/#/inicio');
-    await openLobby(page, '/#/maggie');
+    // In the app's own document (/app): "/#/…" is the course home, which hops each link to /app in a new
+    // document, so Back would leave the page instead of the Mic screen (and nothing unmounts).
+    await page.goto('/app#/inicio');
+    await openLobby(page, '/app#/maggie');
     await startCall(page);
     await expect(page.locator('#mg-tr .bub.her')).toHaveCount(1, { timeout: 15_000 });
     await typeLine(page, 'Hello, I need a taxi to the airport.');

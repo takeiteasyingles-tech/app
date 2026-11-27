@@ -9,6 +9,7 @@ import {
   KNOWN_AT,
   NOT_KNOWN,
   nextIn,
+  notKnownDays,
   queue,
   reached,
 } from '../src/domain/srs';
@@ -109,9 +110,24 @@ describe('srs parity with review.js', () => {
     expect(gradeCard({}, 9, now)).toBeNull();
   });
 
+  it('"Não sei" (NOT_KNOWN) waits 2-4 days by complexity: the longer the card, the sooner it comes back', () => {
+    expect(notKnownDays('window')).toBe(4);
+    expect(notKnownDays('Hi · Hello')).toBe(3);
+    expect(notKnownDays('Nice to meet you.')).toBe(3);
+    expect(notKnownDays('I’m Margaret. Good morning, everybody.')).toBe(2);
+    expect(notKnownDays('')).toBe(4);
+    expect(gradeCard({ en: 'Nice to meet you.', reps: 1 }, NOT_KNOWN, now)).toEqual({
+      at: now + 3 * 86_400_000,
+      reps: 2,
+    });
+    // It leaves today's queue.
+    const later = gradeCard({ en: 'window' }, NOT_KNOWN, now) as { at: number };
+    expect(queue([{ at: later.at }], now + 86_400_000)).toEqual([]);
+  });
+
   it('"Já sei" (KNOWN) leaves the reviews for good; nextIn ignores it (spec 05 "Cards: Já sei / Não sei")', () => {
     expect(gradeCard({ reps: 2 }, KNOWN, now)).toEqual({ at: KNOWN_AT, reps: 3 });
-    expect(gradeCard({}, NOT_KNOWN, now)).toEqual({ at: now, reps: 1 });
+    expect(gradeCard({ en: 'window' }, NOT_KNOWN, now)).toEqual({ at: now + 4 * 86_400_000, reps: 1 });
     const known = { at: KNOWN_AT };
     expect(isKnown(known)).toBe(true);
     expect(isKnown({ at: now + 5 * 86_400_000 })).toBe(false);

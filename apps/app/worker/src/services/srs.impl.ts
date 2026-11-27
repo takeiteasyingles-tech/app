@@ -4,7 +4,7 @@
 // UNIQUE(user_id, norm_key) index, so every insert is INSERT OR IGNORE and replays are harmless.
 // Grading uses the fixed GRADES intervals: De novo → due now (back of the queue), Difícil 10 min,
 // Bom 2 days, Fácil 5 days; or KNOWN ("Já sei", spec 05 "Cards: Já sei / Não sei"): due at KNOWN_AT, out of
-// the reviews for good. reps++ and `card` points once per card per local day, only when the card was due.
+// the reviews for good; or NOT_KNOWN ("Não sei"): back in 2-4 days by the card's complexity (notKnownDays). reps++ and `card` points once per card per local day, only when the card was due.
 // Manual adds are capped (SRS_DECK_MAX, SRS_MANUAL_ADDS_PER_DAY).
 import {
   type AddCardsRes,
@@ -14,6 +14,7 @@ import {
   type GradeRes,
   gradeCard,
   KNOWN_AT,
+  NOT_KNOWN,
   type NewCard,
   newId,
   nextIn as nextInText,
@@ -250,8 +251,21 @@ export function createSrsService(env: Env, services: Services, opts: SrsServiceO
 
     async grade(userId, cardId, grade): Promise<GradeRes> {
       const now = clock();
+      // "Não sei" waits by the card's complexity (its English side), so that one reads the card first;
+      // a card of someone else's is not found, as below.
+      let en: string | undefined;
+      if (grade === NOT_KNOWN) {
+        const row = await one<{ en: string }>(
+          db,
+          'SELECT en FROM srs_cards WHERE id = ? AND user_id = ?',
+          cardId,
+          userId,
+        );
+        if (!row) throw fail('not_found');
+        en = row.en;
+      }
       // gradeCard() only needs reps for the count; the interval alone decides the next due time.
-      const next = gradeCard({ reps: 0 }, grade, now);
+      const next = gradeCard({ reps: 0, en }, grade, now);
       if (!next) throw fail('validation_failed');
       // One transaction: the card as it was (owner check + "was it due?"), then the update with
       // reps = reps + 1, so concurrent grades never lose an increment and the due gate is judged on

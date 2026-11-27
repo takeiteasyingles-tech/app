@@ -58,21 +58,42 @@ export function queue<C extends Due>(deck: readonly C[], now: number): C[] {
 }
 
 /**
- * PROD (spec 05 "Cards: Já sei / Não sei"): the Cards screen asks only "Não sei" (NOT_KNOWN, GRADES[0]
- * "De novo": back of the queue now) or "Já sei" (KNOWN: the card leaves the reviews for good). A known
- * card keeps its row and is due at KNOWN_AT, past any real schedule (year 2286), so no queue, due count
- * or "próxima volta" ever reaches it.
+ * PROD (spec 05 "Cards: Já sei / Não sei"): the Cards screen asks only "Não sei" (NOT_KNOWN: the card
+ * leaves today's queue and comes back in notKnownDays(), by how complex it is) or "Já sei" (KNOWN: the
+ * card leaves the reviews for good). A known card keeps its row and is due at KNOWN_AT, past any real
+ * schedule (year 2286), so no queue, due count or "próxima volta" ever reaches it. Grades 0-3 keep the
+ * prototype's GRADES (older clients still send them).
  */
-export const NOT_KNOWN = 0;
 export const KNOWN = 4;
+export const NOT_KNOWN = 5;
 export const KNOWN_AT = 9_999_999_999_999;
 
 /** A card answered "Já sei". */
 export const isKnown = (c: Due): boolean => (c.at || 0) >= KNOWN_AT;
 
-/** New schedule after grading with GRADES[i] (or KNOWN); null for an unknown grade. */
-export function gradeCard(card: { reps?: number | null }, i: number, now: number): { at: number; reps: number } | null {
+/**
+ * Days a "Não sei" card waits, by its complexity (words in the English side): a longer sentence (5+
+ * words) is the hardest and comes back soonest, in 2 days; an expression (2-4 words) in 3; a single
+ * word in 4.
+ */
+export function notKnownDays(en: string): number {
+  const words = String(en || '')
+    .trim()
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  if (words >= 5) return 2;
+  if (words >= 2) return 3;
+  return 4;
+}
+
+/** New schedule after grading with GRADES[i], KNOWN or NOT_KNOWN; null for an unknown grade. */
+export function gradeCard(
+  card: { reps?: number | null; en?: string | null },
+  i: number,
+  now: number,
+): { at: number; reps: number } | null {
   if (i === KNOWN) return { at: KNOWN_AT, reps: (card.reps || 0) + 1 };
+  if (i === NOT_KNOWN) return { at: now + notKnownDays(card.en ?? '') * DAY, reps: (card.reps || 0) + 1 };
   const g = GRADES[i];
   if (!g) return null;
   return { at: now + g[2], reps: (card.reps || 0) + 1 };

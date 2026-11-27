@@ -1,5 +1,5 @@
 import type { AddCardsRes, GradeRes, SrsQueueRes } from '@tie/shared';
-import { KNOWN, KNOWN_AT, STEP } from '@tie/shared';
+import { KNOWN, KNOWN_AT, NOT_KNOWN, notKnownDays, STEP } from '@tie/shared';
 import { localDate } from '@tie/worker-core';
 import { describe, expect, it } from 'vitest';
 import { SRS_DECK_MAX, SRS_MANUAL_ADDS_PER_DAY } from '../../src/services/srs.impl';
@@ -153,6 +153,20 @@ describe('SrsService.grade', () => {
     expect(h.db.sql('SELECT reps FROM srs_cards WHERE id = ?', id)).toEqual([{ reps: 5 }]);
   });
 
+  it('"Não sei" (NOT_KNOWN) leaves the queue of the day and comes back in 2-4 days by complexity', async () => {
+    const h = await harness();
+    const cards = await h.srs.unlock('u1', 1, STEP.AWAY);
+    const [a] = cards as [(typeof cards)[0]];
+    const r = await h.srs.grade('u1', a.id, NOT_KNOWN);
+    expect(r.card.at).toBe(h.clock.t + notKnownDays(a.en) * DAY);
+    expect(r.card.reps).toBe(1);
+    expect(r.award?.awarded).toBe(true);
+    expect((await h.srs.queue('u1')).cards.map((c) => c.id)).not.toContain(a.id);
+    h.clock.t += notKnownDays(a.en) * DAY;
+    expect((await h.srs.queue('u1')).cards.map((c) => c.id)).toContain(a.id);
+    await expect(h.srs.grade('u2', a.id, NOT_KNOWN)).rejects.toMatchObject({ code: 'not_found' });
+  });
+
   it('"Já sei" (KNOWN) takes the card out of the reviews for good, with the award (spec 05 "Cards: Já sei / Não sei")', async () => {
     const h = await harness();
     const cards = await h.srs.unlock('u1', 1, STEP.AWAY);
@@ -230,7 +244,7 @@ describe('/api/srs routes', () => {
     const denied = await h.call('u2', 'POST', `/api/srs/cards/${id}/grade`, { grade: 3 });
     expect(denied.status).toBe(404);
     expect(h.db.sql('SELECT reps FROM srs_cards WHERE id = ?', id)).toEqual([{ reps: 0 }]);
-    expect((await h.call('u1', 'POST', `/api/srs/cards/${id}/grade`, { grade: 5 })).status).toBe(400);
+    expect((await h.call('u1', 'POST', `/api/srs/cards/${id}/grade`, { grade: 6 })).status).toBe(400);
     const ok = await h.call('u1', 'POST', `/api/srs/cards/${id}/grade`, { grade: 2 });
     expect(ok.status).toBe(200);
     const body = (await ok.json()) as GradeRes;

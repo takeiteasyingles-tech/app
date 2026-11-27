@@ -1,13 +1,13 @@
 // Revisão (prototipo/js/screens/conta.js, TIE.screens.revisao): one flashcard at a time from the due
 // queue. Tap flips it (PT + note), the speaker reads the EN, and the answer reschedules the card through
 // POST /api/srs/cards/:id/grade (applied at once, +2 pontos from the server's award). PROD (spec 05
-// "Cards: Já sei / Não sei"): two answers instead of the prototype's four grades: "Não sei" comes back
-// at the end of the queue, "Já sei" never comes back. Empty states:
+// "Cards: Já sei / Não sei"): two answers instead of the prototype's four grades: "Não sei" leaves today's
+// queue and comes back in 2-4 days by the card's complexity, "Já sei" never comes back. Empty states:
 // "Revisão em dia" with when the next card comes back, or "Seus cartões começam no episódio".
 import type { Catalog } from '@tie/shared/content/schema';
 import { srsApi } from '@tie/shared/contracts/srs';
 import { current } from '@tie/shared/domain/guide';
-import { gradeCard, isKnown, KNOWN, NOT_KNOWN, nextIn, queue } from '@tie/shared/domain/srs';
+import { gradeCard, isKnown, KNOWN, NOT_KNOWN, nextIn, notKnownDays, queue } from '@tie/shared/domain/srs';
 import type { DeckCard } from '@tie/shared/state';
 import { activator, Btn, Icon, Topbar } from '@tie/ui';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
@@ -21,7 +21,7 @@ import { isDesktop, publishedEpisodes, summary, WithCatalog } from '../inicio/to
  * review.grade(en, i) + game.award('card'): the card is rescheduled at once from this device's clock
  * and the server records the grade and plays the award. The server's card is kept except for its due
  * time, which stays the one computed here: the queue is checked against this device's clock, so a
- * "Não sei" card (due now) must not drop out of the queue when the server clock runs a little ahead.
+ * card due now must not drop out of the queue when the server clock runs a little ahead.
  */
 function gradeNow(cardId: string, grade: number) {
   let at: number | null = null;
@@ -82,7 +82,7 @@ const NOTE_LINE = { display: 'flex', alignItems: 'center', gap: '6px', flexWrap:
 
 /** The two answers, their keys and what each does. */
 const ANSWERS = [
-  { key: '1', label: 'Não sei', hint: 'volta daqui a pouco', grade: NOT_KNOWN, icon: 'repeat' },
+  { key: '1', label: 'Não sei', hint: 'volta em alguns dias', grade: NOT_KNOWN, icon: 'repeat' },
   { key: '2', label: 'Já sei', hint: 'não volta mais', grade: KNOWN, icon: 'check' },
 ] as const;
 
@@ -581,7 +581,7 @@ function Review({ c }: { c: Catalog }) {
                 </span>
               </span>
               <span class="xs" style={{ color: 'inherit', opacity: 0.85 }}>
-                {a.hint}
+                {a.grade === NOT_KNOWN ? `volta em ${notKnownDays(card.en)} dias` : a.hint}
               </span>
             </button>
           ))}
