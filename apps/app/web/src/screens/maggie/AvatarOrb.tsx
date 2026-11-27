@@ -1,11 +1,12 @@
 // ElevenLabs agent as the Mic avatar (PROD deviation, docs/spec/05-foundation-notes.md § "Mic avatar per
-// assistant"): an assistant whose Mic avatar is an ElevenLabs agent shows an orb, the agent's look in
-// ElevenLabs' own widget, instead of a face. Colour patches drift inside a sphere (maggie.css, .avorb);
-// the sphere swells with the voice. It follows every voice the Mic plays through core/speech: the
-// agent's (mouth shapes from its loudness), the HD voice (the decoded audio, read where it is playing)
-// and the browser voice (flap visemes), so it moves the same in the modes the agent does not hold.
+// assistant"): an assistant whose Mic avatar is an ElevenLabs agent shows the course's orb (ui-blocks/Orb,
+// the one of step 1's presentation) instead of a face. It pulses while the assistant talks and swells
+// with the voice (--lvl, maggie.css .avorb). It follows every voice the Mic plays through core/speech:
+// the agent's (mouth shapes from its loudness), the HD voice (the decoded audio, read where it is
+// playing) and the browser voice (flap visemes), so it moves the same in the modes the agent does not hold.
 import { useEffect, useRef } from 'preact/hooks';
 import { onSpeech, type SpeechEvent, type Viseme } from '../../core/speech';
+import { Orb } from '../../ui-blocks/Orb';
 import type { AvatarAssistant } from './Avatar';
 
 /** Mouth shape → how far the orb swells (0…1). */
@@ -80,11 +81,8 @@ export function AvatarOrb({ a, talking }: { a: AvatarAssistant; talking: boolean
   // data-a / data-talking: the same hooks as the other avatars (framing, e2e).
   return (
     <div class="av2d avorb" data-a={a.k} data-talking={talking ? '1' : '0'}>
-      <div class="avorb-ball" ref={ball} role="img" aria-label={a.full}>
-        <span class="avorb-blob b1" />
-        <span class="avorb-blob b2" />
-        <span class="avorb-blob b3" />
-        <span class="avorb-blob b4" />
+      <div class="avorb-orb" ref={ball} role="img" aria-label={a.full}>
+        <Orb on={talking} />
       </div>
     </div>
   );

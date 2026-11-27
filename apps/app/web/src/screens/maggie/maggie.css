@@ -42,73 +42,27 @@
   display: block;
   pointer-events: none;
 }
-/* ElevenLabs agent (AvatarOrb.tsx): the orb of ElevenLabs' widget, centred on the stage. Four blurred
-   colour patches turn inside the sphere at different speeds; --lvl (0…1, set from the voice) swells and
-   brightens it. */
+/* ElevenLabs agent (AvatarOrb.tsx): the course's orb (ui-blocks/Orb.tsx, the one of step 1) on a navy
+   stage, sized by the stage (container units). It pulses while the assistant talks, and --lvl (0…1, set
+   from the voice) swells and brightens it. */
 .mg .av2d.avorb {
+  container-type: size;
   display: flex;
   align-items: center;
   justify-content: center;
   background: radial-gradient(circle at 50% 45%, #233457 0%, #14203a 62%, #0f1930 100%);
 }
-.mg .avorb-ball {
+.mg .avorb-orb {
   --lvl: 0;
-  position: relative;
-  height: min(68%, 380px);
-  aspect-ratio: 1;
-  max-width: 82%;
-  border-radius: 50%;
-  overflow: hidden;
-  isolation: isolate;
-  background: #6f7873;
-  box-shadow:
-    0 22px 60px rgba(0, 0, 0, 0.38),
-    0 0 calc(var(--lvl) * 70px) rgba(232, 150, 70, calc(var(--lvl) * 0.45));
-  transform: scale(calc(1 + var(--lvl) * 0.08));
-  filter: saturate(calc(1 + var(--lvl) * 0.45)) brightness(calc(1 + var(--lvl) * 0.14));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: scale(calc(1 + var(--lvl) * 0.1));
+  filter: brightness(calc(1 + var(--lvl) * 0.18));
 }
-.mg .avorb-ball::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.16), transparent 34%),
-    radial-gradient(circle at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.18) 100%);
-  z-index: 2;
-}
-.mg .avorb-blob {
-  position: absolute;
-  inset: -18%;
-  filter: blur(18px);
-  animation: avorb-turn 16s linear infinite;
-}
-.mg .avorb-blob.b1 {
-  background: radial-gradient(circle at 28% 34%, #1f3a35 0%, #1f3a35 12%, rgba(31, 58, 53, 0) 52%);
-}
-.mg .avorb-blob.b2 {
-  background: radial-gradient(circle at 84% 46%, #ef8a24 0%, #ef8a24 6%, rgba(239, 138, 36, 0) 36%);
-  animation-duration: 11s;
-  animation-direction: reverse;
-}
-.mg .avorb-blob.b3 {
-  background: radial-gradient(circle at 40% 80%, #ddd8d0 0%, #ddd8d0 10%, rgba(221, 216, 208, 0) 46%);
-  animation-duration: 13s;
-}
-.mg .avorb-blob.b4 {
-  background: radial-gradient(circle at 62% 20%, #4d6d66 0%, #4d6d66 10%, rgba(77, 109, 102, 0) 44%);
-  animation-duration: 19s;
-  animation-direction: reverse;
-}
-@keyframes avorb-turn {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mg .avorb-blob {
-    animation: none;
-  }
+.mg .avorb .pr-orb {
+  --s: min(56cqmin, 320px);
+  margin: 0;
 }
 /* 3D avatar (Avatar3D.tsx): the engine cover-fits the photo itself, keeping the face in the frame. */
 .mg .av2d.av3d {

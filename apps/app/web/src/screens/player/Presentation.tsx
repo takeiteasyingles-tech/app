@@ -1,10 +1,11 @@
 // Step 1 · Apresentação do Episódio (PROD, spec 05 "Step order"): the episode opens with its presentation
 // audio in a pill player (play/pause, a waveform that fills as it plays), a large animated orb (CSS and
-// SVG only: halos, a glowing sphere with a travelling wave, sound bars at its sides; it swells while the
-// audio plays) and the episode text in a box that scrolls with a chevron when it does not fit. Without
+// SVG only, ui-blocks/Orb.tsx: halos, a glowing sphere with a travelling wave, sound bars at its sides; it
+// swells while the audio plays) and the episode text in a box that scrolls with a chevron when it does not fit. Without
 // a recording, the play button runs the 15 s synth jingle, as the old intro did.
 import { Icon } from '@tie/ui';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { Orb } from '../../ui-blocks/Orb';
 import { fmt } from './model';
 import './presentation.css';
 
@@ -27,40 +28,6 @@ function Headphones() {
       <rect x="3" y="13" width="5" height="7" rx="2" fill="currentColor" />
       <rect x="16" y="13" width="5" height="7" rx="2" fill="currentColor" />
     </svg>
-  );
-}
-
-/** The orb: halos, sphere, wave and side bars; `on` while the audio plays. */
-function Orb({ on }: { on: boolean }) {
-  return (
-    <div class={`pr-orb${on ? ' on' : ''}`} aria-hidden="true">
-      <span class="pr-halo h1" />
-      <span class="pr-halo h2" />
-      <span class="pr-halo h3" />
-      <span class="pr-bars l">
-        {[0.4, 0.7, 1, 0.6, 0.35].map((h, i) => (
-          <i key={i} style={{ '--h': String(h), '--d': `${i * 0.12}s` }} />
-        ))}
-      </span>
-      <span class="pr-bars r">
-        {[0.35, 0.6, 1, 0.7, 0.4].map((h, i) => (
-          <i key={i} style={{ '--h': String(h), '--d': `${i * 0.12 + 0.3}s` }} />
-        ))}
-      </span>
-      <span class="pr-sphere">
-        <span class="pr-swirl" />
-        <span class="pr-shine" />
-        <svg class="pr-wave" viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">
-          <g class="pr-wave-a">
-            <path d="M0 50 Q 25 15 50 50 T 100 50 T 150 50 T 200 50 T 250 50 T 300 50 T 350 50 T 400 50" />
-          </g>
-          <g class="pr-wave-b">
-            <path d="M0 50 Q 25 80 50 50 T 100 50 T 150 50 T 200 50 T 250 50 T 300 50 T 350 50 T 400 50" />
-          </g>
-        </svg>
-      </span>
-      <span class="pr-floor" />
-    </div>
   );
 }
 

@@ -1033,7 +1033,16 @@ test.describe('desktop', () => {
     const grid = page.locator('.live-grid');
     await expect(grid).toBeVisible();
     await expect(grid.locator('.left #av-live')).toBeVisible();
-    await expect(grid.locator('.left .modes .mode')).toHaveCount(4);
+    // The modes are one compact row at the top of the right column (05 "Mic lobby: modes on top").
+    await expect(grid.locator('.left .modes')).toHaveCount(0);
+    const bar = grid.locator('.right .mg-modebar');
+    await expect(bar.locator('.mg-modeb')).toHaveCount(4);
+    await expect(bar.locator('.mg-modeb.on')).toHaveAttribute('aria-pressed', 'true');
+    await bar.getByRole('button', { name: /^Conversa livre/ }).click();
+    await expect(bar.getByRole('button', { name: /^Conversa livre/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(grid.locator('.right .xs').filter({ hasText: 'puxa assunto a partir do que você curte:' })).toBeVisible();
+    await bar.getByRole('button', { name: /^Missão/ }).click();
+    await expect(page.getByText('Escolha a cena')).toBeVisible();
     const how = grid.locator('.right .transcript .card');
     await expect(how.locator('.h3')).toHaveText('Como funciona');
     await expect(how.locator('.row.top')).toHaveCount(4);
@@ -1236,7 +1245,7 @@ test.describe('round 3 · desktop', () => {
     await openLobby(page);
     const right = page.locator('.live-grid .right');
     const left = page.locator('.live-grid .left');
-    // Help phrases under the modes (left), so both columns end at about the same height.
+    // Help phrases in the left column, under the assistant (the modes are on top of the right column).
     await expect(left.getByText('Se travar, é só pedir')).toBeVisible();
     await expect(
       right.getByText('Quando você terminar a primeira conversa com a Maggie, o relatório fica guardado aqui.'),
